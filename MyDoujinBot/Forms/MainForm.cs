@@ -1004,24 +1004,19 @@ namespace MyDoujinBot.Forms
                 pnlEventOverlay.Controls.Add(pnlHeader);
 
                 // ── 內容區 ──
-                var pnlContent = new Panel
+                var pnlContent = new FlowLayoutPanel
                 {
                     Dock = DockStyle.Fill,
+                    FlowDirection = FlowDirection.TopDown,
+                    WrapContents = false,
                     AutoScroll = true,
-                    Padding = new Padding(pad, 14, pad + SystemInformation.VerticalScrollBarWidth + 2, 10),
+                    Padding = new Padding(pad, 14, pad, 10),
                     BackColor = Color.FromArgb(20, 20, 28)
                 };
                 pnlEventOverlay.Controls.Add(pnlHeader);
                 pnlEventOverlay.Controls.Add(pnlContent);
                 pnlHeader.SendToBack();
                 pnlContent.BringToFront();
-
-                var logPanel = pnlEventOverlay.Parent as Panel;
-                int logClientW = logPanel?.ClientSize.Width ?? 500;
-                int logPadH    = logPanel?.Padding.Horizontal ?? 8;
-                int innerW = Math.Max(200, logClientW - logPadH - pad * 2 - SystemInformation.VerticalScrollBarWidth - 2);
-
-                int y = 14;
 
                 // ── 標題：成功 / 失敗 ──
                 string resultTitle = er.IsSuccess ? "成功" : "失敗";
@@ -1032,23 +1027,20 @@ namespace MyDoujinBot.Forms
                 var lblTitle = new Label
                 {
                     Text = resultTitle,
-                    Location = new Point(pad, y),
-                    Width = innerW,
                     Font = new Font("Microsoft JhengHei UI", 15f, FontStyle.Bold),
                     ForeColor = titleColor,
-                    AutoSize = false,
-                    Height = 34
+                    AutoSize = true,
+                    Margin = new Padding(0, 0, 0, 14)
                 };
                 pnlContent.Controls.Add(lblTitle);
-                y += 38;
 
                 // ── 判定結果區塊 ──
                 if (!string.IsNullOrEmpty(er.Stat) || er.Roll.HasValue)
                 {
-                    var pnlCheck = MyDoujinBot.Utilities.EventUiHelper.CreateCheckResultPanel(er, innerW);
-                    pnlCheck.Location = new Point(pad, y);
+                    // Width doesn't matter initially, the Resize handler will fix it
+                    var pnlCheck = MyDoujinBot.Utilities.EventUiHelper.CreateCheckResultPanel(er, 200);
+                    pnlCheck.Margin = new Padding(0, 0, 0, 14);
                     pnlContent.Controls.Add(pnlCheck);
-                    y += pnlCheck.Height + 14;
                 }
 
                 // ── 故事內文 ──
@@ -1057,16 +1049,12 @@ namespace MyDoujinBot.Forms
                     var lblStory = new Label
                     {
                         Text = er.Text,
-                        Location = new Point(pad, y),
-                        MaximumSize = new Size(innerW, 0),
                         AutoSize = true,
                         ForeColor = Color.FromArgb(220, 220, 235),
-                        Font = new Font("Microsoft JhengHei UI", 10.5f)
+                        Font = new Font("Microsoft JhengHei UI", 10.5f),
+                        Margin = new Padding(0, 0, 0, 14)
                     };
                     pnlContent.Controls.Add(lblStory);
-                    int prefH = lblStory.GetPreferredSize(new Size(innerW, 0)).Height;
-                    lblStory.Size = new Size(innerW, Math.Max(prefH, 20));
-                    y += lblStory.Height + 14;
                 }
 
                 // ── 戰鬥結果 ──
@@ -1075,16 +1063,12 @@ namespace MyDoujinBot.Forms
                     var lblBattle = new Label
                     {
                         Text = $"[戰鬥結果] {er.BattleResult}",
-                        Location = new Point(pad, y),
-                        MaximumSize = new Size(innerW, 0),
                         AutoSize = true,
                         ForeColor = Color.FromArgb(255, 180, 100),
-                        Font = new Font("Microsoft JhengHei UI", 9.5f)
+                        Font = new Font("Microsoft JhengHei UI", 9.5f),
+                        Margin = new Padding(0, 0, 0, 14)
                     };
                     pnlContent.Controls.Add(lblBattle);
-                    int prefH = lblBattle.GetPreferredSize(new Size(innerW, 0)).Height;
-                    lblBattle.Size = new Size(innerW, Math.Max(prefH, 20));
-                    y += lblBattle.Height + 14;
                 }
 
                 // ── 獲得獎勵 ──
@@ -1094,28 +1078,27 @@ namespace MyDoujinBot.Forms
                     var lblReward = new Label
                     {
                         Text = $"獲得獎勵：{string.Join("、", bonusParts)}",
-                        Location = new Point(0, y),
-                        Width = innerW,
                         AutoSize = true,
                         ForeColor = Color.FromArgb(255, 220, 80),
-                        Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold)
+                        Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                        Margin = new Padding(0, 0, 0, 16)
                     };
                     pnlContent.Controls.Add(lblReward);
-                    y += lblReward.Height + 16;
                 }
 
                 // ── 關閉按鈕 ──
                 var btnClose = new Button
                 {
                     Text = "關閉",
-                    Location = new Point(pad + (innerW - 120) / 2, y),
                     Width = 120,
                     Height = 36,
                     FlatStyle = FlatStyle.Flat,
                     BackColor = Color.FromArgb(60, 60, 80),
                     ForeColor = Color.White,
                     Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
-                    Cursor = Cursors.Hand
+                    Cursor = Cursors.Hand,
+                    Tag = "CenterCloseBtn",
+                    Margin = new Padding(0)
                 };
                 btnClose.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 130);
                 btnClose.Click += (_, _) =>
@@ -1125,6 +1108,32 @@ namespace MyDoujinBot.Forms
                     tcs.TrySetResult(true);
                 };
                 pnlContent.Controls.Add(btnClose);
+
+                // Resize handle for dynamic layout
+                pnlContent.Resize += (s, ev) =>
+                {
+                    int w = pnlContent.ClientSize.Width - pnlContent.Padding.Horizontal;
+                    if (w < 200) w = 200;
+                    
+                    pnlContent.SuspendLayout();
+                    foreach (Control ctrl in pnlContent.Controls)
+                    {
+                        if (ctrl.Tag?.ToString() == "CenterCloseBtn")
+                        {
+                            ctrl.Margin = new Padding((w - ctrl.Width) / 2, ctrl.Margin.Top, 0, 24);
+                        }
+                        else
+                        {
+                            ctrl.Width = w;
+                            if (ctrl is Label lbl && lbl.AutoSize)
+                            {
+                                lbl.MaximumSize = new Size(w, 0);
+                            }
+                        }
+                    }
+                    pnlContent.ResumeLayout();
+                };
+
                 pnlEventOverlay.BringToFront();
             };
 
@@ -1166,14 +1175,14 @@ namespace MyDoujinBot.Forms
             pnlHeader.Controls.Add(lblHeader);
             pnlEventOverlay.Controls.Add(pnlHeader);
 
-            // ── 內容區（可捲動，容納大量選項）──
-            // AutoScroll = true：選項過多時顯示捲軸
-            var pnlContent = new Panel
+            // ── 內容區（FlowLayoutPanel 可自動適應並重排）──
+            var pnlContent = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
                 AutoScroll = true,
-                // 右側 padding 加入捐軸寬度，防止内容溱出時出現水平捐軸
-                Padding = new Padding(pad, 18, pad + SystemInformation.VerticalScrollBarWidth + 2, 10),
+                Padding = new Padding(pad, 18, pad, 10),
                 BackColor = Color.FromArgb(20, 20, 28)
             };
             pnlEventOverlay.Controls.Add(pnlHeader);
@@ -1181,32 +1190,16 @@ namespace MyDoujinBot.Forms
             pnlHeader.SendToBack();
             pnlContent.BringToFront();
 
-            int y = 14;
-
-            // 寬度計算說明：
-            // pnlEventOverlay 在 Visible=false 時，ClientSize.Width 可能為 0（WinForms 不對隱藏控制項進行 layout）。
-            // 改從父容器 pnlLog（永遠可見）取寬度，再減去 padding 與捐軸預留。
-            var logPanel = pnlEventOverlay.Parent as Panel;
-            int logClientW = logPanel?.ClientSize.Width ?? 500;
-            int logPadH    = logPanel?.Padding.Horizontal ?? 8; // pnlLog 左右 padding 各 4px
-            // innerW = 可用寬 − 内容 padding 左右 − 捐軸寬度預留
-            int innerW = Math.Max(200,
-                logClientW - logPadH - pad * 2 - SystemInformation.VerticalScrollBarWidth - 2);
-
             // ── 事件名稱 ──
             var lblName = new Label
             {
                 Text = pe.Name,
-                Location = new Point(pad, y),
-                Width = innerW,
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 Font = new Font("Microsoft JhengHei UI", 12f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(255, 215, 80),
-                AutoSize = false,
-                Height = 30
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 10)
             };
             pnlContent.Controls.Add(lblName);
-            y += 34;
 
             // ── 事件描述 ──
             if (!string.IsNullOrWhiteSpace(pe.Description))
@@ -1214,42 +1207,36 @@ namespace MyDoujinBot.Forms
                 var lblDesc = new Label
                 {
                     Text = pe.Description,
-                    Location = new Point(pad, y),
-                    MaximumSize = new Size(innerW, 0),
                     AutoSize = true,
                     ForeColor = Color.FromArgb(195, 195, 215),
-                    Font = new Font("Microsoft JhengHei UI", 10.5f)
+                    Font = new Font("Microsoft JhengHei UI", 10.5f),
+                    Margin = new Padding(0, 0, 0, 14)
                 };
                 pnlContent.Controls.Add(lblDesc);
-                int descH = lblDesc.GetPreferredSize(new Size(innerW, 0)).Height;
-                lblDesc.Size = new Size(innerW, Math.Max(descH, 22));
-                y += lblDesc.Height + 16; // 拉高與分隔線的間距
             }
 
             // ── 分隔線 ──
-            pnlContent.Controls.Add(new Label
+            var lblSep = new Label
             {
-                Location = new Point(pad, y),
-                Width = innerW,
                 Height = 1,
                 BackColor = Color.FromArgb(70, 60, 100),
                 AutoSize = false,
-                Text = ""
-            });
-            y += 10;
+                Text = "",
+                Margin = new Padding(0, 0, 0, 14)
+            };
+            pnlContent.Controls.Add(lblSep);
 
             // ── 選項標題 ──
             pnlContent.Controls.Add(new Label
             {
                 Text = "請選擇一個選項：",
-                Location = new Point(pad, y),
                 ForeColor = Color.FromArgb(150, 150, 195),
                 Font = new Font("Microsoft JhengHei UI", 9f),
-                AutoSize = true
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 10)
             });
-            y += 26;
 
-            // ── 選項按鈕（與 EventSelectionForm 同設計風格）──
+            // ── 選項按鈕 ──
             foreach (var option in pe.Options)
             {
                 string rateText = option.SuccessChance.HasValue ? $"{option.SuccessChance}%" : "未知";
@@ -1273,15 +1260,13 @@ namespace MyDoujinBot.Forms
 
                 var btn = new Button
                 {
-                    Location = new Point(pad, y),
-                    Width = innerW,
                     Height = 46,
-                    Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                     FlatStyle = FlatStyle.Flat,
                     BackColor = btnBack,
                     Cursor = Cursors.Hand,
                     Tag = option.Id,
-                    Text = ""
+                    Text = "",
+                    Margin = new Padding(0, 0, 0, 6)
                 };
                 btn.FlatAppearance.BorderColor = Color.FromArgb(90, 75, 130);
                 btn.FlatAppearance.BorderSize = 1;
@@ -1328,8 +1313,27 @@ namespace MyDoujinBot.Forms
                 };
 
                 pnlContent.Controls.Add(btn);
-                y += 52;
             }
+
+            // ── 底部留白 ──
+            pnlContent.Controls.Add(new Label { Height = 24, AutoSize = false, Text = "", BackColor = Color.Transparent });
+
+            pnlContent.Resize += (s, e) =>
+            {
+                int w = pnlContent.ClientSize.Width - pnlContent.Padding.Horizontal;
+                if (w < 200) w = 200;
+
+                pnlContent.SuspendLayout();
+                foreach (Control ctrl in pnlContent.Controls)
+                {
+                    ctrl.Width = w;
+                    if (ctrl is Label lbl && lbl.AutoSize)
+                    {
+                        lbl.MaximumSize = new Size(w, 0);
+                    }
+                }
+                pnlContent.ResumeLayout();
+            };
 
             pnlEventOverlay.Visible = true;
             pnlEventOverlay.BringToFront();

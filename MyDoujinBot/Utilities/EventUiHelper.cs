@@ -26,10 +26,15 @@ namespace MyDoujinBot.Utilities
 
         public static Panel CreateCheckResultPanel(EventResult er, int width)
         {
-            var panel = new Panel
+            var panel = new FlowLayoutPanel
             {
                 Width = width,
-                BackColor = Color.FromArgb(32, 32, 44)
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.FromArgb(32, 32, 44),
+                Padding = new Padding(12, 8, 12, 8)
             };
 
             panel.Paint += (s, e) =>
@@ -38,21 +43,16 @@ namespace MyDoujinBot.Utilities
                 e.Graphics.DrawRectangle(pen, 0, 0, panel.Width - 1, panel.Height - 1);
             };
 
-            int y = 8;
-            const int padX = 12;
-            int innerW = width - padX * 2;
-
             // 【判定結果】
             var lblTag = new Label
             {
                 Text = "【判定結果】",
-                Location = new Point(padX, y),
                 AutoSize = true,
                 Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(180, 180, 210)
+                ForeColor = Color.FromArgb(180, 180, 210),
+                Margin = new Padding(0, 0, 0, 4)
             };
             panel.Controls.Add(lblTag);
-            y += lblTag.Height + 4;
 
             // Line 1: Stat, Roll, Total
             var statName = !string.IsNullOrEmpty(er.Stat) ? StatHelper.GetDisplayName(er.Stat) : "";
@@ -89,14 +89,12 @@ namespace MyDoujinBot.Utilities
                 var lblLine1 = new Label
                 {
                     Text = line1Text,
-                    Location = new Point(padX, y),
-                    Width = innerW,
                     AutoSize = true,
                     Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Regular),
-                    ForeColor = Color.FromArgb(235, 235, 245)
+                    ForeColor = Color.FromArgb(235, 235, 245),
+                    Margin = new Padding(0, 0, 0, 4)
                 };
                 panel.Controls.Add(lblLine1);
-                y += lblLine1.Height + 4;
             }
 
             // Line 2: DC, Chance
@@ -119,21 +117,35 @@ namespace MyDoujinBot.Utilities
                 var lblLine2 = new Label
                 {
                     Text = line2Text,
-                    Location = new Point(padX, y),
-                    Width = innerW,
                     AutoSize = true,
                     Font = new Font("Microsoft JhengHei UI", 9f),
-                    ForeColor = Color.FromArgb(160, 160, 185)
+                    ForeColor = Color.FromArgb(160, 160, 185),
+                    Margin = new Padding(0, 0, 0, 0)
                 };
                 panel.Controls.Add(lblLine2);
-                y += lblLine2.Height + 8;
-            }
-            else
-            {
-                y += 6;
             }
 
-            panel.Height = y;
+            Action updateSizes = () =>
+            {
+                int innerW = panel.ClientSize.Width - panel.Padding.Horizontal;
+                if (innerW > 0)
+                {
+                    panel.SuspendLayout();
+                    foreach (Control ctrl in panel.Controls)
+                    {
+                        ctrl.Width = innerW;
+                        if (ctrl is Label lbl && lbl.AutoSize)
+                        {
+                            lbl.MaximumSize = new Size(innerW, 0);
+                        }
+                    }
+                    panel.ResumeLayout();
+                }
+            };
+
+            panel.Resize += (s, e) => updateSizes();
+            updateSizes(); // 確保初始創建時也能正確設定大小
+
             return panel;
         }
     }
