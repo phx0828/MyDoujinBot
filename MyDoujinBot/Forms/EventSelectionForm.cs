@@ -264,19 +264,26 @@ namespace MyDoujinBot.Forms
                 // --- 戰鬥結果 ---
                 if (er.BattleResult != null)
                 {
-                    var lblBattle = new Label
+                    var btnBattle = new Button
                     {
-                        Text = $"[戰鬥結果] {er.BattleResult}",
+                        Text = "⚔ 查看戰報",
                         Location = new Point(pad, y),
-                        MaximumSize = new Size(innerWidth, 0),
-                        AutoSize = true,
-                        ForeColor = Color.FromArgb(255, 180, 100),
-                        Font = new Font("Microsoft JhengHei UI", 9.5f)
+                        Width = 120,
+                        Height = 36,
+                        FlatStyle = FlatStyle.Flat,
+                        BackColor = Color.FromArgb(50, 50, 70),
+                        ForeColor = Color.White,
+                        Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                        Cursor = Cursors.Hand
                     };
-                    this.Controls.Add(lblBattle);
-                    int preferredHeight = lblBattle.GetPreferredSize(new Size(innerWidth, 0)).Height;
-                    lblBattle.Size = new Size(innerWidth, Math.Max(preferredHeight, 20));
-                    y += lblBattle.Height + 14;
+                    btnBattle.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 130);
+                    btnBattle.Click += (_, _) =>
+                    {
+                        using var form = new BattleReportForm(er.BattleResult);
+                        form.ShowDialog(this);
+                    };
+                    this.Controls.Add(btnBattle);
+                    y += btnBattle.Height + 14;
                 }
 
                 // --- 獲得獎勵 ---

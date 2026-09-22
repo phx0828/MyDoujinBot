@@ -53,7 +53,7 @@ namespace MyDoujinBot.Models
         public EventRewards? Rewards { get; set; }
 
         [JsonPropertyName("battleResult")]
-        public object? BattleResult { get; set; }
+        public BattleResult? BattleResult { get; set; }
 
         [JsonPropertyName("gainCharacters")]
         public List<GainCharacter>? GainCharacters { get; set; }
@@ -127,5 +127,68 @@ namespace MyDoujinBot.Models
         public int Int { get; set; }
         [JsonPropertyName("luk")]
         public int Luk { get; set; }
+    }
+
+    /// <summary>
+    /// 戰鬥結果
+    /// </summary>
+    public class BattleResult
+    {
+        [JsonPropertyName("winner")]
+        public string? Winner { get; set; }
+
+        [JsonPropertyName("logs")]
+        public List<BattleLog>? Logs { get; set; }
+    }
+
+    /// <summary>
+    /// 戰報單筆紀錄
+    /// </summary>
+    public class BattleLog
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = string.Empty;
+
+        [JsonPropertyName("message")]
+        public string Message { get; set; } = string.Empty;
+
+        [JsonPropertyName("actorId")]
+        public string? ActorId { get; set; }
+
+        [JsonPropertyName("skillId")]
+        public string? SkillId { get; set; }
+
+        [JsonPropertyName("skillTier")]
+        public string? SkillTier { get; set; }
+
+        [JsonPropertyName("isNormalAttack")]
+        public bool? IsNormalAttack { get; set; }
+
+        [JsonPropertyName("targetId")]
+        public string? TargetId { get; set; }
+
+        [JsonPropertyName("value")]
+        public int? Value { get; set; }
+
+        [JsonPropertyName("actualDamage")]
+        public int? ActualDamage { get; set; }
+
+        [JsonPropertyName("isCrit")]
+        public bool? IsCrit { get; set; }
+
+        [JsonPropertyName("blocked")]
+        public bool? Blocked { get; set; }
+
+        [JsonPropertyName("maxHp")]
+        public int? MaxHp { get; set; }
+
+        [JsonPropertyName("isDead")]
+        public bool? IsDead { get; set; }
+
+        [JsonPropertyName("expGained")]
+        public int? ExpGained { get; set; }
+
+        [JsonPropertyName("tier")]
+        public string? Tier { get; set; }
     }
 }

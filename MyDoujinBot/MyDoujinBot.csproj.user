@@ -4,6 +4,9 @@
     <_LastSelectedProfileId>D:\Side\MyDoujinBot\MyDoujinBot\Properties\PublishProfiles\FolderProfile1.pubxml</_LastSelectedProfileId>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Update="Forms\BattleReportForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Update="Forms\EventSelectionForm.cs">
       <SubType>Form</SubType>
     </Compile>
