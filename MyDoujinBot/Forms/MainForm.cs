@@ -1,0 +1,796 @@
+using System;
+using System.Drawing;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using MyDoujinBot.Models;
+using MyDoujinBot.Services;
+
+namespace MyDoujinBot.Forms
+{
+    /// <summary>
+    /// 主視窗。
+    /// 負責：UI 建立、使用者操作事件、顯示狀態與 LOG。
+    /// 業務邏輯全部委託給 Service 層。
+    /// </summary>
+    public partial class MainForm : Form
+    {
+        // =====================================================================
+        // 控制項宣告
+        // =====================================================================
+
+        // --- 訓練行動 ---
+        private ComboBox cmbAction = null!;
+
+        // --- 執行模式 ---
+        private RadioButton rbCount = null!;
+        private RadioButton rbTime = null!;
+        private NumericUpDown nudCount = null!;
+        private NumericUpDown nudMinutes = null!;
+        private Label lblCountUnit = null!;
+        private Label lblTimeUnit = null!;
+
+        // --- 冷卻延遲 ---
+        private NumericUpDown nudExtraDelay = null!;
+
+        // --- 事件應對 ---
+        private RadioButton rbAutoEvent = null!;
+        private RadioButton rbManualEvent = null!;
+
+        // --- 控制按鈕 ---
+        private Button btnStart = null!;
+        private Button btnStop = null!;
+        private Button btnSettings = null!;
+
+        // --- Token 狀態顯示 ---
+        private Label lblTokenStatus = null!;
+
+        // --- LOG ---
+        private RichTextBox rtbLog = null!;
+
+        // --- 即時狀態 ---
+        private Label lblStatusValue = null!;
+        private Label lblRunCount = null!;
+        private Label lblSuccessCount = null!;
+        private Label lblFailCount = null!;
+        private Label lblEventCount = null!;
+        private Label lblEventSuccessCount = null!;
+        private Label lblEventFailCount = null!;
+        private Label lblLevel = null!;
+        private Label lblTotalExp = null!;
+        private Label lblNextRun = null!;
+        private Label lblElapsed = null!;
+
+        // =====================================================================
+        // 狀態與 Service
+        // =====================================================================
+
+        // Token 儲存在記憶體，不寫入磁碟，不出現在 LOG
+        private string _currentToken = string.Empty;
+
+        private readonly TrainingService _trainingService = new();
+        private readonly EventService _eventService = new();
+        private TrainingLoop? _trainingLoop;
+        private EventSelectionForm? _currentEventForm;
+
+        private CancellationTokenSource? _cts;
+        private readonly System.Windows.Forms.Timer _elapsedTimer = new() { Interval = 1000 };
+        private DateTime _loopStartTime;
+
+        // =====================================================================
+        // 建構子
+        // =====================================================================
+        public MainForm()
+        {
+            this.Text = "MyDoujin Bot";
+            this.Icon = new Icon(@"Resources\app.ico");
+            
+            this.Size = new Size(1100, 720);
+            this.MinimumSize = new Size(900, 650);
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.BackColor = Color.FromArgb(22, 22, 30);
+            this.ForeColor = Color.FromArgb(220, 220, 230);
+            this.Font = new Font("Microsoft JhengHei UI", 9.5f);
+
+            InitializeControls();
+        }
+
+        // =====================================================================
+        // 建立所有控制項（使用 TableLayoutPanel 確保 resize 正確）
+        // =====================================================================
+        private void InitializeControls()
+        {
+            this.SuspendLayout();
+
+            // ── 根容器：TableLayoutPanel（3欄） ──
+            // TableLayoutPanel 說明：
+            // 把視窗分成固定的欄位，每個欄位內的 Panel 用 Dock=Fill 自動填滿。
+            // 這樣 resize 視窗時，只有第 3 欄（LOG）會變寬，前兩欄固定不動。
+            var table = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 1,
+                Padding = new Padding(4),
+                BackColor = Color.FromArgb(22, 22, 30)
+            };
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 375)); // 設定欄
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210)); // 狀態欄
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // LOG 欄（自動填滿）
+            table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            this.Controls.Add(table);
+
+            // ── 左欄：設定面板 ──
+            var pnlLeft = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(35, 35, 45),
+                Padding = new Padding(2)
+            };
+            // AutoScroll = false：移除滾動條。
+            // 設定內容高度 ~500px，在最小視窗 650px 下完全可以容納。
+            pnlLeft.AutoScroll = false;
+            table.Controls.Add(pnlLeft, 0, 0);
+
+            BuildLeftPanel(pnlLeft);
+
+            // ── 中欄：即時狀態面板 ──
+            var pnlMiddle = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(35, 35, 45),
+                Padding = new Padding(2)
+            };
+            table.Controls.Add(pnlMiddle, 1, 0);
+
+            BuildMiddlePanel(pnlMiddle);
+
+            // ── 右欄：LOG 面板 ──
+            var pnlLog = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(16, 16, 22),
+                Padding = new Padding(4, 4, 4, 4)
+            };
+            table.Controls.Add(pnlLog, 2, 0);
+
+            BuildLogPanel(pnlLog);
+
+            this.ResumeLayout(false);
+            this.PerformLayout();
+        }
+
+        // =====================================================================
+        // 左欄：設定面板內容
+        // =====================================================================
+        private void BuildLeftPanel(Panel panel)
+        {
+            int y = 8;
+            const int x = 10;
+            const int ctrlW = 345;
+
+            // ── API 設定 ──
+            y = AddSectionHeader(panel, "API 設定", y, x);
+
+            // 設定按鈕（開啟 SettingsForm 對話框）
+            btnSettings = new Button
+            {
+                Location = new Point(x, y),
+                Width = 120,
+                Height = 32,
+                Text = "⚙  設定 Token",
+                BackColor = Color.FromArgb(60, 70, 110),
+                ForeColor = Color.FromArgb(200, 210, 255),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            btnSettings.FlatAppearance.BorderSize = 0;
+            btnSettings.Click += OnSettingsClicked;
+            panel.Controls.Add(btnSettings);
+
+            // Token 狀態標籤（顯示「已設定 ✓」或「⚠ 未設定」）
+            lblTokenStatus = new Label
+            {
+                Location = new Point(x + 130, y + 7),
+                Text = "⚠  尚未設定 Token",
+                ForeColor = Color.FromArgb(220, 160, 60),
+                AutoSize = true
+            };
+            panel.Controls.Add(lblTokenStatus);
+            y += 44;
+
+            // ── 訓練行動 ──
+            y = AddSectionHeader(panel, "訓練行動", y + 4, x);
+
+            AddLabel(panel, "選擇訓練：", x, y);
+            y += 22;
+
+            cmbAction = new ComboBox
+            {
+                Location = new Point(x, y),
+                Width = ctrlW,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = Color.FromArgb(45, 45, 58),
+                ForeColor = Color.FromArgb(220, 220, 230),
+                FlatStyle = FlatStyle.Flat
+            };
+            foreach (var action in TrainingActions.All)
+                cmbAction.Items.Add(action);
+            if (cmbAction.Items.Count > 0)
+                cmbAction.SelectedIndex = 0;
+            panel.Controls.Add(cmbAction);
+            y += 34;
+
+            // ── 執行設定 ──
+            y = AddSectionHeader(panel, "執行設定", y + 4, x);
+
+            AddLabel(panel, "執行模式：", x, y);
+            y += 22;
+
+            var pnlExecMode = new Panel
+            {
+                Location = new Point(0, y),
+                Width = ctrlW + x,
+                Height = 24,
+                BackColor = Color.Transparent
+            };
+            panel.Controls.Add(pnlExecMode);
+
+            rbCount = new RadioButton
+            {
+                Location = new Point(x, 0),
+                Text = "執行指定次數",
+                Checked = true,
+                ForeColor = Color.FromArgb(210, 210, 225),
+                AutoSize = true
+            };
+            rbCount.CheckedChanged += OnExecutionModeChanged;
+            pnlExecMode.Controls.Add(rbCount);
+
+            rbTime = new RadioButton
+            {
+                Location = new Point(x + 145, 0),
+                Text = "執行指定時間",
+                ForeColor = Color.FromArgb(210, 210, 225),
+                AutoSize = true
+            };
+            rbTime.CheckedChanged += OnExecutionModeChanged;
+            pnlExecMode.Controls.Add(rbTime);
+            y += 28;
+
+            nudCount = new NumericUpDown
+            {
+                Location = new Point(x, y),
+                Width = 110,
+                Minimum = 1,
+                Maximum = 99999,
+                Value = 100,
+                BackColor = Color.FromArgb(45, 45, 58),
+                ForeColor = Color.FromArgb(220, 220, 230)
+            };
+            panel.Controls.Add(nudCount);
+            lblCountUnit = AddLabel(panel, "次", x + 118, y + 4);
+
+            nudMinutes = new NumericUpDown
+            {
+                Location = new Point(x, y),
+                Width = 110,
+                Minimum = 1,
+                Maximum = 1440,
+                Value = 30,
+                BackColor = Color.FromArgb(45, 45, 58),
+                ForeColor = Color.FromArgb(220, 220, 230),
+                Visible = false
+            };
+            panel.Controls.Add(nudMinutes);
+            lblTimeUnit = AddLabel(panel, "分鐘", x + 118, y + 4, visible: false);
+            y += 34;
+
+            AddLabel(panel, "額外冷卻延遲：", x, y);
+            y += 22;
+
+            nudExtraDelay = new NumericUpDown
+            {
+                Location = new Point(x, y),
+                Width = 110,
+                Minimum = 0,
+                Maximum = 60,
+                Value = 2,
+                BackColor = Color.FromArgb(45, 45, 58),
+                ForeColor = Color.FromArgb(220, 220, 230)
+            };
+            panel.Controls.Add(nudExtraDelay);
+            AddLabel(panel, "秒（0～此值，毫秒精度）", x + 118, y + 4);
+            y += 34;
+
+            // ── 遭遇事件應對 ──
+            y = AddSectionHeader(panel, "遭遇事件應對", y + 4, x);
+
+            var pnlEventMode = new Panel
+            {
+                Location = new Point(0, y),
+                Width = ctrlW + x,
+                Height = 60,
+                BackColor = Color.Transparent
+            };
+            panel.Controls.Add(pnlEventMode);
+
+            rbAutoEvent = new RadioButton
+            {
+                Location = new Point(x, 0),
+                Text = "自動選擇（最高成功率）",
+                Checked = true,
+                ForeColor = Color.FromArgb(210, 210, 225),
+                AutoSize = true
+            };
+            pnlEventMode.Controls.Add(rbAutoEvent);
+
+            rbManualEvent = new RadioButton
+            {
+                Location = new Point(x, 28),
+                Text = "人工選擇（彈出視窗等待選擇）",
+                ForeColor = Color.FromArgb(210, 210, 225),
+                AutoSize = true
+            };
+            pnlEventMode.Controls.Add(rbManualEvent);
+            y += 60;
+
+            // ── 開始 / 停止 ──
+            btnStart = new Button
+            {
+                Location = new Point(x, y),
+                Width = 163,
+                Height = 38,
+                Text = "▶  開始訓練",
+                BackColor = Color.FromArgb(38, 155, 75),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            btnStart.FlatAppearance.BorderSize = 0;
+            btnStart.Click += OnStartClicked;
+            panel.Controls.Add(btnStart);
+
+            btnStop = new Button
+            {
+                Location = new Point(x + 175, y),
+                Width = 163,
+                Height = 38,
+                Text = "⏹  停止",
+                BackColor = Color.FromArgb(155, 45, 45),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Enabled = false
+            };
+            btnStop.FlatAppearance.BorderSize = 0;
+            btnStop.Click += OnStopClicked;
+            panel.Controls.Add(btnStop);
+        }
+
+        // =====================================================================
+        // 中欄：即時狀態面板內容
+        // =====================================================================
+        private void BuildMiddlePanel(Panel panel)
+        {
+            int y = 8;
+            const int x = 10;
+
+            y = AddSectionHeader(panel, "即時狀態", y, x);
+
+            lblStatusValue     = AddStatRow(panel, "狀態：",     "已停止",    Color.FromArgb(170, 170, 180), x, ref y);
+            lblRunCount        = AddStatRow(panel, "已執行：",   "0 次",      Color.FromArgb(210, 210, 225), x, ref y);
+            lblSuccessCount    = AddStatRow(panel, "成功：",     "0 次",      Color.FromArgb(90,  215, 110), x, ref y);
+            lblFailCount       = AddStatRow(panel, "失敗：",     "0 次",      Color.FromArgb(215, 90,  90),  x, ref y);
+
+            y += 6; // 小間距
+            lblEventCount         = AddStatRow(panel, "觸發事件：",  "0 次", Color.FromArgb(190, 150, 255), x, ref y);
+            lblEventSuccessCount  = AddStatRow(panel, "事件成功：",  "0 次", Color.FromArgb(90,  215, 110), x, ref y);
+            lblEventFailCount     = AddStatRow(panel, "事件失敗：",  "0 次", Color.FromArgb(215, 90,  90),  x, ref y);
+
+            y += 6;
+            lblLevel    = AddStatRow(panel, "目前等級：", "—",        Color.FromArgb(255, 215, 70),  x, ref y);
+            lblTotalExp = AddStatRow(panel, "累積 EXP：", "0",        Color.FromArgb(210, 210, 225), x, ref y);
+
+            y += 6;
+            lblNextRun  = AddStatRow(panel, "下次執行：", "—",        Color.FromArgb(170, 215, 255), x, ref y);
+            lblElapsed  = AddStatRow(panel, "運作時間：", "00:00:00", Color.FromArgb(210, 210, 225), x, ref y);
+        }
+
+        // =====================================================================
+        // 右欄：LOG 面板內容
+        // =====================================================================
+        private void BuildLogPanel(Panel panel)
+        {
+            var lblHeader = new Label
+            {
+                Text = "訓練 LOG",
+                Dock = DockStyle.Top,
+                Height = 26,
+                ForeColor = Color.FromArgb(160, 160, 195),
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(2, 0, 0, 0)
+            };
+
+            rtbLog = new RichTextBox
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(14, 14, 20),
+                ForeColor = Color.FromArgb(200, 200, 215),
+                BorderStyle = BorderStyle.None,
+                Font = new Font("Consolas", 9.5f),
+                ReadOnly = true,
+                ScrollBars = RichTextBoxScrollBars.Vertical
+            };
+
+            // Dock 順序：Fill 先加，Top 後加
+            // WinForms 的 Dock 從後往前處理，所以 Top（後加）優先佔位
+            panel.Controls.Add(rtbLog);
+            panel.Controls.Add(lblHeader);
+        }
+
+        // =====================================================================
+        // Helper：建立區塊標題 + 分隔線
+        // =====================================================================
+        private static int AddSectionHeader(Control parent, string text, int y, int x)
+        {
+            parent.Controls.Add(new Label
+            {
+                Location = new Point(x, y),
+                Width = parent.Width - x * 2,
+                Text = text,
+                ForeColor = Color.FromArgb(130, 170, 255),
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                AutoSize = false,
+                Height = 22
+            });
+            parent.Controls.Add(new Label
+            {
+                Location = new Point(x, y + 22),
+                Width = parent.Width - x * 2,
+                Height = 1,
+                BackColor = Color.FromArgb(65, 65, 85),
+                AutoSize = false,
+                Text = ""
+            });
+            return y + 32;
+        }
+
+        private static Label AddLabel(Control parent, string text, int x, int y,
+            Color? color = null, bool visible = true)
+        {
+            var lbl = new Label
+            {
+                Location = new Point(x, y),
+                Text = text,
+                ForeColor = color ?? Color.FromArgb(170, 170, 190),
+                AutoSize = true,
+                Visible = visible
+            };
+            parent.Controls.Add(lbl);
+            return lbl;
+        }
+
+        // =====================================================================
+        // Helper：中欄狀態列（標籤 + 數值）
+        // ref y：讓 helper 內部自動累加 y，呼叫方不用手動 y += 26
+        // =====================================================================
+        private static Label AddStatRow(Control parent, string labelText, string valueText,
+            Color valueColor, int x, ref int y)
+        {
+            parent.Controls.Add(new Label
+            {
+                Location = new Point(x, y),
+                Text = labelText,
+                ForeColor = Color.FromArgb(140, 140, 160),
+                AutoSize = true
+            });
+            var lblValue = new Label
+            {
+                Location = new Point(x + 95, y),
+                Text = valueText,
+                ForeColor = valueColor,
+                AutoSize = true,
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold)
+            };
+            parent.Controls.Add(lblValue);
+            y += 25;
+            return lblValue;
+        }
+
+        // =====================================================================
+        // 設定按鈕：開啟 SettingsForm 對話框
+        // ShowDialog() 說明：
+        // ShowDialog 會阻塞當前 Thread 直到對話框關閉，
+        // 對話框本身是 Modal（使用者必須先關閉它才能操作主視窗）。
+        // =====================================================================
+        private void OnSettingsClicked(object? sender, EventArgs e)
+        {
+            using var settingsForm = new SettingsForm(_currentToken);
+            if (settingsForm.ShowDialog(this) == DialogResult.OK)
+            {
+                _currentToken = settingsForm.Token;
+                UpdateTokenStatus();
+            }
+        }
+
+        private void UpdateTokenStatus()
+        {
+            if (string.IsNullOrWhiteSpace(_currentToken))
+            {
+                lblTokenStatus.Text = "⚠  尚未設定 Token";
+                lblTokenStatus.ForeColor = Color.FromArgb(220, 160, 60);
+            }
+            else
+            {
+                lblTokenStatus.Text = "✓  Token 已設定";
+                lblTokenStatus.ForeColor = Color.FromArgb(90, 210, 100);
+            }
+        }
+
+        // =====================================================================
+        // 執行模式切換
+        // =====================================================================
+        private void OnExecutionModeChanged(object? sender, EventArgs e)
+        {
+            bool isCount = rbCount.Checked;
+            nudCount.Visible   = isCount;
+            lblCountUnit.Visible = isCount;
+            nudMinutes.Visible  = !isCount;
+            lblTimeUnit.Visible = !isCount;
+        }
+
+        // =====================================================================
+        // 開始按鈕
+        // async void：UI 事件不能回傳 Task，只能用 async void。
+        // 內部必須自己 try/catch，因為 async void 的 exception 無法被外部捕獲。
+        // =====================================================================
+        private async void OnStartClicked(object? sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(_currentToken))
+            {
+                AppendLog("[錯誤] 請先點擊「設定 Token」輸入 Bearer Token。",
+                    Color.FromArgb(220, 80, 80));
+                return;
+            }
+
+            if (cmbAction.SelectedItem is not TrainingAction selectedAction)
+            {
+                AppendLog("[錯誤] 請選擇訓練行動。", Color.FromArgb(220, 80, 80));
+                return;
+            }
+
+            var settings = new LoopSettings
+            {
+                Token = _currentToken,
+                ActionId = selectedAction.ActionId,
+                Mode = rbCount.Checked ? ExecutionMode.Count : ExecutionMode.Time,
+                CountLimit = (int)nudCount.Value,
+                TimeLimitMinutes = (int)nudMinutes.Value,
+                ExtraDelaySeconds = (double)nudExtraDelay.Value
+            };
+
+            _cts = new CancellationTokenSource();
+
+            _trainingLoop = new TrainingLoop(_trainingService, _eventService)
+            {
+                IsAutoEventMode = rbAutoEvent.Checked,
+                OnLog = AppendLog,
+                OnStatusChanged = UpdateStatus,
+                OnStatsUpdated = UpdateStats,
+                OnManualEventSelect = HandleManualEventAsync
+            };
+
+            SetControlsEnabled(false);
+            btnStop.Enabled = true;
+
+            _loopStartTime = DateTime.Now;
+            _elapsedTimer.Tick += OnElapsedTick;
+            _elapsedTimer.Start();
+
+            AppendLog($"開始訓練：{selectedAction.DisplayName}（{selectedAction.ActionId}）",
+                Color.FromArgb(140, 200, 255));
+
+            try
+            {
+                await Task.Run(() => _trainingLoop.RunAsync(settings, _cts.Token), _cts.Token);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                AppendLog($"[錯誤] {ex.GetType().Name}: {ex.Message}", Color.FromArgb(220, 80, 80));
+            }
+            finally
+            {
+                _elapsedTimer.Stop();
+                _elapsedTimer.Tick -= OnElapsedTick;
+                SetControlsEnabled(true);
+                btnStop.Enabled = false;
+                lblNextRun.Text = "—";
+            }
+        }
+
+        // =====================================================================
+        // 停止按鈕
+        // =====================================================================
+        private void OnStopClicked(object? sender, EventArgs e)
+        {
+            _cts?.Cancel();
+            _currentEventForm?.Close(); // 如果事件視窗開著，一起關掉
+            AppendLog("使用者按下停止，正在中止訓練…", Color.FromArgb(220, 160, 80));
+            btnStop.Enabled = false;
+        }
+
+        // =====================================================================
+        // 更新狀態標籤
+        // =====================================================================
+        private void UpdateStatus(LoopStatus status)
+        {
+            if (lblStatusValue.InvokeRequired)
+            {
+                lblStatusValue.Invoke(() => UpdateStatus(status));
+                return;
+            }
+            (lblStatusValue.Text, lblStatusValue.ForeColor) = status switch
+            {
+                LoopStatus.Running         => ("執行中",     Color.FromArgb(80, 220, 120)),
+                LoopStatus.WaitingCooldown => ("等待冷卻",   Color.FromArgb(170, 215, 255)),
+                LoopStatus.WaitingEvent    => ("等待事件選擇", Color.FromArgb(190, 150, 255)),
+                LoopStatus.Completed       => ("已完成",     Color.FromArgb(140, 200, 255)),
+                LoopStatus.Error           => ("發生錯誤",   Color.FromArgb(220, 80,  80)),
+                _                          => ("已停止",     Color.FromArgb(170, 170, 180)),
+            };
+        }
+
+        // =====================================================================
+        // 更新統計數字
+        // =====================================================================
+        private void UpdateStats(LoopStats stats)
+        {
+            if (lblRunCount.InvokeRequired)
+            {
+                lblRunCount.Invoke(() => UpdateStats(stats));
+                return;
+            }
+            lblRunCount.Text          = $"{stats.RunCount} 次";
+            lblSuccessCount.Text      = $"{stats.SuccessCount} 次";
+            lblFailCount.Text         = $"{stats.FailCount} 次";
+            lblEventCount.Text        = $"{stats.EventCount} 次";
+            lblEventSuccessCount.Text = $"{stats.EventSuccessCount} 次";
+            lblEventFailCount.Text    = $"{stats.EventFailCount} 次";
+
+            if (stats.CurrentLevel > 0) lblLevel.Text = stats.CurrentLevel.ToString();
+            lblTotalExp.Text = stats.TotalExp.ToString("N0");
+
+            lblNextRun.Text = stats.NextRunCountdownSeconds > 0
+                ? $"{stats.NextRunCountdownSeconds:F1} 秒"
+                : "—";
+        }
+
+        // =====================================================================
+        // 運作時間計時器
+        // =====================================================================
+        private void OnElapsedTick(object? sender, EventArgs e)
+        {
+            var elapsed = DateTime.Now - _loopStartTime;
+            lblElapsed.Text = elapsed.ToString(@"hh\:mm\:ss");
+        }
+
+        // =====================================================================
+        // 鎖定/解鎖設定控制項
+        // =====================================================================
+        private void SetControlsEnabled(bool enabled)
+        {
+            btnSettings.Enabled   = enabled;
+            cmbAction.Enabled     = enabled;
+            rbCount.Enabled       = enabled;
+            rbTime.Enabled        = enabled;
+            nudCount.Enabled      = enabled;
+            nudMinutes.Enabled    = enabled;
+            nudExtraDelay.Enabled = enabled;
+            rbAutoEvent.Enabled   = enabled;
+            rbManualEvent.Enabled = enabled;
+            btnStart.Enabled      = enabled;
+        }
+
+        // =====================================================================
+        // 人工選擇事件 UI
+        //
+        // 流程：
+        // 1. TrainingLoop（ThreadPool Thread）呼叫此方法
+        // 2. 建立 TaskCompletionSource<string?>
+        // 3. Invoke 到 UI Thread 顯示 EventSelectionForm
+        // 4. TrainingLoop await tcs.Task（掛起等待）
+        // 5. 使用者點選選項 → OptionSelected 事件 → tcs.SetResult(optionId)
+        // 6. 視窗關閉，TrainingLoop 繼續執行
+        //
+        // TaskCompletionSource 說明：
+        // 這是「手動控制的 Task」。在任意時間呼叫 tcs.SetResult(value)，
+        // 所有 await tcs.Task 的地方就會收到結果並繼續執行。
+        // =====================================================================
+        private Task<string?> HandleManualEventAsync(PendingEvent pendingEvent, CancellationToken ct)
+        {
+            var tcs = new TaskCompletionSource<string?>();
+
+            // 如果使用者按停止（CancellationToken 觸發），關閉事件視窗並回傳 null
+            var reg = ct.Register(() =>
+            {
+                this.BeginInvoke(() => _currentEventForm?.Close());
+                tcs.TrySetResult(null);
+            });
+
+            this.Invoke(() =>
+            {
+                _currentEventForm = new EventSelectionForm(pendingEvent);
+
+                // 使用者點選選項：設定結果並關閉視窗
+                _currentEventForm.OptionSelected += optionId =>
+                {
+                    reg.Dispose();
+                    tcs.TrySetResult(optionId);
+                    _currentEventForm = null;
+                };
+
+                // 視窗被關閉但沒有選擇（例如直接按 X）：回傳 null
+                _currentEventForm.FormClosed += (_, _) =>
+                {
+                    reg.Dispose();
+                    tcs.TrySetResult(null);
+                    _currentEventForm = null;
+                };
+
+                _currentEventForm.Show(this);
+            });
+
+            return tcs.Task;
+        }
+
+        // =====================================================================
+        // 向 LOG 追加彩色文字（執行緒安全）
+        //
+        // LOG 上限：2000 行。超過時自動刪除最舊的 500 行。
+        // =====================================================================
+        internal void AppendLog(string message, Color color)
+        {
+            if (rtbLog.InvokeRequired)
+            {
+                rtbLog.Invoke(() => AppendLog(message, color));
+                return;
+            }
+
+            // LOG 行數上限管理
+            const int maxLines = 2000;
+            const int trimLines = 500;
+            if (rtbLog.Lines.Length > maxLines)
+            {
+                int trimToIndex = rtbLog.GetFirstCharIndexFromLine(trimLines);
+                rtbLog.Select(0, trimToIndex);
+                rtbLog.SelectedText = "";
+            }
+
+            rtbLog.SelectionStart = rtbLog.TextLength;
+            rtbLog.SelectionLength = 0;
+            rtbLog.SelectionColor = color;
+            rtbLog.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}");
+            rtbLog.SelectionColor = rtbLog.ForeColor;
+            rtbLog.ScrollToCaret();
+        }
+
+        // =====================================================================
+        // 視窗關閉：取消背景工作，釋放資源
+        // =====================================================================
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            base.OnFormClosing(e);
+            _cts?.Cancel();
+            _currentEventForm?.Close();
+            _elapsedTimer.Dispose();
+            _trainingService.Dispose();
+            _eventService.Dispose();
+        }
+    }
+}
