@@ -110,5 +110,12 @@ namespace MyDoujinBot.Services
         /// </summary>
         [JsonPropertyName("enableSystemNotify")]
         public bool EnableSystemNotify { get; set; } = false;
+
+        /// <summary>
+        /// 是否啟用 Windows 系統通知的音效。
+        /// 預設：關閉。
+        /// </summary>
+        [JsonPropertyName("enableSystemNotifySound")]
+        public bool EnableSystemNotifySound { get; set; } = false;
     }
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Toolkit.Uwp.Notifications;
 using MyDoujinBot.Models;
 using MyDoujinBot.Services;
 
@@ -922,12 +923,16 @@ namespace MyDoujinBot.Forms
                 // 系統通知（若設定開啟，不含 emoji 避免相容性問題）
                 if (AppSettingsManager.Current.EnableSystemNotify)
                 {
-                    _notifyIcon.BalloonTipTitle = $"事件觸發：{pendingEvent.Name}";
-                    _notifyIcon.BalloonTipText = string.IsNullOrWhiteSpace(pendingEvent.Description)
+                    var title = $"事件觸發：{pendingEvent.Name}";
+                    var content = string.IsNullOrWhiteSpace(pendingEvent.Description)
                         ? "請切換至 MyDoujin Bot 視窗選擇應對選項。"
                         : pendingEvent.Description;
-                    _notifyIcon.BalloonTipIcon = ToolTipIcon.Info;
-                    _notifyIcon.ShowBalloonTip(8000);
+
+                    new ToastContentBuilder()
+                        .AddText(title)
+                        .AddText(content)
+                        .AddAudio(new ToastAudio() { Silent = !AppSettingsManager.Current.EnableSystemNotifySound })
+                        .Show();
                 }
             });
 

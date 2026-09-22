@@ -14,6 +14,7 @@ namespace MyDoujinBot.Forms
     {
         private TextBox txtToken = null!;
         private CheckBox chkNotify = null!;
+        private CheckBox chkNotifySound = null!;
 
         /// <summary>儲存後的 Token 值，供 MainForm 更新記憶體中的 _currentToken</summary>
         public string Token { get; private set; } = string.Empty;
@@ -21,9 +22,9 @@ namespace MyDoujinBot.Forms
         public SettingsForm(string currentToken = "")
         {
             this.Text = "設定";
-            this.Size = new Size(510, 320);
-            this.MinimumSize = new Size(510, 320);
-            this.MaximumSize = new Size(510, 320);
+            this.Size = new Size(510, 360);
+            this.MinimumSize = new Size(510, 360);
+            this.MaximumSize = new Size(510, 360);
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(28, 28, 35);
             this.ForeColor = Color.FromArgb(220, 220, 230);
@@ -133,6 +134,20 @@ namespace MyDoujinBot.Forms
                 Height = 18
             };
             this.Controls.Add(lblNotifyNote);
+            y += 28;
+
+            chkNotifySound = new CheckBox
+            {
+                Text = "開啟通知音效",
+                Location = new Point(x + 20, y),
+                Width = w - 20,
+                ForeColor = Color.FromArgb(210, 210, 225),
+                BackColor = Color.Transparent,
+                AutoSize = false,
+                Height = 22,
+                Checked = AppSettingsManager.Current.EnableSystemNotifySound
+            };
+            this.Controls.Add(chkNotifySound);
             y += 32;
 
             // =====================================================================
@@ -158,6 +173,7 @@ namespace MyDoujinBot.Forms
                 // 持久化所有設定
                 AppSettingsManager.Current.Token = Token;
                 AppSettingsManager.Current.EnableSystemNotify = chkNotify.Checked;
+                AppSettingsManager.Current.EnableSystemNotifySound = chkNotifySound.Checked;
                 AppSettingsManager.Save();
 
                 this.DialogResult = DialogResult.OK;
