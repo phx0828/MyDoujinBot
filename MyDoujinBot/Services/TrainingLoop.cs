@@ -85,6 +85,12 @@ namespace MyDoujinBot.Services
         // 如果是自動模式，TrainingLoop 自己選擇，不呼叫這個 callback
         public Func<PendingEvent, CancellationToken, Task<string?>>? OnManualEventSelect { get; set; }
 
+        // 人工模式下，當事件選擇結果回傳時，呼叫 Form 顯示結果 UI 並等待使用者關閉
+        public Func<EventResult, CancellationToken, Task>? OnManualEventResult { get; set; }
+
+        // 人工模式下，當 API 失敗或需要清理手動 UI 時呼叫
+        public Action? OnCloseManualUi { get; set; }
+
         public LoopStats Stats { get; } = new();
 
         public TrainingLoop(TrainingService trainingService, EventService eventService)
@@ -228,9 +234,26 @@ namespace MyDoujinBot.Services
                         // 呼叫事件選擇 API
                         if (!string.IsNullOrEmpty(chosenOptionId))
                         {
-                            bool eventOk = await ProcessEventAsync(
+                            var (eventOk, eventResult) = await ProcessEventAsync(
                                 settings.Token, pe.EventId, chosenOptionId, cancellationToken);
-                            if (!eventOk) return; // 若 401 授權失敗或已取消，終止循環
+                            if (!eventOk)
+                            {
+                                OnCloseManualUi?.Invoke();
+                                return; // 若 401 授權失敗或已取消，終止循環
+                            }
+
+                            // 手動選擇模式下，若有結果且有配置 OnManualEventResult，則 await 結果展示（等待使用者按下關閉）
+                            if (!IsAutoEventMode)
+                            {
+                                if (eventResult != null && OnManualEventResult != null)
+                                {
+                                    await OnManualEventResult(eventResult, cancellationToken);
+                                }
+                                else
+                                {
+                                    OnCloseManualUi?.Invoke();
+                                }
+                            }
                         }
 
                         if (cancellationToken.IsCancellationRequested) return;
@@ -437,13 +460,13 @@ namespace MyDoujinBot.Services
         // 呼叫事件選擇 API 並處理結果
         // 回傳 bool：true 代表事件處理正常，false 代表 401 授權失敗或取消，需終止循環
         // =====================================================================
-        private async Task<bool> ProcessEventAsync(
+        private async Task<(bool ok, EventResult? result)> ProcessEventAsync(
             string token, string eventId, string optionId, CancellationToken cancellationToken)
         {
             var eventActionResult = await _eventService.SelectOptionAsync(
                 token, optionId, cancellationToken);
 
-            if (eventActionResult.IsCancelled) return false;
+            if (eventActionResult.IsCancelled) return (false, null);
 
             if (!eventActionResult.IsSuccess)
             {
@@ -457,16 +480,16 @@ namespace MyDoujinBot.Services
                     Log("[錯誤] Token 無效或已過期，訓練終止。請點擊「設定 Token」重新輸入。",
                         System.Drawing.Color.FromArgb(220, 80, 80));
                     OnStatusChanged?.Invoke(LoopStatus.Error);
-                    return false;
+                    return (false, null);
                 }
 
-                return true;
+                return (true, null);
             }
 
             // 處理事件結果
             ProcessEventResult(eventActionResult.Result!);
             NotifyStats();
-            return true;
+            return (true, eventActionResult.Result);
         }
 
         // =====================================================================

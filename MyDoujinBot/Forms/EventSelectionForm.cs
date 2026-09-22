@@ -166,8 +166,11 @@ namespace MyDoujinBot.Forms
 
                 btn.Click += (_, _) =>
                 {
+                    foreach (Control ctrl in this.Controls)
+                    {
+                        ctrl.Enabled = false;
+                    }
                     OptionSelected?.Invoke(capturedOption.Id);
-                    this.Close();
                 };
 
                 this.Controls.Add(btn);
@@ -179,6 +182,160 @@ namespace MyDoujinBot.Forms
             this.ClientSize = new Size(500, y);
 
             this.ResumeLayout(false);
+        }
+
+        public System.Threading.Tasks.Task ShowResultAsync(EventResult er, System.Threading.CancellationToken ct)
+        {
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+            var reg = ct.Register(() =>
+            {
+                this.BeginInvoke(() =>
+                {
+                    tcs.TrySetResult(false);
+                    if (!this.IsDisposed) this.Close();
+                });
+            });
+
+            Action buildAction = () =>
+            {
+                if (this.IsDisposed)
+                {
+                    reg.Dispose();
+                    tcs.TrySetResult(true);
+                    return;
+                }
+
+                this.SuspendLayout();
+                this.Controls.Clear();
+                this.Text = $"⚡  事件結果：{(er.IsSuccess ? "成功" : "失敗")}";
+
+                int y = 16;
+                const int pad = 16;
+                const int innerWidth = 460;
+
+                // --- 標題：成功 / 失敗 ---
+                string resultTitle = er.IsSuccess ? "成功" : "失敗";
+                Color titleColor = er.IsSuccess 
+                    ? Color.FromArgb(80, 220, 120) 
+                    : Color.FromArgb(240, 80, 80);
+
+                var lblTitle = new Label
+                {
+                    Text = resultTitle,
+                    Location = new Point(pad, y),
+                    Width = innerWidth,
+                    Font = new Font("Microsoft JhengHei UI", 16f, FontStyle.Bold),
+                    ForeColor = titleColor,
+                    AutoSize = false,
+                    Height = 36
+                };
+                this.Controls.Add(lblTitle);
+                y += 42;
+
+                // --- 判定結果區塊 ---
+                if (!string.IsNullOrEmpty(er.Stat) || er.Roll.HasValue)
+                {
+                    var pnlCheck = MyDoujinBot.Utilities.EventUiHelper.CreateCheckResultPanel(er, innerWidth);
+                    pnlCheck.Location = new Point(pad, y);
+                    this.Controls.Add(pnlCheck);
+                    y += pnlCheck.Height + 14;
+                }
+
+                // --- 故事內文 ---
+                if (!string.IsNullOrWhiteSpace(er.Text))
+                {
+                    var lblStory = new Label
+                    {
+                        Text = er.Text,
+                        Location = new Point(pad, y),
+                        MaximumSize = new Size(innerWidth, 0),
+                        AutoSize = true,
+                        ForeColor = Color.FromArgb(220, 220, 235),
+                        Font = new Font("Microsoft JhengHei UI", 10.5f)
+                    };
+                    this.Controls.Add(lblStory);
+                    int preferredHeight = lblStory.GetPreferredSize(new Size(innerWidth, 0)).Height;
+                    lblStory.Size = new Size(innerWidth, Math.Max(preferredHeight, 20));
+                    y += lblStory.Height + 14;
+                }
+
+                // --- 戰鬥結果 ---
+                if (er.BattleResult != null)
+                {
+                    var lblBattle = new Label
+                    {
+                        Text = $"[戰鬥結果] {er.BattleResult}",
+                        Location = new Point(pad, y),
+                        MaximumSize = new Size(innerWidth, 0),
+                        AutoSize = true,
+                        ForeColor = Color.FromArgb(255, 180, 100),
+                        Font = new Font("Microsoft JhengHei UI", 9.5f)
+                    };
+                    this.Controls.Add(lblBattle);
+                    int preferredHeight = lblBattle.GetPreferredSize(new Size(innerWidth, 0)).Height;
+                    lblBattle.Size = new Size(innerWidth, Math.Max(preferredHeight, 20));
+                    y += lblBattle.Height + 14;
+                }
+
+                // --- 獲得獎勵 ---
+                var bonusParts = MyDoujinBot.Utilities.EventUiHelper.BuildBonusStatsParts(er.Rewards?.BonusStats);
+                if (bonusParts.Count > 0)
+                {
+                    var lblReward = new Label
+                    {
+                        Text = $"獲得獎勵：{string.Join("、", bonusParts)}",
+                        Location = new Point(pad, y),
+                        Width = innerWidth,
+                        AutoSize = true,
+                        ForeColor = Color.FromArgb(255, 220, 80),
+                        Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold)
+                    };
+                    this.Controls.Add(lblReward);
+                    y += lblReward.Height + 16;
+                }
+
+                // --- 關閉按鈕 ---
+                var btnClose = new Button
+                {
+                    Text = "關閉",
+                    Location = new Point(pad + (innerWidth - 120) / 2, y),
+                    Width = 120,
+                    Height = 36,
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = Color.FromArgb(60, 60, 80),
+                    ForeColor = Color.White,
+                    Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                    Cursor = Cursors.Hand
+                };
+                btnClose.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 130);
+                btnClose.Click += (_, _) =>
+                {
+                    reg.Dispose();
+                    tcs.TrySetResult(true);
+                    this.Close();
+                };
+                this.Controls.Add(btnClose);
+                y += 48;
+
+                this.ClientSize = new Size(500, y);
+                this.ResumeLayout(true);
+
+                this.FormClosed += (_, _) =>
+                {
+                    reg.Dispose();
+                    tcs.TrySetResult(true);
+                };
+
+                this.BringToFront();
+                this.Activate();
+            };
+
+            if (this.InvokeRequired)
+                this.Invoke(buildAction);
+            else
+                buildAction();
+
+            return tcs.Task;
         }
     }
 }

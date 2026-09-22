@@ -1,27 +1,29 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using MyDoujinBot.Services;
 
 namespace MyDoujinBot.Forms
 {
     /// <summary>
-    /// 設定對話框。
-    /// 目前僅包含 Bearer Token 設定。
-    /// 未來可在此加入其他設定項目。
+    /// 應用程式設定對話框。
+    /// 包含連線設定（Token）與通知設定。
+    /// 所有設定儲存後會持久化至磁碟（%AppData%\MyDoujinBot\settings.json）。
     /// </summary>
     public class SettingsForm : Form
     {
         private TextBox txtToken = null!;
+        private CheckBox chkNotify = null!;
 
-        /// <summary>儲存後的 Token 值（Save 按下後才有值）</summary>
+        /// <summary>儲存後的 Token 值，供 MainForm 更新記憶體中的 _currentToken</summary>
         public string Token { get; private set; } = string.Empty;
 
         public SettingsForm(string currentToken = "")
         {
             this.Text = "設定";
-            this.Size = new Size(480, 200);
-            this.MinimumSize = new Size(480, 200);
-            this.MaximumSize = new Size(480, 200);
+            this.Size = new Size(510, 320);
+            this.MinimumSize = new Size(510, 320);
+            this.MaximumSize = new Size(510, 320);
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(28, 28, 35);
             this.ForeColor = Color.FromArgb(220, 220, 230);
@@ -35,48 +37,112 @@ namespace MyDoujinBot.Forms
 
         private void BuildUI(string currentToken)
         {
+            int y = 16;
+            const int x = 16;
+            const int w = 460;
+
+            // =====================================================================
+            // 區塊：連線設定
+            // =====================================================================
+            AddSectionHeader(this, "連線設定", y, x);
+            y += 32;
+
+            // Token 輸入框
             var lblToken = new Label
             {
                 Text = "Bearer Token：",
-                Location = new Point(16, 18),
+                Location = new Point(x, y),
                 ForeColor = Color.FromArgb(160, 180, 255),
                 Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
                 AutoSize = true
             };
             this.Controls.Add(lblToken);
+            y += 22;
 
             txtToken = new TextBox
             {
-                Location = new Point(16, 42),
-                Width = 430,
-                UseSystemPasswordChar = true,
+                Location = new Point(x, y),
+                Width = w,
+                // 不使用密碼遮蔽 — 使用者確認此為低敏感資料
                 BackColor = Color.FromArgb(45, 45, 55),
                 ForeColor = Color.FromArgb(220, 220, 230),
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = new Font("Consolas", 9.5f),
-                PlaceholderText = "輸入 Bearer Token（輸入時自動遮蔽）",
+                PlaceholderText = "請輸入 Bearer Token",
                 Text = currentToken
             };
             this.Controls.Add(txtToken);
+            y += 28;
 
-            var lblNote = new Label
+            // 紅字提醒：將會儲存至磁碟
+            var lblTokenNote = new Label
             {
-                Text = "⚠ Token 僅儲存於本次執行記憶體，不寫入磁碟，不出現在 LOG。",
-                Location = new Point(16, 74),
-                Width = 430,
-                ForeColor = Color.FromArgb(150, 150, 100),
+                Text = "⚠ Token 將儲存至磁碟，下次啟動後自動載入。請勿在公共電腦上使用。",
+                Location = new Point(x, y),
+                Width = w,
+                ForeColor = Color.FromArgb(210, 90, 90),
                 Font = new Font("Microsoft JhengHei UI", 8.5f),
                 AutoSize = false,
                 Height = 18
             };
-            this.Controls.Add(lblNote);
+            this.Controls.Add(lblTokenNote);
+            y += 28;
 
-            // --- 儲存按鈕 ---
+            // =====================================================================
+            // 分隔線
+            // =====================================================================
+            this.Controls.Add(new Label
+            {
+                Location = new Point(x, y),
+                Width = w,
+                Height = 1,
+                BackColor = Color.FromArgb(65, 65, 85),
+                AutoSize = false,
+                Text = ""
+            });
+            y += 12;
+
+            // =====================================================================
+            // 區塊：通知設定
+            // =====================================================================
+            AddSectionHeader(this, "通知設定", y, x);
+            y += 32;
+
+            chkNotify = new CheckBox
+            {
+                Text = "啟用系統通知（手動內嵌模式下，事件觸發時右下角氣泡提示）",
+                Location = new Point(x, y),
+                Width = w,
+                ForeColor = Color.FromArgb(210, 210, 225),
+                BackColor = Color.Transparent,
+                AutoSize = false,
+                Height = 22,
+                Checked = AppSettingsManager.Current.EnableSystemNotify
+            };
+            this.Controls.Add(chkNotify);
+            y += 28;
+
+            var lblNotifyNote = new Label
+            {
+                Text = "僅於「手動選擇」+「內嵌於主畫面」模式有效。",
+                Location = new Point(x + 20, y),
+                Width = w - 20,
+                ForeColor = Color.FromArgb(120, 120, 145),
+                Font = new Font("Microsoft JhengHei UI", 8.5f),
+                AutoSize = false,
+                Height = 18
+            };
+            this.Controls.Add(lblNotifyNote);
+            y += 32;
+
+            // =====================================================================
+            // 按鈕列
+            // =====================================================================
             var btnSave = new Button
             {
                 Text = "儲存",
-                Location = new Point(228, 112),
-                Width = 104,
+                Location = new Point(268, y),
+                Width = 100,
                 Height = 34,
                 BackColor = Color.FromArgb(40, 140, 80),
                 ForeColor = Color.White,
@@ -87,18 +153,23 @@ namespace MyDoujinBot.Forms
             btnSave.FlatAppearance.BorderSize = 0;
             btnSave.Click += (_, _) =>
             {
-                Token = txtToken.Text;
+                Token = txtToken.Text.Trim();
+
+                // 持久化所有設定
+                AppSettingsManager.Current.Token = Token;
+                AppSettingsManager.Current.EnableSystemNotify = chkNotify.Checked;
+                AppSettingsManager.Save();
+
                 this.DialogResult = DialogResult.OK;
                 this.Close();
             };
             this.Controls.Add(btnSave);
 
-            // --- 取消按鈕 ---
             var btnCancel = new Button
             {
                 Text = "取消",
-                Location = new Point(342, 112),
-                Width = 104,
+                Location = new Point(378, y),
+                Width = 100,
                 Height = 34,
                 BackColor = Color.FromArgb(70, 70, 90),
                 ForeColor = Color.FromArgb(200, 200, 210),
@@ -114,9 +185,31 @@ namespace MyDoujinBot.Forms
             };
             this.Controls.Add(btnCancel);
 
-            // Enter 鍵觸發儲存，Escape 觸發取消
             this.AcceptButton = btnSave;
             this.CancelButton = btnCancel;
+        }
+
+        private static void AddSectionHeader(Control parent, string text, int y, int x)
+        {
+            parent.Controls.Add(new Label
+            {
+                Location = new Point(x, y),
+                Width = parent.Width - x * 2,
+                Text = text,
+                ForeColor = Color.FromArgb(130, 170, 255),
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                AutoSize = false,
+                Height = 22
+            });
+            parent.Controls.Add(new Label
+            {
+                Location = new Point(x, y + 22),
+                Width = parent.Width - x * 2,
+                Height = 1,
+                BackColor = Color.FromArgb(65, 65, 85),
+                AutoSize = false,
+                Text = ""
+            });
         }
     }
 }

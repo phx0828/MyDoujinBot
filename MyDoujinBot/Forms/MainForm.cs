@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -36,6 +37,16 @@ namespace MyDoujinBot.Forms
         // --- 事件應對 ---
         private RadioButton rbAutoEvent = null!;
         private RadioButton rbManualEvent = null!;
+        // 手動模式的子選項
+        private RadioButton rbPopupMode = null!;
+        private RadioButton rbInlineMode = null!;
+        private Panel pnlManualSub = null!;
+
+        // --- 內嵌事件 Overlay（覆蓋 LOG 欄） ---
+        private Panel pnlEventOverlay = null!;
+
+        // --- 系統托盤通知 ---
+        private NotifyIcon _notifyIcon = null!;
 
         // --- 控制按鈕 ---
         private Button btnStart = null!;
@@ -47,6 +58,7 @@ namespace MyDoujinBot.Forms
 
         // --- LOG ---
         private RichTextBox rtbLog = null!;
+        private Label lblLogHeader = null!;
 
         // --- 即時狀態 ---
         private Label lblStatusValue = null!;
@@ -65,7 +77,7 @@ namespace MyDoujinBot.Forms
         // 狀態與 Service
         // =====================================================================
 
-        // Token 儲存在記憶體，不寫入磁碟，不出現在 LOG
+        // Token：啟動時從 AppSettings 讀取，使用者儲存設定時更新
         private string _currentToken = string.Empty;
 
         private readonly TrainingService _trainingService = new();
@@ -84,7 +96,7 @@ namespace MyDoujinBot.Forms
         {
             this.Text = "MyDoujin Bot";
             this.Icon = new Icon(@"Resources\app.ico");
-            
+
             this.Size = new Size(1100, 720);
             this.MinimumSize = new Size(900, 650);
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -92,7 +104,31 @@ namespace MyDoujinBot.Forms
             this.ForeColor = Color.FromArgb(220, 220, 230);
             this.Font = new Font("Microsoft JhengHei UI", 9.5f);
 
+            // 啟動時讀取持久化設定
+            AppSettingsManager.Load();
+
             InitializeControls();
+            InitializeNotifyIcon();
+
+            // 從持久化設定還原 Token
+            _currentToken = AppSettingsManager.Current.Token;
+            UpdateTokenStatus();
+
+            // 依儲存的設定還原事件應對模式
+            // EventMode: "auto" = 自動；"popup" = 手動+彈窗；"inline" = 手動+內嵌
+            bool isManual = AppSettingsManager.Current.EventMode != "auto";
+            if (isManual)
+            {
+                rbManualEvent.Checked = true; // 觸發 CheckedChanged → 子選項啟用
+                if (AppSettingsManager.Current.EventMode == "inline")
+                    rbInlineMode.Checked = true;
+                else
+                    rbPopupMode.Checked = true;
+            }
+            else
+            {
+                rbAutoEvent.Checked = true;
+            }
         }
 
         // =====================================================================
@@ -176,9 +212,9 @@ namespace MyDoujinBot.Forms
             btnSettings = new Button
             {
                 Location = new Point(x, y),
-                Width = 120,
+                Width = 100,
                 Height = 32,
-                Text = "⚙  設定 Token",
+                Text = "⚙  設定",
                 BackColor = Color.FromArgb(60, 70, 110),
                 ForeColor = Color.FromArgb(200, 210, 255),
                 FlatStyle = FlatStyle.Flat,
@@ -188,17 +224,20 @@ namespace MyDoujinBot.Forms
             btnSettings.FlatAppearance.BorderSize = 0;
             btnSettings.Click += OnSettingsClicked;
             panel.Controls.Add(btnSettings);
+            y += 36; // 按鈕高度 + 小間距
 
-            // Token 狀態標籤（顯示「已設定 ✓」或「⚠ 未設定」）
+            // Token 狀態標籤 — 獨立一行，避免被截斷
             lblTokenStatus = new Label
             {
-                Location = new Point(x + 130, y + 7),
-                Text = "⚠  尚未設定 Token",
-                ForeColor = Color.FromArgb(220, 160, 60),
-                AutoSize = true
+                Location = new Point(x, y),
+                Width = ctrlW,
+                Text = "⚠  尚未設定 Token，請點擊「設定」填入",
+                ForeColor = Color.FromArgb(210, 80, 80),
+                AutoSize = false,
+                Height = 18
             };
             panel.Controls.Add(lblTokenStatus);
-            y += 44;
+            y += 24;
 
             // ── 訓練行動 ──
             y = AddSectionHeader(panel, "訓練行動", y + 4, x);
@@ -307,11 +346,12 @@ namespace MyDoujinBot.Forms
             // ── 遭遇事件應對 ──
             y = AddSectionHeader(panel, "遭遇事件應對", y + 4, x);
 
+            // pnlEventMode 高度 = rbAutoEvent(28) + rbManualEvent(28) + pnlManualSub(60) = 116
             var pnlEventMode = new Panel
             {
                 Location = new Point(0, y),
                 Width = ctrlW + x,
-                Height = 60,
+                Height = 116,
                 BackColor = Color.Transparent
             };
             panel.Controls.Add(pnlEventMode);
@@ -324,17 +364,50 @@ namespace MyDoujinBot.Forms
                 ForeColor = Color.FromArgb(210, 210, 225),
                 AutoSize = true
             };
+            rbAutoEvent.CheckedChanged += OnManualSubModeChanged;
             pnlEventMode.Controls.Add(rbAutoEvent);
 
             rbManualEvent = new RadioButton
             {
                 Location = new Point(x, 28),
-                Text = "人工選擇（彈出視窗等待選擇）",
+                Text = "手動選擇",
                 ForeColor = Color.FromArgb(210, 210, 225),
                 AutoSize = true
             };
+            rbManualEvent.CheckedChanged += OnManualSubModeChanged;
             pnlEventMode.Controls.Add(rbManualEvent);
-            y += 60;
+
+            // 手動選擇的子選項（縮排顯示）
+            pnlManualSub = new Panel
+            {
+                Location = new Point(x + 22, 56),
+                Width = ctrlW - 22,
+                Height = 60,
+                BackColor = Color.Transparent,
+                Enabled = false // 預設 auto 選中時停用
+            };
+            pnlEventMode.Controls.Add(pnlManualSub);
+
+            rbPopupMode = new RadioButton
+            {
+                Location = new Point(0, 0),
+                Text = "彈出視窗（奪取焦點）",
+                Checked = true,
+                ForeColor = Color.FromArgb(210, 210, 225),
+                AutoSize = true
+            };
+            pnlManualSub.Controls.Add(rbPopupMode);
+
+            rbInlineMode = new RadioButton
+            {
+                Location = new Point(0, 28),
+                Text = "內嵌於主畫面（零干擾）",
+                ForeColor = Color.FromArgb(210, 210, 225),
+                AutoSize = true
+            };
+            pnlManualSub.Controls.Add(rbInlineMode);
+
+            y += 116;
 
             // ── 開始 / 停止 ──
             btnStart = new Button
@@ -401,11 +474,11 @@ namespace MyDoujinBot.Forms
         }
 
         // =====================================================================
-        // 右欄：LOG 面板內容
+        // 右欄：LOG 面板內容（含事件 Overlay）
         // =====================================================================
         private void BuildLogPanel(Panel panel)
         {
-            var lblHeader = new Label
+            lblLogHeader = new Label
             {
                 Text = "訓練 LOG",
                 Dock = DockStyle.Top,
@@ -427,10 +500,42 @@ namespace MyDoujinBot.Forms
                 ScrollBars = RichTextBoxScrollBars.Vertical
             };
 
-            // Dock 順序：Fill 先加，Top 後加
-            // WinForms 的 Dock 從後往前處理，所以 Top（後加）優先佔位
+            // ── 事件 Overlay Panel（覆蓋整個 LOG 欄，平時隱藏）──
+            // 原理：WinForms 中，後加入的控制項會顯示在前面（Z-Order）。
+            // Overlay 最後加入，因此視覺上蓋在 rtbLog 上方。
+            pnlEventOverlay = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(20, 20, 28),
+                Visible = false,
+                Padding = new Padding(0)
+            };
+
+            // Dock 順序：Fill 先加，Top 後加（WinForms Dock 從後往前佔位）
             panel.Controls.Add(rtbLog);
-            panel.Controls.Add(lblHeader);
+            panel.Controls.Add(lblLogHeader);
+            // Overlay 最後加入 → 位於最上層（蓋住 rtbLog）
+            panel.Controls.Add(pnlEventOverlay);
+        }
+
+        // =====================================================================
+        // NotifyIcon 初始化（右下角系統托盤圖示）
+        // =====================================================================
+        private void InitializeNotifyIcon()
+        {
+            _notifyIcon = new NotifyIcon
+            {
+                Icon = this.Icon,
+                Text = "MyDoujin Bot",
+                Visible = true
+            };
+            // 雙擊托盤圖示時還原視窗
+            _notifyIcon.DoubleClick += (_, _) =>
+            {
+                this.Show();
+                this.WindowState = FormWindowState.Normal;
+                this.Activate();
+            };
         }
 
         // =====================================================================
@@ -522,14 +627,30 @@ namespace MyDoujinBot.Forms
         {
             if (string.IsNullOrWhiteSpace(_currentToken))
             {
-                lblTokenStatus.Text = "⚠  尚未設定 Token";
-                lblTokenStatus.ForeColor = Color.FromArgb(220, 160, 60);
+                lblTokenStatus.Text = "⚠  尚未設定 Token，請點擊「設定」填入";
+                lblTokenStatus.ForeColor = Color.FromArgb(210, 80, 80);
             }
             else
             {
                 lblTokenStatus.Text = "✓  Token 已設定";
                 lblTokenStatus.ForeColor = Color.FromArgb(90, 210, 100);
             }
+        }
+
+        // =====================================================================
+        // 手動模式子選項顯示切換（自動→停用子面板；手動→啟用子面板）
+        // =====================================================================
+        private void OnManualSubModeChanged(object? sender, EventArgs e)
+        {
+            bool isManual = rbManualEvent.Checked;
+            pnlManualSub.Enabled = isManual;
+            // 視覺回饋：停用時降低子選項亮度
+            rbPopupMode.ForeColor = isManual
+                ? Color.FromArgb(210, 210, 225)
+                : Color.FromArgb(120, 120, 140);
+            rbInlineMode.ForeColor = isManual
+                ? Color.FromArgb(210, 210, 225)
+                : Color.FromArgb(120, 120, 140);
         }
 
         // =====================================================================
@@ -553,7 +674,7 @@ namespace MyDoujinBot.Forms
         {
             if (string.IsNullOrWhiteSpace(_currentToken))
             {
-                AppendLog("[錯誤] 請先點擊「設定 Token」輸入 Bearer Token。",
+                AppendLog("[錯誤] 請先點擊「設定」輸入 Bearer Token。",
                     Color.FromArgb(220, 80, 80));
                 return;
             }
@@ -574,6 +695,13 @@ namespace MyDoujinBot.Forms
                 ExtraDelaySeconds = (double)nudExtraDelay.Value
             };
 
+            // 計算並儲存目前的事件模式
+            bool isInline = rbManualEvent.Checked && rbInlineMode.Checked;
+            bool isPopup  = rbManualEvent.Checked && !rbInlineMode.Checked;
+            AppSettingsManager.Current.EventMode = rbAutoEvent.Checked ? "auto" :
+                                                   isInline ? "inline" : "popup";
+            AppSettingsManager.Save();
+
             _cts = new CancellationTokenSource();
 
             _trainingLoop = new TrainingLoop(_trainingService, _eventService)
@@ -582,7 +710,14 @@ namespace MyDoujinBot.Forms
                 OnLog = AppendLog,
                 OnStatusChanged = UpdateStatus,
                 OnStatsUpdated = UpdateStats,
-                OnManualEventSelect = HandleManualEventAsync
+                // 自動模式：OnManualEventSelect = null（TrainingLoop 自動選擇）
+                // 手動+彈窗：HandleManualEventAsync
+                // 手動+內嵌：HandleInlineEventAsync
+                OnManualEventSelect = rbAutoEvent.Checked ? null :
+                                      isInline ? HandleInlineEventAsync : HandleManualEventAsync,
+                OnManualEventResult = rbAutoEvent.Checked ? null :
+                                      isInline ? ShowInlineEventResultAsync : HandleManualEventResultAsync,
+                OnCloseManualUi = () => { _currentEventForm?.Close(); HideEventOverlay(); }
             };
 
             SetControlsEnabled(false);
@@ -621,6 +756,7 @@ namespace MyDoujinBot.Forms
         {
             _cts?.Cancel();
             _currentEventForm?.Close(); // 如果事件視窗開著，一起關掉
+            HideEventOverlay();          // 如果 Overlay 展開著，一起關掉
             AppendLog("使用者按下停止，正在中止訓練…", Color.FromArgb(220, 160, 80));
             btnStop.Enabled = false;
         }
@@ -685,16 +821,18 @@ namespace MyDoujinBot.Forms
         // =====================================================================
         private void SetControlsEnabled(bool enabled)
         {
-            btnSettings.Enabled   = enabled;
-            cmbAction.Enabled     = enabled;
-            rbCount.Enabled       = enabled;
-            rbTime.Enabled        = enabled;
-            nudCount.Enabled      = enabled;
-            nudMinutes.Enabled    = enabled;
-            nudExtraDelay.Enabled = enabled;
-            rbAutoEvent.Enabled   = enabled;
-            rbManualEvent.Enabled = enabled;
-            btnStart.Enabled      = enabled;
+            btnSettings.Enabled    = enabled;
+            cmbAction.Enabled      = enabled;
+            rbCount.Enabled        = enabled;
+            rbTime.Enabled         = enabled;
+            nudCount.Enabled       = enabled;
+            nudMinutes.Enabled     = enabled;
+            nudExtraDelay.Enabled  = enabled;
+            rbAutoEvent.Enabled    = enabled;
+            rbManualEvent.Enabled  = enabled;
+            // pnlManualSub 整組控制 — 只有手動模式且 enabled=true 時才可操作
+            pnlManualSub.Enabled   = enabled && rbManualEvent.Checked;
+            btnStart.Enabled       = enabled;
         }
 
         // =====================================================================
@@ -727,15 +865,14 @@ namespace MyDoujinBot.Forms
             {
                 _currentEventForm = new EventSelectionForm(pendingEvent);
 
-                // 使用者點選選項：設定結果並關閉視窗
+                // 使用者點選選項：設定結果
                 _currentEventForm.OptionSelected += optionId =>
                 {
                     reg.Dispose();
                     tcs.TrySetResult(optionId);
-                    _currentEventForm = null;
                 };
 
-                // 視窗被關閉但沒有選擇（例如直接按 X）：回傳 null
+                // 視窗被關閉（或選擇完按下關閉）：清理引用
                 _currentEventForm.FormClosed += (_, _) =>
                 {
                     reg.Dispose();
@@ -747,6 +884,469 @@ namespace MyDoujinBot.Forms
             });
 
             return tcs.Task;
+        }
+
+        // =====================================================================
+        // 內嵌事件 UI（零干擾模式）
+        //
+        // 流程：
+        // 1. TrainingLoop（ThreadPool Thread）呼叫此方法
+        // 2. 建立 TaskCompletionSource<string?>
+        // 3. Invoke 到 UI Thread，在 pnlEventOverlay 渲染事件選項
+        // 4. 若設定開啟，發送 Windows BalloonTip 通知
+        // 5. TrainingLoop await tcs.Task（掛起等待，不阻塞 UI）
+        // 6. 使用者點選選項 → tcs.SetResult(optionId) → Overlay 隱藏
+        // =====================================================================
+        private Task<string?> HandleInlineEventAsync(PendingEvent pendingEvent, CancellationToken ct)
+        {
+            var tcs = new TaskCompletionSource<string?>();
+
+            // CancellationToken 觸發時（使用者按停止）：隱藏 Overlay 並回傳 null
+            var reg = ct.Register(() =>
+            {
+                this.BeginInvoke(() =>
+                {
+                    HideEventOverlay();
+                    tcs.TrySetResult(null);
+                });
+            });
+
+            this.Invoke(() =>
+            {
+                ShowInlineEvent(pendingEvent, optionId =>
+                {
+                    reg.Dispose();
+                    tcs.TrySetResult(optionId);
+                });
+
+                // 系統通知（若設定開啟，不含 emoji 避免相容性問題）
+                if (AppSettingsManager.Current.EnableSystemNotify)
+                {
+                    _notifyIcon.BalloonTipTitle = $"事件觸發：{pendingEvent.Name}";
+                    _notifyIcon.BalloonTipText = string.IsNullOrWhiteSpace(pendingEvent.Description)
+                        ? "請切換至 MyDoujin Bot 視窗選擇應對選項。"
+                        : pendingEvent.Description;
+                    _notifyIcon.BalloonTipIcon = ToolTipIcon.Info;
+                    _notifyIcon.ShowBalloonTip(8000);
+                }
+            });
+
+            return tcs.Task;
+        }
+
+        // =====================================================================
+        // 處理彈出視窗模式下的事件結果顯示
+        // =====================================================================
+        private Task HandleManualEventResultAsync(EventResult er, CancellationToken ct)
+        {
+            var form = _currentEventForm;
+            if (form != null && !form.IsDisposed)
+            {
+                var tcs = new TaskCompletionSource<bool>();
+                this.Invoke(() =>
+                {
+                    if (form != null && !form.IsDisposed)
+                    {
+                        var task = form.ShowResultAsync(er, ct);
+                        task.ContinueWith(_ => tcs.TrySetResult(true));
+                    }
+                    else
+                    {
+                        tcs.TrySetResult(true);
+                    }
+                });
+                return tcs.Task;
+            }
+            return Task.CompletedTask;
+        }
+
+        // =====================================================================
+        // 處理內嵌模式下的事件結果顯示
+        // =====================================================================
+        private Task ShowInlineEventResultAsync(EventResult er, CancellationToken ct)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            var reg = ct.Register(() =>
+            {
+                this.BeginInvoke(() =>
+                {
+                    HideEventOverlay();
+                    tcs.TrySetResult(false);
+                });
+            });
+
+            Action buildAction = () =>
+            {
+                pnlEventOverlay.Controls.Clear();
+                pnlEventOverlay.Visible = true;
+                pnlEventOverlay.BringToFront();
+                if (lblLogHeader != null) lblLogHeader.Visible = false;
+
+                const int pad = 14;
+
+                // ── Header Bar ──
+                var pnlHeader = new Panel
+                {
+                    Dock = DockStyle.Top,
+                    Height = 42,
+                    BackColor = Color.FromArgb(40, 30, 60)
+                };
+                var lblHeader = new Label
+                {
+                    Text = "⚡  事件結果",
+                    Dock = DockStyle.Fill,
+                    ForeColor = Color.FromArgb(200, 160, 255),
+                    Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Padding = new Padding(pad, 0, 0, 0)
+                };
+                pnlHeader.Controls.Add(lblHeader);
+                pnlEventOverlay.Controls.Add(pnlHeader);
+
+                // ── 內容區 ──
+                var pnlContent = new Panel
+                {
+                    Dock = DockStyle.Fill,
+                    AutoScroll = true,
+                    Padding = new Padding(pad, 14, pad + SystemInformation.VerticalScrollBarWidth + 2, 10),
+                    BackColor = Color.FromArgb(20, 20, 28)
+                };
+                pnlEventOverlay.Controls.Add(pnlHeader);
+                pnlEventOverlay.Controls.Add(pnlContent);
+                pnlHeader.SendToBack();
+                pnlContent.BringToFront();
+
+                var logPanel = pnlEventOverlay.Parent as Panel;
+                int logClientW = logPanel?.ClientSize.Width ?? 500;
+                int logPadH    = logPanel?.Padding.Horizontal ?? 8;
+                int innerW = Math.Max(200, logClientW - logPadH - pad * 2 - SystemInformation.VerticalScrollBarWidth - 2);
+
+                int y = 14;
+
+                // ── 標題：成功 / 失敗 ──
+                string resultTitle = er.IsSuccess ? "成功" : "失敗";
+                Color titleColor = er.IsSuccess 
+                    ? Color.FromArgb(80, 220, 120) 
+                    : Color.FromArgb(240, 80, 80);
+
+                var lblTitle = new Label
+                {
+                    Text = resultTitle,
+                    Location = new Point(pad, y),
+                    Width = innerW,
+                    Font = new Font("Microsoft JhengHei UI", 15f, FontStyle.Bold),
+                    ForeColor = titleColor,
+                    AutoSize = false,
+                    Height = 34
+                };
+                pnlContent.Controls.Add(lblTitle);
+                y += 38;
+
+                // ── 判定結果區塊 ──
+                if (!string.IsNullOrEmpty(er.Stat) || er.Roll.HasValue)
+                {
+                    var pnlCheck = MyDoujinBot.Utilities.EventUiHelper.CreateCheckResultPanel(er, innerW);
+                    pnlCheck.Location = new Point(pad, y);
+                    pnlContent.Controls.Add(pnlCheck);
+                    y += pnlCheck.Height + 14;
+                }
+
+                // ── 故事內文 ──
+                if (!string.IsNullOrWhiteSpace(er.Text))
+                {
+                    var lblStory = new Label
+                    {
+                        Text = er.Text,
+                        Location = new Point(pad, y),
+                        MaximumSize = new Size(innerW, 0),
+                        AutoSize = true,
+                        ForeColor = Color.FromArgb(220, 220, 235),
+                        Font = new Font("Microsoft JhengHei UI", 10.5f)
+                    };
+                    pnlContent.Controls.Add(lblStory);
+                    int prefH = lblStory.GetPreferredSize(new Size(innerW, 0)).Height;
+                    lblStory.Size = new Size(innerW, Math.Max(prefH, 20));
+                    y += lblStory.Height + 14;
+                }
+
+                // ── 戰鬥結果 ──
+                if (er.BattleResult != null)
+                {
+                    var lblBattle = new Label
+                    {
+                        Text = $"[戰鬥結果] {er.BattleResult}",
+                        Location = new Point(pad, y),
+                        MaximumSize = new Size(innerW, 0),
+                        AutoSize = true,
+                        ForeColor = Color.FromArgb(255, 180, 100),
+                        Font = new Font("Microsoft JhengHei UI", 9.5f)
+                    };
+                    pnlContent.Controls.Add(lblBattle);
+                    int prefH = lblBattle.GetPreferredSize(new Size(innerW, 0)).Height;
+                    lblBattle.Size = new Size(innerW, Math.Max(prefH, 20));
+                    y += lblBattle.Height + 14;
+                }
+
+                // ── 獲得獎勵 ──
+                var bonusParts = MyDoujinBot.Utilities.EventUiHelper.BuildBonusStatsParts(er.Rewards?.BonusStats);
+                if (bonusParts.Count > 0)
+                {
+                    var lblReward = new Label
+                    {
+                        Text = $"獲得獎勵：{string.Join("、", bonusParts)}",
+                        Location = new Point(0, y),
+                        Width = innerW,
+                        AutoSize = true,
+                        ForeColor = Color.FromArgb(255, 220, 80),
+                        Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold)
+                    };
+                    pnlContent.Controls.Add(lblReward);
+                    y += lblReward.Height + 16;
+                }
+
+                // ── 關閉按鈕 ──
+                var btnClose = new Button
+                {
+                    Text = "關閉",
+                    Location = new Point(pad + (innerW - 120) / 2, y),
+                    Width = 120,
+                    Height = 36,
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = Color.FromArgb(60, 60, 80),
+                    ForeColor = Color.White,
+                    Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                    Cursor = Cursors.Hand
+                };
+                btnClose.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 130);
+                btnClose.Click += (_, _) =>
+                {
+                    reg.Dispose();
+                    HideEventOverlay();
+                    tcs.TrySetResult(true);
+                };
+                pnlContent.Controls.Add(btnClose);
+                pnlEventOverlay.BringToFront();
+            };
+
+            if (this.InvokeRequired)
+                this.Invoke(buildAction);
+            else
+                buildAction();
+
+            return tcs.Task;
+        }
+
+        // =====================================================================
+        // 渲染事件 Overlay 內容
+        // onOptionSelected：使用者點選某個選項後呼叫，帶入選擇的 optionId
+        // =====================================================================
+        private void ShowInlineEvent(PendingEvent pe, Action<string?> onOptionSelected)
+        {
+            // 清空上一次的 Overlay 內容
+            pnlEventOverlay.Controls.Clear();
+
+            const int pad = 14;
+
+            // ── Header Bar ──
+            var pnlHeader = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 42,
+                BackColor = Color.FromArgb(40, 30, 60)
+            };
+            var lblHeader = new Label
+            {
+                Text = "⚡  遭遇事件",
+                Dock = DockStyle.Fill,
+                ForeColor = Color.FromArgb(200, 160, 255),
+                Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(pad, 0, 0, 0)
+            };
+            pnlHeader.Controls.Add(lblHeader);
+            pnlEventOverlay.Controls.Add(pnlHeader);
+
+            // ── 內容區（可捲動，容納大量選項）──
+            // AutoScroll = true：選項過多時顯示捲軸
+            var pnlContent = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                // 右側 padding 加入捐軸寬度，防止内容溱出時出現水平捐軸
+                Padding = new Padding(pad, 18, pad + SystemInformation.VerticalScrollBarWidth + 2, 10),
+                BackColor = Color.FromArgb(20, 20, 28)
+            };
+            pnlEventOverlay.Controls.Add(pnlHeader);
+            pnlEventOverlay.Controls.Add(pnlContent);
+            pnlHeader.SendToBack();
+            pnlContent.BringToFront();
+
+            int y = 14;
+
+            // 寬度計算說明：
+            // pnlEventOverlay 在 Visible=false 時，ClientSize.Width 可能為 0（WinForms 不對隱藏控制項進行 layout）。
+            // 改從父容器 pnlLog（永遠可見）取寬度，再減去 padding 與捐軸預留。
+            var logPanel = pnlEventOverlay.Parent as Panel;
+            int logClientW = logPanel?.ClientSize.Width ?? 500;
+            int logPadH    = logPanel?.Padding.Horizontal ?? 8; // pnlLog 左右 padding 各 4px
+            // innerW = 可用寬 − 内容 padding 左右 − 捐軸寬度預留
+            int innerW = Math.Max(200,
+                logClientW - logPadH - pad * 2 - SystemInformation.VerticalScrollBarWidth - 2);
+
+            // ── 事件名稱 ──
+            var lblName = new Label
+            {
+                Text = pe.Name,
+                Location = new Point(pad, y),
+                Width = innerW,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                Font = new Font("Microsoft JhengHei UI", 12f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(255, 215, 80),
+                AutoSize = false,
+                Height = 30
+            };
+            pnlContent.Controls.Add(lblName);
+            y += 34;
+
+            // ── 事件描述 ──
+            if (!string.IsNullOrWhiteSpace(pe.Description))
+            {
+                var lblDesc = new Label
+                {
+                    Text = pe.Description,
+                    Location = new Point(pad, y),
+                    MaximumSize = new Size(innerW, 0),
+                    AutoSize = true,
+                    ForeColor = Color.FromArgb(195, 195, 215),
+                    Font = new Font("Microsoft JhengHei UI", 10.5f)
+                };
+                pnlContent.Controls.Add(lblDesc);
+                int descH = lblDesc.GetPreferredSize(new Size(innerW, 0)).Height;
+                lblDesc.Size = new Size(innerW, Math.Max(descH, 22));
+                y += lblDesc.Height + 16; // 拉高與分隔線的間距
+            }
+
+            // ── 分隔線 ──
+            pnlContent.Controls.Add(new Label
+            {
+                Location = new Point(pad, y),
+                Width = innerW,
+                Height = 1,
+                BackColor = Color.FromArgb(70, 60, 100),
+                AutoSize = false,
+                Text = ""
+            });
+            y += 10;
+
+            // ── 選項標題 ──
+            pnlContent.Controls.Add(new Label
+            {
+                Text = "請選擇一個選項：",
+                Location = new Point(pad, y),
+                ForeColor = Color.FromArgb(150, 150, 195),
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                AutoSize = true
+            });
+            y += 26;
+
+            // ── 選項按鈕（與 EventSelectionForm 同設計風格）──
+            foreach (var option in pe.Options)
+            {
+                string rateText = option.SuccessChance.HasValue ? $"{option.SuccessChance}%" : "未知";
+                string mainText = option.Name;
+                string subText = string.IsNullOrEmpty(option.CheckStat)
+                    ? " (直接行動)"
+                    : $" ({MyDoujinBot.Utilities.StatHelper.GetDisplayName(option.CheckStat)}：- / 成功率：{rateText})";
+
+                Color btnBack = option.SuccessChance.HasValue
+                    ? (option.SuccessChance.Value >= 70
+                        ? Color.FromArgb(40, 70, 50)
+                        : option.SuccessChance.Value >= 40
+                            ? Color.FromArgb(60, 55, 40)
+                            : Color.FromArgb(70, 40, 40))
+                    : Color.FromArgb(50, 50, 70);
+
+                Color btnBackHover = Color.FromArgb(
+                    Math.Min(btnBack.R + 30, 255),
+                    Math.Min(btnBack.G + 30, 255),
+                    Math.Min(btnBack.B + 30, 255));
+
+                var btn = new Button
+                {
+                    Location = new Point(pad, y),
+                    Width = innerW,
+                    Height = 46,
+                    Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = btnBack,
+                    Cursor = Cursors.Hand,
+                    Tag = option.Id,
+                    Text = ""
+                };
+                btn.FlatAppearance.BorderColor = Color.FromArgb(90, 75, 130);
+                btn.FlatAppearance.BorderSize = 1;
+
+                var mainFont = new Font("Microsoft JhengHei UI", 9.5f);
+                var subFont  = new Font("Microsoft JhengHei UI", 8.2f);
+
+                btn.Paint += (s, e) =>
+                {
+                    const int leftPad = 12;
+                    Size mainSize = TextRenderer.MeasureText(e.Graphics, mainText, mainFont,
+                        new Size(btn.Width, btn.Height), TextFormatFlags.NoPadding);
+                    Size subSize = TextRenderer.MeasureText(e.Graphics, subText, subFont,
+                        new Size(btn.Width, btn.Height), TextFormatFlags.NoPadding);
+
+                    int mainY = (btn.Height - mainSize.Height) / 2;
+                    int subY  = (btn.Height - subSize.Height)  / 2;
+
+                    TextRenderer.DrawText(e.Graphics, mainText, mainFont,
+                        new Point(leftPad, mainY),
+                        Color.FromArgb(235, 230, 255), TextFormatFlags.NoPadding);
+                    TextRenderer.DrawText(e.Graphics, subText, subFont,
+                        new Point(leftPad + mainSize.Width + 2, subY + 1),
+                        Color.FromArgb(165, 165, 185), TextFormatFlags.NoPadding);
+                };
+
+                btn.Disposed += (s, e) =>
+                {
+                    mainFont.Dispose();
+                    subFont.Dispose();
+                };
+
+                var capturedOption = option;
+                btn.MouseEnter += (_, _) => btn.BackColor = btnBackHover;
+                btn.MouseLeave += (_, _) => btn.BackColor = btnBack;
+
+                btn.Click += (_, _) =>
+                {
+                    foreach (Control ctrl in pnlContent.Controls)
+                    {
+                        ctrl.Enabled = false;
+                    }
+                    onOptionSelected(capturedOption.Id);
+                };
+
+                pnlContent.Controls.Add(btn);
+                y += 52;
+            }
+
+            pnlEventOverlay.Visible = true;
+            pnlEventOverlay.BringToFront();
+            if (lblLogHeader != null) lblLogHeader.Visible = false;
+        }
+
+        /// <summary>隱藏並清空事件 Overlay</summary>
+        private void HideEventOverlay()
+        {
+            if (pnlEventOverlay.InvokeRequired)
+            {
+                pnlEventOverlay.Invoke(HideEventOverlay);
+                return;
+            }
+            pnlEventOverlay.Visible = false;
+            pnlEventOverlay.Controls.Clear();
+            if (lblLogHeader != null) lblLogHeader.Visible = true;
         }
 
         // =====================================================================
@@ -788,9 +1388,12 @@ namespace MyDoujinBot.Forms
             base.OnFormClosing(e);
             _cts?.Cancel();
             _currentEventForm?.Close();
+            HideEventOverlay();
             _elapsedTimer.Dispose();
             _trainingService.Dispose();
             _eventService.Dispose();
+            _notifyIcon.Visible = false; // 關閉前隱藏托盤圖示，避免殘留
+            _notifyIcon.Dispose();
         }
     }
 }
