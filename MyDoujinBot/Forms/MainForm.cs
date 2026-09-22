@@ -94,7 +94,7 @@ namespace MyDoujinBot.Forms
         // =====================================================================
         public MainForm()
         {
-            this.Text = "MyDoujin Bot";
+            this.Text = $"MyDoujin Bot v{Application.ProductVersion}";
             this.Icon = new Icon(@"Resources\app.ico");
 
             this.Size = new Size(1100, 720);
