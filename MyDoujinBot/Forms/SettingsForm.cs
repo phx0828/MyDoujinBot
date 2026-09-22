@@ -22,9 +22,9 @@ namespace MyDoujinBot.Forms
         public SettingsForm(string currentToken = "")
         {
             this.Text = "設定";
-            this.Size = new Size(510, 360);
-            this.MinimumSize = new Size(510, 360);
-            this.MaximumSize = new Size(510, 360);
+            this.Size = new Size(600, 420);
+            this.MinimumSize = new Size(600, 420);
+            this.MaximumSize = new Size(600, 420);
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(28, 28, 35);
             this.ForeColor = Color.FromArgb(220, 220, 230);
@@ -40,7 +40,7 @@ namespace MyDoujinBot.Forms
         {
             int y = 16;
             const int x = 16;
-            const int w = 460;
+            const int w = 550;
 
             // =====================================================================
             // 區塊：連線設定
@@ -80,14 +80,13 @@ namespace MyDoujinBot.Forms
             {
                 Text = "⚠ Token 將儲存至磁碟，下次啟動後自動載入。請勿在公共電腦上使用。",
                 Location = new Point(x, y),
-                Width = w,
+                MaximumSize = new Size(w, 0),
                 ForeColor = Color.FromArgb(210, 90, 90),
                 Font = new Font("Microsoft JhengHei UI", 8.5f),
-                AutoSize = false,
-                Height = 18
+                AutoSize = true
             };
             this.Controls.Add(lblTokenNote);
-            y += 28;
+            y += 32;
 
             // =====================================================================
             // 分隔線
@@ -113,42 +112,39 @@ namespace MyDoujinBot.Forms
             {
                 Text = "啟用系統通知（手動內嵌模式下，事件觸發時右下角氣泡提示）",
                 Location = new Point(x, y),
-                Width = w,
+                MaximumSize = new Size(w, 0),
                 ForeColor = Color.FromArgb(210, 210, 225),
                 BackColor = Color.Transparent,
-                AutoSize = false,
-                Height = 22,
+                AutoSize = true,
                 Checked = AppSettingsManager.Current.EnableSystemNotify
             };
             this.Controls.Add(chkNotify);
-            y += 28;
+            y += 32;
 
             var lblNotifyNote = new Label
             {
                 Text = "僅於「手動選擇」+「內嵌於主畫面」模式有效。",
                 Location = new Point(x + 20, y),
-                Width = w - 20,
+                MaximumSize = new Size(w - 20, 0),
                 ForeColor = Color.FromArgb(120, 120, 145),
                 Font = new Font("Microsoft JhengHei UI", 8.5f),
-                AutoSize = false,
-                Height = 18
+                AutoSize = true
             };
             this.Controls.Add(lblNotifyNote);
-            y += 28;
+            y += 32;
 
             chkNotifySound = new CheckBox
             {
                 Text = "開啟通知音效",
                 Location = new Point(x + 20, y),
-                Width = w - 20,
+                MaximumSize = new Size(w - 20, 0),
                 ForeColor = Color.FromArgb(210, 210, 225),
                 BackColor = Color.Transparent,
-                AutoSize = false,
-                Height = 22,
+                AutoSize = true,
                 Checked = AppSettingsManager.Current.EnableSystemNotifySound
             };
             this.Controls.Add(chkNotifySound);
-            y += 32;
+            y += 40;
 
             // =====================================================================
             // 按鈕列
@@ -156,7 +152,7 @@ namespace MyDoujinBot.Forms
             var btnSave = new Button
             {
                 Text = "儲存",
-                Location = new Point(268, y),
+                Location = new Point(358, y),
                 Width = 100,
                 Height = 34,
                 BackColor = Color.FromArgb(40, 140, 80),
@@ -184,7 +180,7 @@ namespace MyDoujinBot.Forms
             var btnCancel = new Button
             {
                 Text = "取消",
-                Location = new Point(378, y),
+                Location = new Point(468, y),
                 Width = 100,
                 Height = 34,
                 BackColor = Color.FromArgb(70, 70, 90),

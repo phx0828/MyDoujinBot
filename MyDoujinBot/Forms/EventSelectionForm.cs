@@ -177,9 +177,11 @@ namespace MyDoujinBot.Forms
                 y += 52;
             }
 
-            // 設定視窗高度以剛好容納所有選項
+            // 設定視窗高度以剛好容納所有選項，並避免超出螢幕
             y += 16; // 底部邊距
-            this.ClientSize = new Size(500, y);
+            this.AutoScroll = true;
+            int maxHeight = (Screen.PrimaryScreen?.WorkingArea.Height ?? 1080) - 100;
+            this.ClientSize = new Size(500, Math.Min(y, maxHeight));
 
             this.ResumeLayout(false);
         }
@@ -317,7 +319,9 @@ namespace MyDoujinBot.Forms
                 this.Controls.Add(btnClose);
                 y += 48;
 
-                this.ClientSize = new Size(500, y);
+                this.AutoScroll = true;
+                int resultMaxHeight = (Screen.PrimaryScreen?.WorkingArea.Height ?? 1080) - 100;
+                this.ClientSize = new Size(500, Math.Min(y, resultMaxHeight));
                 this.ResumeLayout(true);
 
                 this.FormClosed += (_, _) =>

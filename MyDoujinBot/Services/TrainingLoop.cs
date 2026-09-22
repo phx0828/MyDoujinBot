@@ -46,6 +46,7 @@ namespace MyDoujinBot.Services
         public int TotalExp { get; set; }
         public double NextRunCountdownSeconds { get; set; }  // 倒數秒數，供 UI 顯示
         public DateTime StartTime { get; set; }
+        public System.Collections.Generic.List<string> GainedCharacters { get; set; } = new();
     }
 
     /// <summary>
@@ -115,6 +116,7 @@ namespace MyDoujinBot.Services
             Stats.EventFailCount = 0;
             Stats.TotalExp = 0;
             Stats.StartTime = DateTime.Now;
+            Stats.GainedCharacters.Clear();
 
             OnStatusChanged?.Invoke(LoopStatus.Running);
             NotifyStats();
@@ -522,6 +524,19 @@ namespace MyDoujinBot.Services
                     msg += $" 獲得 {string.Join("、", bonusParts)}";
 
                 Log(msg, System.Drawing.Color.FromArgb(220, 80, 80));
+            }
+
+            // 處理獲得角色
+            if (er.GainCharacters != null && er.GainCharacters.Count > 0)
+            {
+                foreach (var character in er.GainCharacters)
+                {
+                    if (!string.IsNullOrEmpty(character.Name))
+                    {
+                        Stats.GainedCharacters.Add(character.Name);
+                        Log($"[事件] 獲得角色：{character.Name}", System.Drawing.Color.Gold);
+                    }
+                }
             }
         }
 

@@ -54,6 +54,9 @@ namespace MyDoujinBot.Models
 
         [JsonPropertyName("battleResult")]
         public object? BattleResult { get; set; }
+
+        [JsonPropertyName("gainCharacters")]
+        public List<GainCharacter>? GainCharacters { get; set; }
     }
 
     /// <summary>
@@ -69,5 +72,60 @@ namespace MyDoujinBot.Models
         // 4. bonusStats: { "int": 1 } → Dictionary { "int"->1 }
         [JsonPropertyName("bonusStats")]
         public Dictionary<string, int>? BonusStats { get; set; }
+    }
+
+    /// <summary>
+    /// 事件中獲得的角色資訊
+    /// </summary>
+    public class GainCharacter
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("title")]
+        public string Title { get; set; } = string.Empty;
+
+        [JsonPropertyName("imagePath")]
+        public string ImagePath { get; set; } = string.Empty;
+
+        [JsonPropertyName("base")]
+        public CharacterStats? Base { get; set; }
+
+        [JsonPropertyName("normalAttack")]
+        public string NormalAttack { get; set; } = string.Empty;
+
+        [JsonPropertyName("skills")]
+        public List<string> Skills { get; set; } = new();
+
+        [JsonPropertyName("growth")]
+        public CharacterStats? Growth { get; set; }
+    }
+
+    /// <summary>
+    /// 角色的能力值結構 (Base / Growth)
+    /// </summary>
+    public class CharacterStats
+    {
+        [JsonPropertyName("hp")]
+        public int HP { get; set; }
+        [JsonPropertyName("atk")]
+        public int Atk { get; set; }
+        [JsonPropertyName("def")]
+        public int Def { get; set; }
+        [JsonPropertyName("sta")]
+        public int Sta { get; set; }
+        [JsonPropertyName("agi")]
+        public int Agi { get; set; }
+        [JsonPropertyName("spd")]
+        public int Spd { get; set; }
+        [JsonPropertyName("tec")]
+        public int Tec { get; set; }
+        [JsonPropertyName("int")]
+        public int Int { get; set; }
+        [JsonPropertyName("luk")]
+        public int Luk { get; set; }
     }
 }

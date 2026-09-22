@@ -71,6 +71,7 @@ namespace MyDoujinBot.Forms
         private Label lblEventFailCount = null!;
         private Label lblLevel = null!;
         private Label lblTotalExp = null!;
+        private Label lblGainedCharacters = null!;
         private Label lblNextRun = null!;
         private Label lblElapsed = null!;
 
@@ -472,6 +473,11 @@ namespace MyDoujinBot.Forms
             y += 6;
             lblNextRun  = AddStatRow(panel, "下次執行：", "—",        Color.FromArgb(170, 215, 255), x, ref y);
             lblElapsed  = AddStatRow(panel, "運作時間：", "00:00:00", Color.FromArgb(210, 210, 225), x, ref y);
+
+            y += 6;
+            lblGainedCharacters = AddStatRow(panel, "獲得角色：", "無", Color.Gold, x, ref y);
+            lblGainedCharacters.AutoSize = true;
+            lblGainedCharacters.MaximumSize = new Size(100, 0); // Allow wrapping if there are many characters
         }
 
         // =====================================================================
@@ -802,6 +808,15 @@ namespace MyDoujinBot.Forms
 
             if (stats.CurrentLevel > 0) lblLevel.Text = stats.CurrentLevel.ToString();
             lblTotalExp.Text = stats.TotalExp.ToString("N0");
+
+            if (stats.GainedCharacters.Count == 0)
+            {
+                lblGainedCharacters.Text = "無";
+            }
+            else
+            {
+                lblGainedCharacters.Text = string.Join("、", stats.GainedCharacters);
+            }
 
             lblNextRun.Text = stats.NextRunCountdownSeconds > 0
                 ? $"{stats.NextRunCountdownSeconds:F1} 秒"
