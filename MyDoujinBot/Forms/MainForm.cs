@@ -127,6 +127,12 @@ namespace MyDoujinBot.Forms
             this.ForeColor = Color.FromArgb(220, 220, 230);
             this.Font = new Font("Microsoft JhengHei UI", 9.5f);
 
+            // ── DPI 自動縮放：讓 WinForms 依目前 DPI 自動換算所有絕對座標
+            // AutoScaleDimensions 宣告原始設計基準（96 DPI = 100% 縮放）
+            // 啟動時若偵測到不同 DPI，WinForms 會等比例縮放所有 Location / Size
+            this.AutoScaleMode = AutoScaleMode.Dpi;
+            this.AutoScaleDimensions = new SizeF(96F, 96F);
+
             // 啟動時讀取持久化設定
             AppSettingsManager.Load();
 
@@ -173,9 +179,10 @@ namespace MyDoujinBot.Forms
                 Padding = new Padding(4),
                 BackColor = Color.FromArgb(22, 22, 30)
             };
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 395)); // 設定欄
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230)); // 狀態欄
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // LOG 欄（自動填滿）
+            // 比例式欄寬：SizeType.Absolute 欄寬不隨 DPI 縮放，是跑版根本原因之一
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));  // 設定欄
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 23));  // 狀態欄
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 37));  // LOG 欄
             table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             this.Controls.Add(table);
 
@@ -186,8 +193,7 @@ namespace MyDoujinBot.Forms
                 BackColor = Color.FromArgb(35, 35, 45),
                 Padding = new Padding(2)
             };
-            // 允許滾動以適應不同螢幕大小與內容長度
-            pnlLeft.AutoScroll = true;
+            // 捲動由內部 FlowLayoutPanel 負責，外部 Panel 不需要 AutoScroll
             table.Controls.Add(pnlLeft, 0, 0);
 
             BuildLeftPanel(pnlLeft);
@@ -219,272 +225,316 @@ namespace MyDoujinBot.Forms
         }
 
         // =====================================================================
-        // 左欄：設定面板內容
+        // 左欄：設定面板（單欄 TableLayoutPanel → 真正的 HTML block 堆疊）
         // =====================================================================
-        private void BuildLeftPanel(Panel panel)
+        private void BuildLeftPanel(Panel outerPanel)
         {
-            int y = 8;
-            const int x = 10;
-            const int ctrlW = 365;
+            // 將外部 Panel 設為可捲動
+            outerPanel.AutoScroll = true;
+
+            // 單欄 TableLayoutPanel：設定為 AutoSize，高度由內容决定，像 HTML <div> 堆疊
+            var tbl = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 1,
+                RowCount = 0,
+                Padding = new Padding(10, 8, 6, 12),
+                BackColor = Color.Transparent,
+                CellBorderStyle = TableLayoutPanelCellBorderStyle.None
+            };
+            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            outerPanel.Controls.Add(tbl);
 
             // ── API 設定 ──
-            y = AddSectionHeader(panel, "API 設定", y, x);
+            TblAddRow(tbl, MakeSectionHeader("連線設定"));
 
             btnSettings = new Button
             {
-                Location = new Point(x, y),
-                Width = 100, Height = 32,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(12, 4, 12, 4),
                 Text = "⚙  設定",
                 BackColor = Color.FromArgb(60, 70, 110), ForeColor = Color.FromArgb(200, 210, 255),
                 FlatStyle = FlatStyle.Flat, Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand, Anchor = AnchorStyles.Left, Margin = new Padding(0, 4, 0, 4)
             };
             btnSettings.FlatAppearance.BorderSize = 0;
             btnSettings.Click += OnSettingsClicked;
-            panel.Controls.Add(btnSettings);
-            y += 36;
+            TblAddRow(tbl, btnSettings);
 
             lblTokenStatus = new Label
             {
-                Location = new Point(x, y),
-                Width = ctrlW, Height = 18,
                 Text = "⚠  尚未設定 Token，請點擊「設定」填入",
-                ForeColor = Color.FromArgb(210, 80, 80), AutoSize = false
+                ForeColor = Color.FromArgb(210, 80, 80),
+                AutoSize = true, Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 0, 6)
             };
-            panel.Controls.Add(lblTokenStatus);
-            y += 24;
+            TblAddRow(tbl, lblTokenStatus);
 
             // ── 執行類型 ──
-            y = AddSectionHeader(panel, "執行類型", y + 4, x);
-            
-            var pnlModeType = new Panel { Location = new Point(0, y), Width = ctrlW + x, Height = 28, BackColor = Color.Transparent };
-            panel.Controls.Add(pnlModeType);
-            
-            rbModeTraining = new RadioButton { 
-                Location = new Point(x, 0), Text = "自動訓練", Checked = true, ForeColor = Color.White, 
+            TblAddRow(tbl, MakeSectionHeader("執行類型"));
+
+            rbModeTraining = new RadioButton
+            {
+                Text = "自動訓練", Checked = true, ForeColor = Color.White,
                 Appearance = Appearance.Button, FlatStyle = FlatStyle.Flat,
-                Width = 140, Height = 28, TextAlign = ContentAlignment.MiddleCenter, Cursor = Cursors.Hand
+                AutoSize = true, Padding = new Padding(20, 6, 20, 6),
+                TextAlign = ContentAlignment.MiddleCenter, Cursor = Cursors.Hand
             };
             rbModeTraining.FlatAppearance.BorderSize = 0;
             rbModeTraining.FlatAppearance.CheckedBackColor = Color.FromArgb(60, 70, 110);
-            
-            rbModeBattle = new RadioButton { 
-                Location = new Point(x + 145, 0), Text = "自動戰鬥", ForeColor = Color.White, 
+            rbModeBattle = new RadioButton
+            {
+                Text = "自動戰鬥", ForeColor = Color.White,
                 Appearance = Appearance.Button, FlatStyle = FlatStyle.Flat,
-                Width = 140, Height = 28, TextAlign = ContentAlignment.MiddleCenter, Cursor = Cursors.Hand
+                AutoSize = true, Padding = new Padding(20, 6, 20, 6),
+                TextAlign = ContentAlignment.MiddleCenter, Cursor = Cursors.Hand,
+                Margin = new Padding(6, 0, 0, 0)
             };
             rbModeBattle.FlatAppearance.BorderSize = 0;
             rbModeBattle.FlatAppearance.CheckedBackColor = Color.FromArgb(60, 70, 110);
             rbModeTraining.CheckedChanged += OnModeTypeChanged;
             rbModeBattle.CheckedChanged += OnModeTypeChanged;
-            pnlModeType.Controls.Add(rbModeTraining);
-            pnlModeType.Controls.Add(rbModeBattle);
-            y += 34;
+            TblAddRow(tbl, MakeHRow(rbModeTraining, rbModeBattle));
 
-            // ── 共用執行設定 ──
-            y = AddSectionHeader(panel, "執行設定", y, x);
-            AddLabel(panel, "執行模式：", x, y);
-            y += 22;
+            // ── 執行設定 ──
+            TblAddRow(tbl, MakeSectionHeader("執行設定"));
+            TblAddRow(tbl, MakeLabel("執行模式："));
 
-            var pnlExecMode = new Panel { Location = new Point(0, y), Width = ctrlW + x, Height = 24, BackColor = Color.Transparent };
-            panel.Controls.Add(pnlExecMode);
-            rbCount = new RadioButton { Location = new Point(x, 0), Text = "執行指定次數", Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
-            rbTime = new RadioButton { Location = new Point(x + 145, 0), Text = "執行指定時間", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
+            rbCount = new RadioButton { Text = "執行指定次數", Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
+            rbTime  = new RadioButton { Text = "執行指定時間", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true, Margin = new Padding(12, 0, 0, 0) };
             rbCount.CheckedChanged += OnExecutionModeChanged;
-            rbTime.CheckedChanged += OnExecutionModeChanged;
-            pnlExecMode.Controls.Add(rbCount);
-            pnlExecMode.Controls.Add(rbTime);
-            y += 28;
+            rbTime.CheckedChanged  += OnExecutionModeChanged;
+            TblAddRow(tbl, MakeHRow(rbCount, rbTime));
 
-            nudCount = new NumericUpDown { Location = new Point(x, y), Width = 110, Minimum = 1, Maximum = 99999, Value = 100, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230) };
-            lblCountUnit = AddLabel(panel, "次", x + 118, y + 4);
-            nudMinutes = new NumericUpDown { Location = new Point(x, y), Width = 110, Minimum = 1, Maximum = 1440, Value = 30, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230), Visible = false };
-            lblTimeUnit = AddLabel(panel, "分鐘", x + 118, y + 4, visible: false);
-            panel.Controls.Add(nudCount);
-            panel.Controls.Add(nudMinutes);
-            y += 34;
+            // 次數 / 時間輸入
+            nudCount    = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 99999, Value = 100, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230) };
+            lblCountUnit = MakeLabel("次");
+            nudMinutes  = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 1440,  Value = 30,  BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230), Visible = false };
+            lblTimeUnit  = MakeLabel("分鐘", visible: false);
+            TblAddRow(tbl, MakeHRow(nudCount, lblCountUnit, nudMinutes, lblTimeUnit));
 
-            AddLabel(panel, "額外冷卻延遲：", x, y);
-            y += 22;
-            nudExtraDelay = new NumericUpDown { Location = new Point(x, y), Width = 110, Minimum = 0, Maximum = 60, Value = 2, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230) };
-            panel.Controls.Add(nudExtraDelay);
-            AddLabel(panel, "秒（0～此值）", x + 118, y + 4);
-            y += 34;
+            TblAddRow(tbl, MakeLabel("額外冷卻延遲："));
+            nudExtraDelay = new NumericUpDown { Width = 110, Minimum = 0, Maximum = 60, Value = 2, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230) };
+            TblAddRow(tbl, MakeHRow(nudExtraDelay, MakeLabel("秒（0～此值）")));
 
-            // ── 遭遇事件應對 (共用) ──
-            y = AddSectionHeader(panel, "遭遇事件應對", y, x);
-            var pnlEventMode = new Panel { Location = new Point(0, y), Width = ctrlW + x, Height = 116, BackColor = Color.Transparent };
-            panel.Controls.Add(pnlEventMode);
+            // ── 遭遇事件應對 ──
+            TblAddRow(tbl, MakeSectionHeader("遭遇事件應對"));
 
-            rbAutoEvent = new RadioButton { Location = new Point(x, 0), Text = "自動選擇（最高成功率）", Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
+            rbAutoEvent = new RadioButton { Text = "自動選擇（最高成功率）", Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
             rbAutoEvent.CheckedChanged += OnManualSubModeChanged;
-            pnlEventMode.Controls.Add(rbAutoEvent);
+            TblAddRow(tbl, rbAutoEvent);
 
-            rbManualEvent = new RadioButton { Location = new Point(x, 28), Text = "手動選擇", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
+            rbManualEvent = new RadioButton { Text = "手動選擇", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
             rbManualEvent.CheckedChanged += OnManualSubModeChanged;
-            pnlEventMode.Controls.Add(rbManualEvent);
+            TblAddRow(tbl, rbManualEvent);
 
-            pnlManualSub = new Panel { Location = new Point(x + 22, 56), Width = ctrlW - 22, Height = 60, BackColor = Color.Transparent, Enabled = false };
-            pnlEventMode.Controls.Add(pnlManualSub);
+            // 手動子選項（縮排）
+            var subTbl = new TableLayoutPanel
+            {
+                ColumnCount = 1, RowCount = 0,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent, Enabled = false,
+                Margin = new Padding(24, 2, 0, 6),
+                CellBorderStyle = TableLayoutPanelCellBorderStyle.None
+            };
+            subTbl.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            rbPopupMode  = new RadioButton { Text = "彈出視窗（奪取焦點）",   Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
+            rbInlineMode = new RadioButton { Text = "內嵌於主畫面（零干擾）", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true, Margin = new Padding(0, 4, 0, 0) };
+            TblAddRow(subTbl, rbPopupMode);
+            TblAddRow(subTbl, rbInlineMode);
+            pnlManualSub = subTbl;
+            TblAddRow(tbl, pnlManualSub);
 
-            rbPopupMode = new RadioButton { Location = new Point(0, 0), Text = "彈出視窗（奪取焦點）", Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
-            pnlManualSub.Controls.Add(rbPopupMode);
-            rbInlineMode = new RadioButton { Location = new Point(0, 28), Text = "內嵌於主畫面（零干擾）", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
-            pnlManualSub.Controls.Add(rbInlineMode);
-            y += 124;
-
-            // ── 專屬設定容器 ──
-            var pnlModeContainer = new Panel { Location = new Point(0, y), Width = ctrlW + x, Height = 170, BackColor = Color.Transparent };
-            panel.Controls.Add(pnlModeContainer);
-
-            BuildTrainingSettingsPanel(pnlModeContainer, x, ctrlW);
-            BuildBattleSettingsPanel(pnlModeContainer, x, ctrlW);
-
-            y += 175;
+            // ── 訓練 / 戰鬥 專屬設定容器 ──
+            BuildTrainingSettingsPanel(tbl);
+            BuildBattleSettingsPanel(tbl);
 
             // ── 開始 / 停止 ──
+            TblAddRow(tbl, MakeSeparator());
+
             btnStart = new Button
             {
-                Location = new Point(x, y), Width = 163, Height = 38,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(24, 6, 24, 6),
                 Text = "▶  開始",
                 BackColor = Color.FromArgb(38, 155, 75), ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat, Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand, Anchor = AnchorStyles.Left, Margin = new Padding(0, 4, 0, 4)
             };
             btnStart.FlatAppearance.BorderSize = 0;
             btnStart.Click += OnStartClicked;
-            panel.Controls.Add(btnStart);
 
             btnStop = new Button
             {
-                Location = new Point(x + 175, y), Width = 163, Height = 38,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(24, 6, 24, 6),
                 Text = "⏹  停止",
                 BackColor = Color.FromArgb(155, 45, 45), ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat, Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
-                Cursor = Cursors.Hand, Enabled = false
+                Cursor = Cursors.Hand, Enabled = false, Margin = new Padding(8, 4, 0, 4)
             };
             btnStop.FlatAppearance.BorderSize = 0;
             btnStop.Click += OnStopClicked;
-            panel.Controls.Add(btnStop);
-            
-            // 加入底部留白
-            var bottomPad = new Panel { Location = new Point(0, y + 40), Width = 10, Height = 20, BackColor = Color.Transparent };
-            panel.Controls.Add(bottomPad);
-            
-            // 初始化模式
+            TblAddRow(tbl, MakeHRow(btnStart, btnStop));
+
+            // 初始化模式顯示
             OnModeTypeChanged(null, EventArgs.Empty);
         }
 
-        private void BuildTrainingSettingsPanel(Panel parent, int x, int ctrlW)
+        private void BuildTrainingSettingsPanel(TableLayoutPanel parent)
         {
-            pnlTrainingSettings = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Visible = true };
-            parent.Controls.Add(pnlTrainingSettings);
-            int py = 0;
+            // 單欄 TableLayoutPanel，跟左欄外層一樣的堆疊方式
+            pnlTrainingSettings = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1, RowCount = 0,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent, Visible = true,
+                CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
+                Padding = Padding.Empty,
+                Margin = Padding.Empty
+            };
+            ((TableLayoutPanel)pnlTrainingSettings).ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            TblAddRow(parent, (Control)pnlTrainingSettings, topPad: 0);
 
-            py = AddSectionHeader(pnlTrainingSettings, "訓練行動", py, x);
-            AddLabel(pnlTrainingSettings, "選擇訓練：", x, py);
-            py += 22;
+            var t = (TableLayoutPanel)pnlTrainingSettings;
+            TblAddRow(t, MakeSectionHeader("訓練行動"));
+            TblAddRow(t, MakeLabel("選擇訓練："));
 
             cmbAction = new ComboBox
             {
-                Location = new Point(x, py), Width = ctrlW, DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230), FlatStyle = FlatStyle.Flat
+                Dock = DockStyle.Fill,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230),
+                FlatStyle = FlatStyle.Flat, Margin = new Padding(0, 2, 0, 6)
             };
             foreach (var action in TrainingActions.All) cmbAction.Items.Add(action);
             if (cmbAction.Items.Count > 0) cmbAction.SelectedIndex = 0;
-            pnlTrainingSettings.Controls.Add(cmbAction);
-            py += 34;
-
+            TblAddRow(t, cmbAction);
         }
 
-        private void BuildBattleSettingsPanel(Panel parent, int x, int ctrlW)
+        private void BuildBattleSettingsPanel(TableLayoutPanel parent)
         {
-            pnlBattleSettings = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Visible = false };
-            parent.Controls.Add(pnlBattleSettings);
-            int py = 0;
+            pnlBattleSettings = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1, RowCount = 0,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent, Visible = false,
+                CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
+                Padding = Padding.Empty,
+                Margin = Padding.Empty
+            };
+            ((TableLayoutPanel)pnlBattleSettings).ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            TblAddRow(parent, (Control)pnlBattleSettings, topPad: 0);
 
-            py = AddSectionHeader(pnlBattleSettings, "戰鬥對象", py, x);
-            
+            var t = (TableLayoutPanel)pnlBattleSettings;
+            TblAddRow(t, MakeSectionHeader("戰鬥對象"));
+
             txtTargetPlayerId = new TextBox
             {
-                Location = new Point(x, py), Width = ctrlW - 75,
+                Dock = DockStyle.Fill,
                 BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230),
                 BorderStyle = BorderStyle.FixedSingle, Text = AppSettingsManager.Current.LastBattleTargetId
             };
-            pnlBattleSettings.Controls.Add(txtTargetPlayerId);
-
             btnGetPlayerInfo = new Button
             {
-                Location = new Point(x + ctrlW - 70, py - 2), Width = 70, Height = 25,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(6, 2, 6, 2),
                 Text = "驗證 ID", BackColor = Color.FromArgb(60, 70, 110), ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand
+                FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(6, 0, 0, 0)
             };
             btnGetPlayerInfo.FlatAppearance.BorderSize = 0;
             btnGetPlayerInfo.Click += OnGetPlayerInfoClicked;
-            pnlBattleSettings.Controls.Add(btnGetPlayerInfo);
-            py += 28;
+            var idRow = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 2, RowCount = 1,
+                Margin = Padding.Empty, Padding = Padding.Empty
+            };
+            idRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            idRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            idRow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            
+            txtTargetPlayerId.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            btnGetPlayerInfo.Anchor = AnchorStyles.Left;
+            idRow.Controls.Add(txtTargetPlayerId, 0, 0);
+            idRow.Controls.Add(btnGetPlayerInfo, 1, 0);
+
+            TblAddRow(t, idRow);
 
             lblPlayerInfo = new Label
             {
-                Location = new Point(x, py), Width = ctrlW, Height = 40,
-                Text = "請輸入玩家 ID 並驗證", ForeColor = Color.FromArgb(170, 170, 190), AutoSize = false
+                Text = "請輸入玩家 ID 並驗證", ForeColor = Color.FromArgb(170, 170, 190),
+                AutoSize = true, Dock = DockStyle.Fill,
+                Margin = new Padding(0, 2, 0, 6)
             };
-            pnlBattleSettings.Controls.Add(lblPlayerInfo);
-            py += 44;
+            TblAddRow(t, lblPlayerInfo);
 
-            py = AddSectionHeader(pnlBattleSettings, "戰鬥模式", py, x);
-            var pnlBattleMode = new Panel { Location = new Point(0, py), Width = ctrlW + x, Height = 30, BackColor = Color.Transparent };
-            pnlBattleSettings.Controls.Add(pnlBattleMode);
+            TblAddRow(t, MakeSectionHeader("戰鬥模式"));
 
-            rbBattleChallenge = new RadioButton { Location = new Point(x, 0), Text = "友好切磋", Checked = AppSettingsManager.Current.BattleMode == "Challenge", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
-            rbBattleChado = new RadioButton { Location = new Point(x + 145, 0), Text = "我要茶渡你", Checked = AppSettingsManager.Current.BattleMode == "Chado", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
-            
+            rbBattleChallenge = new RadioButton { Text = "友好切磋", Checked = AppSettingsManager.Current.BattleMode == "Challenge", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
+            rbBattleChado    = new RadioButton { Text = "我要茶渡你", Checked = AppSettingsManager.Current.BattleMode == "Chado",     ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true, Margin = new Padding(12, 0, 0, 0) };
             if (!rbBattleChallenge.Checked && !rbBattleChado.Checked) rbBattleChallenge.Checked = true;
-            
-            pnlBattleMode.Controls.Add(rbBattleChallenge);
-            pnlBattleMode.Controls.Add(rbBattleChado);
+            TblAddRow(t, MakeHRow(rbBattleChallenge, rbBattleChado));
         }
 
         // =====================================================================
-        // 中欄：即時狀態面板內容
+        // 中欄：即時狀態面板（單欄 TableLayoutPanel 堆疊 + 兩欄狀態格線）
         // =====================================================================
         private void BuildMiddlePanel(Panel panel)
         {
-            int y = 8;
-            const int x = 10;
+            // 將外部 Panel 設為可捲動
+            panel.AutoScroll = true;
 
-            y = AddSectionHeader(panel, "即時狀態", y, x);
+            var tbl = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 1, RowCount = 0,
+                Padding = new Padding(8),
+                BackColor = Color.Transparent,
+                CellBorderStyle = TableLayoutPanelCellBorderStyle.None
+            };
+            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.Controls.Add(tbl);
 
-            lblStatusValue     = AddStatRow(panel, "狀態：",     "已停止",    Color.FromArgb(170, 170, 180), x, ref y).Value;
-            var runRow         = AddStatRow(panel, "已執行：",   "0 次",      Color.FromArgb(210, 210, 225), x, ref y);
-            lblTitleRunCount   = runRow.Title;
-            lblRunCount        = runRow.Value;
-            
-            var successRow     = AddStatRow(panel, "成功：",     "0 次",      Color.FromArgb(90,  215, 110), x, ref y);
-            lblTitleSuccessCount = successRow.Title;
-            lblSuccessCount    = successRow.Value;
+            TblAddRow(tbl, MakeSectionHeader("即時狀態"));
 
-            var failRow        = AddStatRow(panel, "失敗：",     "0 次",      Color.FromArgb(215, 90,  90),  x, ref y);
-            lblTitleFailCount  = failRow.Title;
-            lblFailCount       = failRow.Value;
+            // 兩欄 TableLayoutPanel：左欄標籤、右欄數值
+            var grid = new TableLayoutPanel
+            {
+                ColumnCount = 2,
+                RowCount = 0,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent,
+                CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
+                Margin = new Padding(0, 2, 0, 0)
+            };
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            TblAddRow(tbl, grid, topPad: 0);
 
-            y += 6; // 小間距
-            lblEventCount         = AddStatRow(panel, "觸發事件：",  "0 次", Color.FromArgb(190, 150, 255), x, ref y).Value;
-            lblEventSuccessCount  = AddStatRow(panel, "事件成功：",  "0 次", Color.FromArgb(90,  215, 110), x, ref y).Value;
-            lblEventFailCount     = AddStatRow(panel, "事件失敗：",  "0 次", Color.FromArgb(215, 90,  90),  x, ref y).Value;
-
-            y += 6;
-            lblLevel    = AddStatRow(panel, "目前等級：", "—",        Color.FromArgb(255, 215, 70),  x, ref y).Value;
-            lblTotalExp = AddStatRow(panel, "累積 EXP：", "0",        Color.FromArgb(210, 210, 225), x, ref y).Value;
-
-            y += 6;
-            lblNextRun  = AddStatRow(panel, "下次執行：", "—",        Color.FromArgb(170, 215, 255), x, ref y).Value;
-            lblElapsed  = AddStatRow(panel, "運作時間：", "00:00:00", Color.FromArgb(210, 210, 225), x, ref y).Value;
-
-            y += 6;
-            lblGainedCharacters = AddStatRow(panel, "獲得角色：", "無", Color.Gold, x, ref y).Value;
+            int row = 0;
+            (_, lblStatusValue)                              = AddMiddleStatRow(grid, row++, "狀態：",     "已停止",    Color.FromArgb(170, 170, 180));
+            (lblTitleRunCount,     lblRunCount)              = AddMiddleStatRow(grid, row++, "已執行：",   "0 次",      Color.FromArgb(210, 210, 225));
+            (lblTitleSuccessCount, lblSuccessCount)          = AddMiddleStatRow(grid, row++, "成功：",     "0 次",      Color.FromArgb(90,  215, 110));
+            (lblTitleFailCount,    lblFailCount)             = AddMiddleStatRow(grid, row++, "失敗：",     "0 次",      Color.FromArgb(215, 90,  90));
+            AddMiddleSpacer(grid, row++);
+            (_, lblEventCount)                              = AddMiddleStatRow(grid, row++, "觸發事件：", "0 次",      Color.FromArgb(190, 150, 255));
+            (_, lblEventSuccessCount)                       = AddMiddleStatRow(grid, row++, "事件成功：", "0 次",      Color.FromArgb(90,  215, 110));
+            (_, lblEventFailCount)                          = AddMiddleStatRow(grid, row++, "事件失敗：", "0 次",      Color.FromArgb(215, 90,  90));
+            AddMiddleSpacer(grid, row++);
+            (_, lblLevel)                                   = AddMiddleStatRow(grid, row++, "目前等級：", "—",         Color.FromArgb(255, 215, 70));
+            (_, lblTotalExp)                                = AddMiddleStatRow(grid, row++, "累積 EXP：", "0",         Color.FromArgb(210, 210, 225));
+            AddMiddleSpacer(grid, row++);
+            (_, lblNextRun)                                 = AddMiddleStatRow(grid, row++, "下次執行：", "—",         Color.FromArgb(170, 215, 255));
+            (_, lblElapsed)                                 = AddMiddleStatRow(grid, row++, "運作時間：", "00:00:00",  Color.FromArgb(210, 210, 225));
+            AddMiddleSpacer(grid, row++);
+            (_, lblGainedCharacters)                        = AddMiddleStatRow(grid, row++, "獲得角色：", "無",        Color.Gold);
             lblGainedCharacters.AutoSize = true;
-            lblGainedCharacters.MaximumSize = new Size(100, 0); // Allow wrapping if there are many characters
+            lblGainedCharacters.MaximumSize = new Size(120, 0);
         }
 
         // =====================================================================
@@ -577,74 +627,144 @@ namespace MyDoujinBot.Forms
         }
 
         // =====================================================================
-        // Helper：建立區塊標題 + 分隔線
+        // Helper：區塊標題（TableLayoutPanel 2列：AutoSize 標題 + 1px 分隔線）
+        // 標題高度隨字體自動成長，分隔線自動占滿欄寬——像 HTML <h3> + <hr>
         // =====================================================================
-        private static int AddSectionHeader(Control parent, string text, int y, int x)
+        private static Control MakeSectionHeader(string title)
         {
-            parent.Controls.Add(new Label
+            var t = new TableLayoutPanel
             {
-                Location = new Point(x, y),
-                Width = parent.Width - x * 2,
-                Text = text,
+                ColumnCount = 1, RowCount = 2,
+                Dock = DockStyle.Fill,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent,
+                CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
+                Padding = Padding.Empty,
+                Margin = new Padding(0, 8, 0, 4)
+            };
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            t.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // 標題列：自動高度
+            t.RowStyles.Add(new RowStyle(SizeType.Absolute, 1)); // 分隔線：固定 1px
+
+            t.Controls.Add(new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = title,
                 ForeColor = Color.FromArgb(130, 170, 255),
                 Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                AutoSize = false,
-                Height = 22
-            });
-            parent.Controls.Add(new Label
-            {
-                Location = new Point(x, y + 22),
-                Width = parent.Width - x * 2,
-                Height = 1,
-                BackColor = Color.FromArgb(65, 65, 85),
-                AutoSize = false,
-                Text = ""
-            });
-            return y + 32;
-        }
-
-        private static Label AddLabel(Control parent, string text, int x, int y,
-            Color? color = null, bool visible = true)
-        {
-            var lbl = new Label
-            {
-                Location = new Point(x, y),
-                Text = text,
-                ForeColor = color ?? Color.FromArgb(170, 170, 190),
                 AutoSize = true,
-                Visible = visible
-            };
-            parent.Controls.Add(lbl);
-            return lbl;
+                Padding = new Padding(0, 0, 0, 3)
+            }, 0, 0);
+
+            t.Controls.Add(new Label
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(65, 65, 85),
+                AutoSize = false, Text = ""
+            }, 0, 1);
+
+            return t;
         }
 
         // =====================================================================
-        // Helper：中欄狀態列（標籤 + 數值）
-        // ref y：讓 helper 內部自動累加 y，呼叫方不用手動 y += 26
+        // Helper：純粗分隔線（用於開始按鈕上方）
         // =====================================================================
-        private static (Label Title, Label Value) AddStatRow(Control parent, string labelText, string valueText,
-            Color valueColor, int x, ref int y)
+        private static Control MakeSeparator()
         {
+            return new Label
+            {
+                Dock = DockStyle.Fill, Height = 1,
+                BackColor = Color.FromArgb(55, 55, 70),
+                AutoSize = false, Text = "",
+                Margin = new Padding(0, 6, 0, 6)
+            };
+        }
+
+        // =====================================================================
+        // Helper：單欄 TableLayoutPanel 加列（相當於 HTML appendChild）
+        // topPad 預設 4px，小標題設 2px
+        // =====================================================================
+        private static void TblAddRow(TableLayoutPanel tbl, Control ctrl, int topPad = 4)
+        {
+            int row = tbl.RowCount;
+            tbl.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            tbl.RowCount = row + 1;
+            ctrl.Margin = new Padding(ctrl.Margin.Left, topPad, ctrl.Margin.Right, ctrl.Margin.Bottom);
+            tbl.Controls.Add(ctrl, 0, row);
+        }
+
+        // =====================================================================
+        // Helper：水平排列容器（FlowLayoutPanel LeftToRight，用於並排控制項）
+        // =====================================================================
+        private static FlowLayoutPanel MakeHRow(params Control[] controls)
+        {
+            var row = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, 2, 0, 4)
+            };
+            foreach (var c in controls)
+            {
+                c.Anchor = AnchorStyles.Left; // 垂直置中
+                row.Controls.Add(c);
+            }
+            return row;
+        }
+
+        // =====================================================================
+        // Helper：說明/小標題 Label（AutoSize 、排定列位置用）
+        // =====================================================================
+        private static Label MakeLabel(string text, Color? color = null, bool visible = true)
+        {
+            return new Label
+            {
+                Text = text,
+                ForeColor = color ?? Color.FromArgb(185, 185, 205),
+                AutoSize = true,
+                Visible = visible,
+                Margin = new Padding(0, 0, 0, 2)
+            };
+        }
+
+        // =====================================================================
+        // Helper：中欄 TableLayoutPanel 狀態列（標籤 + 數值，兩欄對齊）
+        // =====================================================================
+        private static (Label Title, Label Value) AddMiddleStatRow(TableLayoutPanel grid, int row,
+            string labelText, string valueText, Color valueColor)
+        {
+            grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var title = new Label
             {
-                Location = new Point(x, y),
                 Text = labelText,
                 ForeColor = Color.FromArgb(140, 140, 160),
-                AutoSize = true
+                AutoSize = true,
+                Padding = new Padding(0, 3, 8, 3)
             };
-            parent.Controls.Add(title);
-
-            var lblValue = new Label
+            var value = new Label
             {
-                Location = new Point(x + 105, y),
                 Text = valueText,
                 ForeColor = valueColor,
                 AutoSize = true,
-                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold)
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                Padding = new Padding(0, 3, 0, 3)
             };
-            parent.Controls.Add(lblValue);
-            y += 25;
-            return (title, lblValue);
+            grid.Controls.Add(title, 0, row);
+            grid.Controls.Add(value, 1, row);
+            return (title, value);
+        }
+
+        // =====================================================================
+        // Helper：中欄 TableLayoutPanel 分組間距列
+        // =====================================================================
+        private static void AddMiddleSpacer(TableLayoutPanel grid, int row)
+        {
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 8));
+            var spacer = new Label { Height = 8, AutoSize = false, BackColor = Color.Transparent };
+            grid.Controls.Add(spacer, 0, row);
+            grid.SetColumnSpan(spacer, 2);
         }
 
         // =====================================================================

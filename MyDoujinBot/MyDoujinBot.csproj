@@ -7,6 +7,8 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+    <!-- .NET 6+ 的正確 DPI 設定方式，由 ApplicationConfiguration.Initialize() 讀取 -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <Version>1.1.0</Version>
   </PropertyGroup>
 

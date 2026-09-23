@@ -24,7 +24,9 @@ namespace MyDoujinBot.Forms
         public EventSelectionForm(PendingEvent pendingEvent)
         {
             this.Text = $"⚡  遭遇事件：{pendingEvent.Name}";
-            this.Width = 500;
+            this.Width = 520;
+            this.AutoSize = true; this.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            this.MinimumSize = new Size(400, 250);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(28, 28, 35);
             this.ForeColor = Color.FromArgb(220, 220, 230);
@@ -33,6 +35,9 @@ namespace MyDoujinBot.Forms
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.TopMost = true;
+
+            this.AutoScaleMode = AutoScaleMode.Dpi;
+            this.AutoScaleDimensions = new SizeF(96F, 96F);
 
             BuildUI(pendingEvent);
         }

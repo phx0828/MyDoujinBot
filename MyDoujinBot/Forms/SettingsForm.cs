@@ -23,8 +23,8 @@ namespace MyDoujinBot.Forms
         {
             this.Text = "設定";
             this.Size = new Size(600, 420);
-            this.MinimumSize = new Size(600, 420);
-            this.MaximumSize = new Size(600, 420);
+            this.MinimumSize = new Size(480, 320);
+            // MaximumSize 移除：它會阻止 AutoScaleMode.Dpi 對視窗尺寸之縮放
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(28, 28, 35);
             this.ForeColor = Color.FromArgb(220, 220, 230);
@@ -33,140 +33,171 @@ namespace MyDoujinBot.Forms
             this.MaximizeBox = false;
             this.MinimizeBox = false;
 
+            // DPI 自動縮放
+            this.AutoScaleMode = AutoScaleMode.Dpi;
+            this.AutoScaleDimensions = new SizeF(96F, 96F);
+
             BuildUI(currentToken);
         }
 
         private void BuildUI(string currentToken)
         {
-            int y = 16;
-            const int x = 16;
-            const int w = 550;
+            var tbl = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1, RowCount = 0,
+                AutoScroll = true,
+                Padding = new Padding(16)
+            };
+            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            this.Controls.Add(tbl);
 
-            // =====================================================================
+            void AddRow(Control c)
+            {
+                tbl.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                tbl.Controls.Add(c);
+            }
+
+            // ═══════════════════════════════════════════════════════════════════
             // 區塊：連線設定
-            // =====================================================================
-            AddSectionHeader(this, "連線設定", y, x);
-            y += 32;
+            // ═══════════════════════════════════════════════════════════════════
+            AddRow(new Label
+            {
+                Text = "連線設定",
+                ForeColor = Color.FromArgb(130, 170, 255),
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                AutoSize = true, Margin = new Padding(0, 0, 0, 4)
+            });
 
-            // Token 輸入框
-            var lblToken = new Label
+            AddRow(new Label
             {
                 Text = "Bearer Token：",
-                Location = new Point(x, y),
                 ForeColor = Color.FromArgb(160, 180, 255),
                 Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                AutoSize = true
-            };
-            this.Controls.Add(lblToken);
-            y += 22;
+                AutoSize = true, Margin = new Padding(0, 4, 0, 2)
+            });
 
             txtToken = new TextBox
             {
-                Location = new Point(x, y),
-                Width = w,
-                // 不使用密碼遮蔽 — 使用者確認此為低敏感資料
+                Dock = DockStyle.Fill,
                 BackColor = Color.FromArgb(45, 45, 55),
                 ForeColor = Color.FromArgb(220, 220, 230),
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = new Font("Consolas", 9.5f),
                 PlaceholderText = "請輸入 Bearer Token",
-                Text = currentToken
+                Text = currentToken,
+                Margin = new Padding(0, 0, 0, 4)
             };
-            this.Controls.Add(txtToken);
-            y += 28;
+            AddRow(txtToken);
 
-            // 紅字提醒：將會儲存至磁碟
-            var lblTokenNote = new Label
+            AddRow(new Label
             {
                 Text = "⚠ Token 將儲存至磁碟，下次啟動後自動載入。請勿在公共電腦上使用。",
-                Location = new Point(x, y),
-                MaximumSize = new Size(w, 0),
+                Dock = DockStyle.Fill,
                 ForeColor = Color.FromArgb(210, 90, 90),
                 Font = new Font("Microsoft JhengHei UI", 8.5f),
-                AutoSize = true
-            };
-            this.Controls.Add(lblTokenNote);
-            y += 32;
-
-            // =====================================================================
-            // 分隔線
-            // =====================================================================
-            this.Controls.Add(new Label
-            {
-                Location = new Point(x, y),
-                Width = w,
-                Height = 1,
-                BackColor = Color.FromArgb(65, 65, 85),
-                AutoSize = false,
-                Text = ""
+                AutoSize = true, Margin = new Padding(0, 0, 0, 10)
             });
-            y += 12;
 
-            // =====================================================================
+            // 分隔線
+            AddRow(new Label
+            {
+                Dock = DockStyle.Fill, Height = 1,
+                BackColor = Color.FromArgb(65, 65, 85),
+                AutoSize = false, Text = "",
+                Margin = new Padding(0, 0, 0, 10)
+            });
+
+            // ═══════════════════════════════════════════════════════════════════
             // 區塊：通知設定
-            // =====================================================================
-            AddSectionHeader(this, "通知設定", y, x);
-            y += 32;
+            // ═══════════════════════════════════════════════════════════════════
+            AddRow(new Label
+            {
+                Text = "通知設定",
+                ForeColor = Color.FromArgb(130, 170, 255),
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                AutoSize = true, Margin = new Padding(0, 0, 0, 4)
+            });
 
             chkNotify = new CheckBox
             {
                 Text = "啟用系統通知（手動內嵌模式下，事件觸發時右下角氣泡提示）",
-                Location = new Point(x, y),
-                MaximumSize = new Size(w, 0),
+                Dock = DockStyle.Fill,
                 ForeColor = Color.FromArgb(210, 210, 225),
                 BackColor = Color.Transparent,
                 AutoSize = true,
-                Checked = AppSettingsManager.Current.EnableSystemNotify
+                Checked = AppSettingsManager.Current.EnableSystemNotify,
+                Margin = new Padding(0, 2, 0, 4)
             };
-            this.Controls.Add(chkNotify);
-            y += 32;
+            AddRow(chkNotify);
 
-            var lblNotifyNote = new Label
+            AddRow(new Label
             {
                 Text = "僅於「手動選擇」+「內嵌於主畫面」模式有效。",
-                Location = new Point(x + 20, y),
-                MaximumSize = new Size(w - 20, 0),
+                Dock = DockStyle.Fill,
                 ForeColor = Color.FromArgb(120, 120, 145),
                 Font = new Font("Microsoft JhengHei UI", 8.5f),
-                AutoSize = true
-            };
-            this.Controls.Add(lblNotifyNote);
-            y += 32;
+                AutoSize = true,
+                Margin = new Padding(20, 0, 0, 4)
+            });
 
             chkNotifySound = new CheckBox
             {
                 Text = "開啟通知音效",
-                Location = new Point(x + 20, y),
-                MaximumSize = new Size(w - 20, 0),
                 ForeColor = Color.FromArgb(210, 210, 225),
                 BackColor = Color.Transparent,
                 AutoSize = true,
-                Checked = AppSettingsManager.Current.EnableSystemNotifySound
+                Checked = AppSettingsManager.Current.EnableSystemNotifySound,
+                Margin = new Padding(20, 0, 0, 12)
             };
-            this.Controls.Add(chkNotifySound);
-            y += 40;
+            AddRow(chkNotifySound);
 
-            // =====================================================================
+            // ═══════════════════════════════════════════════════════════════════
             // 按鈕列
-            // =====================================================================
+            // ═══════════════════════════════════════════════════════════════════
+            var pnlBtns = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 3, RowCount = 1,
+                Margin = new Padding(0, 12, 0, 0)
+            };
+            pnlBtns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // Spacer
+            pnlBtns.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            pnlBtns.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+            var btnCancel = new Button
+            {
+                Text = "取消",
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(16, 4, 16, 4),
+                BackColor = Color.FromArgb(70, 70, 90),
+                ForeColor = Color.FromArgb(200, 200, 210),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 8, 0)
+            };
+            btnCancel.FlatAppearance.BorderSize = 0;
+            btnCancel.Click += (_, _) =>
+            {
+                this.DialogResult = DialogResult.Cancel;
+                this.Close();
+            };
+
             var btnSave = new Button
             {
                 Text = "儲存",
-                Location = new Point(358, y),
-                Width = 100,
-                Height = 34,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(16, 4, 16, 4),
                 BackColor = Color.FromArgb(40, 140, 80),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand, Margin = Padding.Empty
             };
             btnSave.FlatAppearance.BorderSize = 0;
             btnSave.Click += (_, _) =>
             {
                 Token = txtToken.Text.Trim();
 
-                // 持久化所有設定
                 AppSettingsManager.Current.Token = Token;
                 AppSettingsManager.Current.EnableSystemNotify = chkNotify.Checked;
                 AppSettingsManager.Current.EnableSystemNotifySound = chkNotifySound.Checked;
@@ -175,53 +206,15 @@ namespace MyDoujinBot.Forms
                 this.DialogResult = DialogResult.OK;
                 this.Close();
             };
-            this.Controls.Add(btnSave);
 
-            var btnCancel = new Button
-            {
-                Text = "取消",
-                Location = new Point(468, y),
-                Width = 100,
-                Height = 34,
-                BackColor = Color.FromArgb(70, 70, 90),
-                ForeColor = Color.FromArgb(200, 200, 210),
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 9.5f),
-                Cursor = Cursors.Hand
-            };
-            btnCancel.FlatAppearance.BorderSize = 0;
-            btnCancel.Click += (_, _) =>
-            {
-                this.DialogResult = DialogResult.Cancel;
-                this.Close();
-            };
-            this.Controls.Add(btnCancel);
+            pnlBtns.Controls.Add(new Label { Text = "", AutoSize = false }, 0, 0); // Spacer
+            pnlBtns.Controls.Add(btnCancel, 1, 0);
+            pnlBtns.Controls.Add(btnSave, 2, 0);
+            AddRow(pnlBtns);
 
             this.AcceptButton = btnSave;
             this.CancelButton = btnCancel;
         }
 
-        private static void AddSectionHeader(Control parent, string text, int y, int x)
-        {
-            parent.Controls.Add(new Label
-            {
-                Location = new Point(x, y),
-                Width = parent.Width - x * 2,
-                Text = text,
-                ForeColor = Color.FromArgb(130, 170, 255),
-                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                AutoSize = false,
-                Height = 22
-            });
-            parent.Controls.Add(new Label
-            {
-                Location = new Point(x, y + 22),
-                Width = parent.Width - x * 2,
-                Height = 1,
-                BackColor = Color.FromArgb(65, 65, 85),
-                AutoSize = false,
-                Text = ""
-            });
-        }
     }
 }

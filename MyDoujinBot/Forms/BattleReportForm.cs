@@ -21,6 +21,9 @@ namespace MyDoujinBot.Forms
             this.ShowIcon = false;
             this.MinimizeBox = false;
 
+            this.AutoScaleMode = AutoScaleMode.Dpi;
+            this.AutoScaleDimensions = new SizeF(96F, 96F);
+
             BuildUI(battleResult);
         }
 
