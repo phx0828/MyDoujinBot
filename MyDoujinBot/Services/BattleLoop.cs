@@ -37,6 +37,7 @@ namespace MyDoujinBot.Services
         public int TotalExp { get; set; }
         public double NextRunCountdownSeconds { get; set; }
         public DateTime StartTime { get; set; }
+        public int ChadoSuccessCount { get; set; }
         public System.Collections.Generic.List<string> GainedCharacters { get; set; } = new();
     }
 
@@ -142,6 +143,31 @@ namespace MyDoujinBot.Services
                     Log($"[{winStr}] {typeStr}：獲得 EXP {response.ExpGained}", logColor);
                     
                     NotifyStats();
+
+                    if (settings.Type == BattleType.Chado && response.Logs != null && response.Logs.Count > 0)
+                    {
+                        int checkCount = Math.Min(10, response.Logs.Count);
+                        bool isChadoSuccess = false;
+                        for (int i = 1; i <= checkCount; i++)
+                        {
+                            var logEntry = response.Logs[response.Logs.Count - i];
+                            if (logEntry.Type == "CHADO")
+                            {
+                                isChadoSuccess = true;
+                                break;
+                            }
+                            if (logEntry.Type == "CHADO_MISS")
+                            {
+                                break;
+                            }
+                        }
+
+                        if (isChadoSuccess)
+                        {
+                            Stats.ChadoSuccessCount++;
+                            Log("茶渡潑屎成功！", System.Drawing.Color.FromArgb(200, 155, 106));
+                        }
+                    }
 
                     var battleResult = new BattleResult
                     {

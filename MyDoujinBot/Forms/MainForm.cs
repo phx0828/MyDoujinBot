@@ -77,6 +77,7 @@ namespace MyDoujinBot.Forms
         private Label lblGainedCharacters = null!;
         private Label lblNextRun = null!;
         private Label lblElapsed = null!;
+        private Label lblChadoSuccessText = null!;
 
         // --- 執行模式切換 ---
         private RadioButton rbModeTraining = null!;
@@ -535,6 +536,19 @@ namespace MyDoujinBot.Forms
             (_, lblGainedCharacters)                        = AddMiddleStatRow(grid, row++, "獲得角色：", "無",        Color.Gold);
             lblGainedCharacters.AutoSize = true;
             lblGainedCharacters.MaximumSize = new Size(120, 0);
+
+            // 茶渡潑屎成功標語
+            lblChadoSuccessText = new Label
+            {
+                Text = "此輪戰鬥螺旋下指小零食成功！",
+                ForeColor = Color.FromArgb(200, 155, 106),
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                AutoSize = true,
+                Visible = false,
+                Margin = new Padding(0, 12, 0, 0)
+            };
+            grid.Controls.Add(lblChadoSuccessText, 0, row++);
+            grid.SetColumnSpan(lblChadoSuccessText, 2);
         }
 
         // =====================================================================
@@ -929,6 +943,7 @@ namespace MyDoujinBot.Forms
             _cts = new CancellationTokenSource();
             SetControlsEnabled(false);
             btnStop.Enabled = true;
+            lblChadoSuccessText.Visible = false;
             btnShowLastReport.Visible = false;
 
             _loopStartTime = DateTime.Now;
@@ -1127,6 +1142,16 @@ namespace MyDoujinBot.Forms
                 lblNextRun.Text = $"{stats.NextRunCountdownSeconds:F1} 秒後";
             else
                 lblNextRun.Text = "—";
+
+            if (stats.ChadoSuccessCount > 0)
+            {
+                lblChadoSuccessText.Text = "此輪戰鬥螺旋下指小零食成功！";
+                lblChadoSuccessText.Visible = true;
+            }
+            else
+            {
+                lblChadoSuccessText.Visible = false;
+            }
         }
 
         // =====================================================================
