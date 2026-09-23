@@ -117,5 +117,17 @@ namespace MyDoujinBot.Services
         /// </summary>
         [JsonPropertyName("enableSystemNotifySound")]
         public bool EnableSystemNotifySound { get; set; } = false;
+
+        /// <summary>
+        /// 最後一次戰鬥的目標玩家 ID。
+        /// </summary>
+        [JsonPropertyName("lastBattleTargetId")]
+        public string LastBattleTargetId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 預設的戰鬥模式（Challenge 或 Chado）。
+        /// </summary>
+        [JsonPropertyName("battleMode")]
+        public string BattleMode { get; set; } = "Challenge";
     }
 }

@@ -66,6 +66,9 @@ namespace MyDoujinBot.Forms
         private Label lblRunCount = null!;
         private Label lblSuccessCount = null!;
         private Label lblFailCount = null!;
+        private Label lblTitleRunCount = null!;
+        private Label lblTitleSuccessCount = null!;
+        private Label lblTitleFailCount = null!;
         private Label lblEventCount = null!;
         private Label lblEventSuccessCount = null!;
         private Label lblEventFailCount = null!;
@@ -74,6 +77,22 @@ namespace MyDoujinBot.Forms
         private Label lblGainedCharacters = null!;
         private Label lblNextRun = null!;
         private Label lblElapsed = null!;
+
+        // --- 執行模式切換 ---
+        private RadioButton rbModeTraining = null!;
+        private RadioButton rbModeBattle = null!;
+
+        // --- 戰鬥專屬 ---
+        private TextBox txtTargetPlayerId = null!;
+        private Button btnGetPlayerInfo = null!;
+        private Label lblPlayerInfo = null!;
+        private RadioButton rbBattleChallenge = null!;
+        private RadioButton rbBattleChado = null!;
+        private Panel pnlTrainingSettings = null!;
+        private Panel pnlBattleSettings = null!;
+        private Button btnShowLastReport = null!;
+        private BattleResult? _lastBattleResult;
+        private string _targetPlayerName = string.Empty;
 
         // =====================================================================
         // 狀態與 Service
@@ -84,7 +103,9 @@ namespace MyDoujinBot.Forms
 
         private readonly TrainingService _trainingService = new();
         private readonly EventService _eventService = new();
+        private readonly BattleService _battleService = new();
         private TrainingLoop? _trainingLoop;
+        private BattleLoop? _battleLoop;
         private EventSelectionForm? _currentEventForm;
 
         private CancellationTokenSource? _cts;
@@ -99,8 +120,8 @@ namespace MyDoujinBot.Forms
             this.Text = $"MyDoujin Bot v{Application.ProductVersion}";
             this.Icon = new Icon(@"Resources\app.ico");
 
-            this.Size = new Size(1100, 720);
-            this.MinimumSize = new Size(900, 650);
+            this.Size = new Size(1050, 800);
+            this.MinimumSize = new Size(1000, 700);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(22, 22, 30);
             this.ForeColor = Color.FromArgb(220, 220, 230);
@@ -152,8 +173,8 @@ namespace MyDoujinBot.Forms
                 Padding = new Padding(4),
                 BackColor = Color.FromArgb(22, 22, 30)
             };
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 375)); // 設定欄
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210)); // 狀態欄
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 395)); // 設定欄
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230)); // 狀態欄
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // LOG 欄（自動填滿）
             table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             this.Controls.Add(table);
@@ -165,9 +186,8 @@ namespace MyDoujinBot.Forms
                 BackColor = Color.FromArgb(35, 35, 45),
                 Padding = new Padding(2)
             };
-            // AutoScroll = false：移除滾動條。
-            // 設定內容高度 ~500px，在最小視窗 650px 下完全可以容納。
-            pnlLeft.AutoScroll = false;
+            // 允許滾動以適應不同螢幕大小與內容長度
+            pnlLeft.AutoScroll = true;
             table.Controls.Add(pnlLeft, 0, 0);
 
             BuildLeftPanel(pnlLeft);
@@ -205,223 +225,130 @@ namespace MyDoujinBot.Forms
         {
             int y = 8;
             const int x = 10;
-            const int ctrlW = 345;
+            const int ctrlW = 365;
 
             // ── API 設定 ──
             y = AddSectionHeader(panel, "API 設定", y, x);
 
-            // 設定按鈕（開啟 SettingsForm 對話框）
             btnSettings = new Button
             {
                 Location = new Point(x, y),
-                Width = 100,
-                Height = 32,
+                Width = 100, Height = 32,
                 Text = "⚙  設定",
-                BackColor = Color.FromArgb(60, 70, 110),
-                ForeColor = Color.FromArgb(200, 210, 255),
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
+                BackColor = Color.FromArgb(60, 70, 110), ForeColor = Color.FromArgb(200, 210, 255),
+                FlatStyle = FlatStyle.Flat, Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
                 Cursor = Cursors.Hand
             };
             btnSettings.FlatAppearance.BorderSize = 0;
             btnSettings.Click += OnSettingsClicked;
             panel.Controls.Add(btnSettings);
-            y += 36; // 按鈕高度 + 小間距
+            y += 36;
 
-            // Token 狀態標籤 — 獨立一行，避免被截斷
             lblTokenStatus = new Label
             {
                 Location = new Point(x, y),
-                Width = ctrlW,
+                Width = ctrlW, Height = 18,
                 Text = "⚠  尚未設定 Token，請點擊「設定」填入",
-                ForeColor = Color.FromArgb(210, 80, 80),
-                AutoSize = false,
-                Height = 18
+                ForeColor = Color.FromArgb(210, 80, 80), AutoSize = false
             };
             panel.Controls.Add(lblTokenStatus);
             y += 24;
 
-            // ── 訓練行動 ──
-            y = AddSectionHeader(panel, "訓練行動", y + 4, x);
-
-            AddLabel(panel, "選擇訓練：", x, y);
-            y += 22;
-
-            cmbAction = new ComboBox
-            {
-                Location = new Point(x, y),
-                Width = ctrlW,
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = Color.FromArgb(45, 45, 58),
-                ForeColor = Color.FromArgb(220, 220, 230),
-                FlatStyle = FlatStyle.Flat
+            // ── 執行類型 ──
+            y = AddSectionHeader(panel, "執行類型", y + 4, x);
+            
+            var pnlModeType = new Panel { Location = new Point(0, y), Width = ctrlW + x, Height = 28, BackColor = Color.Transparent };
+            panel.Controls.Add(pnlModeType);
+            
+            rbModeTraining = new RadioButton { 
+                Location = new Point(x, 0), Text = "自動訓練", Checked = true, ForeColor = Color.White, 
+                Appearance = Appearance.Button, FlatStyle = FlatStyle.Flat,
+                Width = 140, Height = 28, TextAlign = ContentAlignment.MiddleCenter, Cursor = Cursors.Hand
             };
-            foreach (var action in TrainingActions.All)
-                cmbAction.Items.Add(action);
-            if (cmbAction.Items.Count > 0)
-                cmbAction.SelectedIndex = 0;
-            panel.Controls.Add(cmbAction);
+            rbModeTraining.FlatAppearance.BorderSize = 0;
+            rbModeTraining.FlatAppearance.CheckedBackColor = Color.FromArgb(60, 70, 110);
+            
+            rbModeBattle = new RadioButton { 
+                Location = new Point(x + 145, 0), Text = "自動戰鬥", ForeColor = Color.White, 
+                Appearance = Appearance.Button, FlatStyle = FlatStyle.Flat,
+                Width = 140, Height = 28, TextAlign = ContentAlignment.MiddleCenter, Cursor = Cursors.Hand
+            };
+            rbModeBattle.FlatAppearance.BorderSize = 0;
+            rbModeBattle.FlatAppearance.CheckedBackColor = Color.FromArgb(60, 70, 110);
+            rbModeTraining.CheckedChanged += OnModeTypeChanged;
+            rbModeBattle.CheckedChanged += OnModeTypeChanged;
+            pnlModeType.Controls.Add(rbModeTraining);
+            pnlModeType.Controls.Add(rbModeBattle);
             y += 34;
 
-            // ── 執行設定 ──
-            y = AddSectionHeader(panel, "執行設定", y + 4, x);
-
+            // ── 共用執行設定 ──
+            y = AddSectionHeader(panel, "執行設定", y, x);
             AddLabel(panel, "執行模式：", x, y);
             y += 22;
 
-            var pnlExecMode = new Panel
-            {
-                Location = new Point(0, y),
-                Width = ctrlW + x,
-                Height = 24,
-                BackColor = Color.Transparent
-            };
+            var pnlExecMode = new Panel { Location = new Point(0, y), Width = ctrlW + x, Height = 24, BackColor = Color.Transparent };
             panel.Controls.Add(pnlExecMode);
-
-            rbCount = new RadioButton
-            {
-                Location = new Point(x, 0),
-                Text = "執行指定次數",
-                Checked = true,
-                ForeColor = Color.FromArgb(210, 210, 225),
-                AutoSize = true
-            };
+            rbCount = new RadioButton { Location = new Point(x, 0), Text = "執行指定次數", Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
+            rbTime = new RadioButton { Location = new Point(x + 145, 0), Text = "執行指定時間", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
             rbCount.CheckedChanged += OnExecutionModeChanged;
-            pnlExecMode.Controls.Add(rbCount);
-
-            rbTime = new RadioButton
-            {
-                Location = new Point(x + 145, 0),
-                Text = "執行指定時間",
-                ForeColor = Color.FromArgb(210, 210, 225),
-                AutoSize = true
-            };
             rbTime.CheckedChanged += OnExecutionModeChanged;
+            pnlExecMode.Controls.Add(rbCount);
             pnlExecMode.Controls.Add(rbTime);
             y += 28;
 
-            nudCount = new NumericUpDown
-            {
-                Location = new Point(x, y),
-                Width = 110,
-                Minimum = 1,
-                Maximum = 99999,
-                Value = 100,
-                BackColor = Color.FromArgb(45, 45, 58),
-                ForeColor = Color.FromArgb(220, 220, 230)
-            };
-            panel.Controls.Add(nudCount);
+            nudCount = new NumericUpDown { Location = new Point(x, y), Width = 110, Minimum = 1, Maximum = 99999, Value = 100, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230) };
             lblCountUnit = AddLabel(panel, "次", x + 118, y + 4);
-
-            nudMinutes = new NumericUpDown
-            {
-                Location = new Point(x, y),
-                Width = 110,
-                Minimum = 1,
-                Maximum = 1440,
-                Value = 30,
-                BackColor = Color.FromArgb(45, 45, 58),
-                ForeColor = Color.FromArgb(220, 220, 230),
-                Visible = false
-            };
-            panel.Controls.Add(nudMinutes);
+            nudMinutes = new NumericUpDown { Location = new Point(x, y), Width = 110, Minimum = 1, Maximum = 1440, Value = 30, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230), Visible = false };
             lblTimeUnit = AddLabel(panel, "分鐘", x + 118, y + 4, visible: false);
+            panel.Controls.Add(nudCount);
+            panel.Controls.Add(nudMinutes);
             y += 34;
 
             AddLabel(panel, "額外冷卻延遲：", x, y);
             y += 22;
-
-            nudExtraDelay = new NumericUpDown
-            {
-                Location = new Point(x, y),
-                Width = 110,
-                Minimum = 0,
-                Maximum = 60,
-                Value = 2,
-                BackColor = Color.FromArgb(45, 45, 58),
-                ForeColor = Color.FromArgb(220, 220, 230)
-            };
+            nudExtraDelay = new NumericUpDown { Location = new Point(x, y), Width = 110, Minimum = 0, Maximum = 60, Value = 2, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230) };
             panel.Controls.Add(nudExtraDelay);
-            AddLabel(panel, "秒（0～此值，毫秒精度）", x + 118, y + 4);
+            AddLabel(panel, "秒（0～此值）", x + 118, y + 4);
             y += 34;
 
-            // ── 遭遇事件應對 ──
-            y = AddSectionHeader(panel, "遭遇事件應對", y + 4, x);
-
-            // pnlEventMode 高度 = rbAutoEvent(28) + rbManualEvent(28) + pnlManualSub(60) = 116
-            var pnlEventMode = new Panel
-            {
-                Location = new Point(0, y),
-                Width = ctrlW + x,
-                Height = 116,
-                BackColor = Color.Transparent
-            };
+            // ── 遭遇事件應對 (共用) ──
+            y = AddSectionHeader(panel, "遭遇事件應對", y, x);
+            var pnlEventMode = new Panel { Location = new Point(0, y), Width = ctrlW + x, Height = 116, BackColor = Color.Transparent };
             panel.Controls.Add(pnlEventMode);
 
-            rbAutoEvent = new RadioButton
-            {
-                Location = new Point(x, 0),
-                Text = "自動選擇（最高成功率）",
-                Checked = true,
-                ForeColor = Color.FromArgb(210, 210, 225),
-                AutoSize = true
-            };
+            rbAutoEvent = new RadioButton { Location = new Point(x, 0), Text = "自動選擇（最高成功率）", Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
             rbAutoEvent.CheckedChanged += OnManualSubModeChanged;
             pnlEventMode.Controls.Add(rbAutoEvent);
 
-            rbManualEvent = new RadioButton
-            {
-                Location = new Point(x, 28),
-                Text = "手動選擇",
-                ForeColor = Color.FromArgb(210, 210, 225),
-                AutoSize = true
-            };
+            rbManualEvent = new RadioButton { Location = new Point(x, 28), Text = "手動選擇", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
             rbManualEvent.CheckedChanged += OnManualSubModeChanged;
             pnlEventMode.Controls.Add(rbManualEvent);
 
-            // 手動選擇的子選項（縮排顯示）
-            pnlManualSub = new Panel
-            {
-                Location = new Point(x + 22, 56),
-                Width = ctrlW - 22,
-                Height = 60,
-                BackColor = Color.Transparent,
-                Enabled = false // 預設 auto 選中時停用
-            };
+            pnlManualSub = new Panel { Location = new Point(x + 22, 56), Width = ctrlW - 22, Height = 60, BackColor = Color.Transparent, Enabled = false };
             pnlEventMode.Controls.Add(pnlManualSub);
 
-            rbPopupMode = new RadioButton
-            {
-                Location = new Point(0, 0),
-                Text = "彈出視窗（奪取焦點）",
-                Checked = true,
-                ForeColor = Color.FromArgb(210, 210, 225),
-                AutoSize = true
-            };
+            rbPopupMode = new RadioButton { Location = new Point(0, 0), Text = "彈出視窗（奪取焦點）", Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
             pnlManualSub.Controls.Add(rbPopupMode);
-
-            rbInlineMode = new RadioButton
-            {
-                Location = new Point(0, 28),
-                Text = "內嵌於主畫面（零干擾）",
-                ForeColor = Color.FromArgb(210, 210, 225),
-                AutoSize = true
-            };
+            rbInlineMode = new RadioButton { Location = new Point(0, 28), Text = "內嵌於主畫面（零干擾）", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
             pnlManualSub.Controls.Add(rbInlineMode);
+            y += 124;
 
-            y += 116;
+            // ── 專屬設定容器 ──
+            var pnlModeContainer = new Panel { Location = new Point(0, y), Width = ctrlW + x, Height = 170, BackColor = Color.Transparent };
+            panel.Controls.Add(pnlModeContainer);
+
+            BuildTrainingSettingsPanel(pnlModeContainer, x, ctrlW);
+            BuildBattleSettingsPanel(pnlModeContainer, x, ctrlW);
+
+            y += 175;
 
             // ── 開始 / 停止 ──
             btnStart = new Button
             {
-                Location = new Point(x, y),
-                Width = 163,
-                Height = 38,
-                Text = "▶  開始訓練",
-                BackColor = Color.FromArgb(38, 155, 75),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
+                Location = new Point(x, y), Width = 163, Height = 38,
+                Text = "▶  開始",
+                BackColor = Color.FromArgb(38, 155, 75), ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat, Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
                 Cursor = Cursors.Hand
             };
             btnStart.FlatAppearance.BorderSize = 0;
@@ -430,20 +357,92 @@ namespace MyDoujinBot.Forms
 
             btnStop = new Button
             {
-                Location = new Point(x + 175, y),
-                Width = 163,
-                Height = 38,
+                Location = new Point(x + 175, y), Width = 163, Height = 38,
                 Text = "⏹  停止",
-                BackColor = Color.FromArgb(155, 45, 45),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Enabled = false
+                BackColor = Color.FromArgb(155, 45, 45), ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat, Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
+                Cursor = Cursors.Hand, Enabled = false
             };
             btnStop.FlatAppearance.BorderSize = 0;
             btnStop.Click += OnStopClicked;
             panel.Controls.Add(btnStop);
+            
+            // 加入底部留白
+            var bottomPad = new Panel { Location = new Point(0, y + 40), Width = 10, Height = 20, BackColor = Color.Transparent };
+            panel.Controls.Add(bottomPad);
+            
+            // 初始化模式
+            OnModeTypeChanged(null, EventArgs.Empty);
+        }
+
+        private void BuildTrainingSettingsPanel(Panel parent, int x, int ctrlW)
+        {
+            pnlTrainingSettings = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Visible = true };
+            parent.Controls.Add(pnlTrainingSettings);
+            int py = 0;
+
+            py = AddSectionHeader(pnlTrainingSettings, "訓練行動", py, x);
+            AddLabel(pnlTrainingSettings, "選擇訓練：", x, py);
+            py += 22;
+
+            cmbAction = new ComboBox
+            {
+                Location = new Point(x, py), Width = ctrlW, DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230), FlatStyle = FlatStyle.Flat
+            };
+            foreach (var action in TrainingActions.All) cmbAction.Items.Add(action);
+            if (cmbAction.Items.Count > 0) cmbAction.SelectedIndex = 0;
+            pnlTrainingSettings.Controls.Add(cmbAction);
+            py += 34;
+
+        }
+
+        private void BuildBattleSettingsPanel(Panel parent, int x, int ctrlW)
+        {
+            pnlBattleSettings = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Visible = false };
+            parent.Controls.Add(pnlBattleSettings);
+            int py = 0;
+
+            py = AddSectionHeader(pnlBattleSettings, "戰鬥對象", py, x);
+            
+            txtTargetPlayerId = new TextBox
+            {
+                Location = new Point(x, py), Width = ctrlW - 75,
+                BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230),
+                BorderStyle = BorderStyle.FixedSingle, Text = AppSettingsManager.Current.LastBattleTargetId
+            };
+            pnlBattleSettings.Controls.Add(txtTargetPlayerId);
+
+            btnGetPlayerInfo = new Button
+            {
+                Location = new Point(x + ctrlW - 70, py - 2), Width = 70, Height = 25,
+                Text = "驗證 ID", BackColor = Color.FromArgb(60, 70, 110), ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand
+            };
+            btnGetPlayerInfo.FlatAppearance.BorderSize = 0;
+            btnGetPlayerInfo.Click += OnGetPlayerInfoClicked;
+            pnlBattleSettings.Controls.Add(btnGetPlayerInfo);
+            py += 28;
+
+            lblPlayerInfo = new Label
+            {
+                Location = new Point(x, py), Width = ctrlW, Height = 40,
+                Text = "請輸入玩家 ID 並驗證", ForeColor = Color.FromArgb(170, 170, 190), AutoSize = false
+            };
+            pnlBattleSettings.Controls.Add(lblPlayerInfo);
+            py += 44;
+
+            py = AddSectionHeader(pnlBattleSettings, "戰鬥模式", py, x);
+            var pnlBattleMode = new Panel { Location = new Point(0, py), Width = ctrlW + x, Height = 30, BackColor = Color.Transparent };
+            pnlBattleSettings.Controls.Add(pnlBattleMode);
+
+            rbBattleChallenge = new RadioButton { Location = new Point(x, 0), Text = "友好切磋", Checked = AppSettingsManager.Current.BattleMode == "Challenge", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
+            rbBattleChado = new RadioButton { Location = new Point(x + 145, 0), Text = "我要茶渡你", Checked = AppSettingsManager.Current.BattleMode == "Chado", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
+            
+            if (!rbBattleChallenge.Checked && !rbBattleChado.Checked) rbBattleChallenge.Checked = true;
+            
+            pnlBattleMode.Controls.Add(rbBattleChallenge);
+            pnlBattleMode.Controls.Add(rbBattleChado);
         }
 
         // =====================================================================
@@ -456,26 +455,34 @@ namespace MyDoujinBot.Forms
 
             y = AddSectionHeader(panel, "即時狀態", y, x);
 
-            lblStatusValue     = AddStatRow(panel, "狀態：",     "已停止",    Color.FromArgb(170, 170, 180), x, ref y);
-            lblRunCount        = AddStatRow(panel, "已執行：",   "0 次",      Color.FromArgb(210, 210, 225), x, ref y);
-            lblSuccessCount    = AddStatRow(panel, "成功：",     "0 次",      Color.FromArgb(90,  215, 110), x, ref y);
-            lblFailCount       = AddStatRow(panel, "失敗：",     "0 次",      Color.FromArgb(215, 90,  90),  x, ref y);
+            lblStatusValue     = AddStatRow(panel, "狀態：",     "已停止",    Color.FromArgb(170, 170, 180), x, ref y).Value;
+            var runRow         = AddStatRow(panel, "已執行：",   "0 次",      Color.FromArgb(210, 210, 225), x, ref y);
+            lblTitleRunCount   = runRow.Title;
+            lblRunCount        = runRow.Value;
+            
+            var successRow     = AddStatRow(panel, "成功：",     "0 次",      Color.FromArgb(90,  215, 110), x, ref y);
+            lblTitleSuccessCount = successRow.Title;
+            lblSuccessCount    = successRow.Value;
+
+            var failRow        = AddStatRow(panel, "失敗：",     "0 次",      Color.FromArgb(215, 90,  90),  x, ref y);
+            lblTitleFailCount  = failRow.Title;
+            lblFailCount       = failRow.Value;
 
             y += 6; // 小間距
-            lblEventCount         = AddStatRow(panel, "觸發事件：",  "0 次", Color.FromArgb(190, 150, 255), x, ref y);
-            lblEventSuccessCount  = AddStatRow(panel, "事件成功：",  "0 次", Color.FromArgb(90,  215, 110), x, ref y);
-            lblEventFailCount     = AddStatRow(panel, "事件失敗：",  "0 次", Color.FromArgb(215, 90,  90),  x, ref y);
+            lblEventCount         = AddStatRow(panel, "觸發事件：",  "0 次", Color.FromArgb(190, 150, 255), x, ref y).Value;
+            lblEventSuccessCount  = AddStatRow(panel, "事件成功：",  "0 次", Color.FromArgb(90,  215, 110), x, ref y).Value;
+            lblEventFailCount     = AddStatRow(panel, "事件失敗：",  "0 次", Color.FromArgb(215, 90,  90),  x, ref y).Value;
 
             y += 6;
-            lblLevel    = AddStatRow(panel, "目前等級：", "—",        Color.FromArgb(255, 215, 70),  x, ref y);
-            lblTotalExp = AddStatRow(panel, "累積 EXP：", "0",        Color.FromArgb(210, 210, 225), x, ref y);
+            lblLevel    = AddStatRow(panel, "目前等級：", "—",        Color.FromArgb(255, 215, 70),  x, ref y).Value;
+            lblTotalExp = AddStatRow(panel, "累積 EXP：", "0",        Color.FromArgb(210, 210, 225), x, ref y).Value;
 
             y += 6;
-            lblNextRun  = AddStatRow(panel, "下次執行：", "—",        Color.FromArgb(170, 215, 255), x, ref y);
-            lblElapsed  = AddStatRow(panel, "運作時間：", "00:00:00", Color.FromArgb(210, 210, 225), x, ref y);
+            lblNextRun  = AddStatRow(panel, "下次執行：", "—",        Color.FromArgb(170, 215, 255), x, ref y).Value;
+            lblElapsed  = AddStatRow(panel, "運作時間：", "00:00:00", Color.FromArgb(210, 210, 225), x, ref y).Value;
 
             y += 6;
-            lblGainedCharacters = AddStatRow(panel, "獲得角色：", "無", Color.Gold, x, ref y);
+            lblGainedCharacters = AddStatRow(panel, "獲得角色：", "無", Color.Gold, x, ref y).Value;
             lblGainedCharacters.AutoSize = true;
             lblGainedCharacters.MaximumSize = new Size(100, 0); // Allow wrapping if there are many characters
         }
@@ -485,17 +492,45 @@ namespace MyDoujinBot.Forms
         // =====================================================================
         private void BuildLogPanel(Panel panel)
         {
+            // ── 標題與戰報按鈕容器 ──
+            var pnlLogTop = new Panel
+            {
+                Dock = DockStyle.Top, Height = 26
+            };
+            
             lblLogHeader = new Label
             {
-                Text = "訓練 LOG",
-                Dock = DockStyle.Top,
-                Height = 26,
+                Text = "LOG",
+                Dock = DockStyle.Left,
+                Width = 100,
                 ForeColor = Color.FromArgb(160, 160, 195),
                 Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(2, 0, 0, 0)
             };
+            pnlLogTop.Controls.Add(lblLogHeader);
 
+            btnShowLastReport = new Button
+            {
+                Text = "📄 顯示最後戰報",
+                Dock = DockStyle.Right,
+                Width = 120,
+                BackColor = Color.FromArgb(50, 60, 80),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Visible = false
+            };
+            btnShowLastReport.FlatAppearance.BorderSize = 0;
+            btnShowLastReport.Click += (s, e) => {
+                if (_lastBattleResult != null)
+                {
+                    using var f = new BattleReportForm(_lastBattleResult);
+                    f.ShowDialog(this);
+                }
+            };
+            pnlLogTop.Controls.Add(btnShowLastReport);
+            
             rtbLog = new RichTextBox
             {
                 Dock = DockStyle.Fill,
@@ -508,8 +543,6 @@ namespace MyDoujinBot.Forms
             };
 
             // ── 事件 Overlay Panel（覆蓋整個 LOG 欄，平時隱藏）──
-            // 原理：WinForms 中，後加入的控制項會顯示在前面（Z-Order）。
-            // Overlay 最後加入，因此視覺上蓋在 rtbLog 上方。
             pnlEventOverlay = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -518,10 +551,8 @@ namespace MyDoujinBot.Forms
                 Padding = new Padding(0)
             };
 
-            // Dock 順序：Fill 先加，Top 後加（WinForms Dock 從後往前佔位）
             panel.Controls.Add(rtbLog);
-            panel.Controls.Add(lblLogHeader);
-            // Overlay 最後加入 → 位於最上層（蓋住 rtbLog）
+            panel.Controls.Add(pnlLogTop);
             panel.Controls.Add(pnlEventOverlay);
         }
 
@@ -591,19 +622,21 @@ namespace MyDoujinBot.Forms
         // Helper：中欄狀態列（標籤 + 數值）
         // ref y：讓 helper 內部自動累加 y，呼叫方不用手動 y += 26
         // =====================================================================
-        private static Label AddStatRow(Control parent, string labelText, string valueText,
+        private static (Label Title, Label Value) AddStatRow(Control parent, string labelText, string valueText,
             Color valueColor, int x, ref int y)
         {
-            parent.Controls.Add(new Label
+            var title = new Label
             {
                 Location = new Point(x, y),
                 Text = labelText,
                 ForeColor = Color.FromArgb(140, 140, 160),
                 AutoSize = true
-            });
+            };
+            parent.Controls.Add(title);
+
             var lblValue = new Label
             {
-                Location = new Point(x + 95, y),
+                Location = new Point(x + 105, y),
                 Text = valueText,
                 ForeColor = valueColor,
                 AutoSize = true,
@@ -611,7 +644,7 @@ namespace MyDoujinBot.Forms
             };
             parent.Controls.Add(lblValue);
             y += 25;
-            return lblValue;
+            return (title, lblValue);
         }
 
         // =====================================================================
@@ -641,6 +674,72 @@ namespace MyDoujinBot.Forms
             {
                 lblTokenStatus.Text = "✓  Token 已設定";
                 lblTokenStatus.ForeColor = Color.FromArgb(90, 210, 100);
+            }
+        }
+
+        // =====================================================================
+        // 模式切換 (訓練 / 戰鬥)
+        // =====================================================================
+        private void OnModeTypeChanged(object? sender, EventArgs e)
+        {
+            bool isBattle = rbModeBattle.Checked;
+            if (pnlTrainingSettings != null) pnlTrainingSettings.Visible = !isBattle;
+            if (pnlBattleSettings != null) pnlBattleSettings.Visible = isBattle;
+            if (btnStart != null) btnStart.Text = isBattle ? "▶  開始戰鬥" : "▶  開始訓練";
+            if (lblLogHeader != null) lblLogHeader.Text = isBattle ? "戰鬥 LOG" : "訓練 LOG";
+
+            if (lblTitleRunCount != null) lblTitleRunCount.Text = isBattle ? "戰鬥總次數：" : "已執行：";
+            if (lblTitleSuccessCount != null) lblTitleSuccessCount.Text = isBattle ? "勝利次數：" : "成功：";
+            if (lblTitleFailCount != null) lblTitleFailCount.Text = isBattle ? "失敗次數：" : "失敗：";
+
+            rbModeTraining.BackColor = isBattle ? Color.FromArgb(40, 40, 50) : Color.FromArgb(60, 70, 110);
+            rbModeBattle.BackColor = isBattle ? Color.FromArgb(60, 70, 110) : Color.FromArgb(40, 40, 50);
+        }
+
+        // =====================================================================
+        // 取得戰鬥對象資訊
+        // =====================================================================
+        private async void OnGetPlayerInfoClicked(object? sender, EventArgs e)
+        {
+            string targetId = txtTargetPlayerId.Text.Trim();
+            if (string.IsNullOrEmpty(targetId))
+            {
+                MessageBox.Show("請輸入玩家 ID", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_currentToken))
+            {
+                MessageBox.Show("請先設定 Token", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            btnGetPlayerInfo.Enabled = false;
+            lblPlayerInfo.Text = "讀取中...";
+            lblPlayerInfo.ForeColor = Color.FromArgb(170, 170, 190);
+
+            try
+            {
+                var result = await _battleService.GetPlayerProfileAsync(targetId, _currentToken);
+                if (result.IsSuccess && result.Data != null)
+                {
+                    var data = result.Data;
+                    string cName = data.Character != null ? data.Character.Name : "無";
+                    int cLevel = data.Character != null ? data.Character.Level : 0;
+                    lblPlayerInfo.Text = $"暱稱: {data.Nickname}\n角色: Lv.{cLevel} {cName}";
+                    lblPlayerInfo.ForeColor = Color.FromArgb(80, 220, 120);
+                    _targetPlayerName = data.Nickname ?? string.Empty;
+                }
+                else
+                {
+                    lblPlayerInfo.Text = $"讀取失敗: {result.ErrorMessage}";
+                    lblPlayerInfo.ForeColor = Color.FromArgb(220, 80, 80);
+                    _targetPlayerName = string.Empty;
+                }
+            }
+            finally
+            {
+                btnGetPlayerInfo.Enabled = true;
             }
         }
 
@@ -686,60 +785,117 @@ namespace MyDoujinBot.Forms
                 return;
             }
 
-            if (cmbAction.SelectedItem is not TrainingAction selectedAction)
+            bool isBattleMode = rbModeBattle.Checked;
+            TrainingAction? selectedAction = null;
+
+            if (!isBattleMode)
             {
-                AppendLog("[錯誤] 請選擇訓練行動。", Color.FromArgb(220, 80, 80));
-                return;
+                if (cmbAction.SelectedItem is not TrainingAction action)
+                {
+                    AppendLog("[錯誤] 請選擇訓練行動。", Color.FromArgb(220, 80, 80));
+                    return;
+                }
+                selectedAction = action;
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(txtTargetPlayerId.Text))
+                {
+                    AppendLog("[錯誤] 請輸入戰鬥對象 ID。", Color.FromArgb(220, 80, 80));
+                    return;
+                }
             }
 
-            var settings = new LoopSettings
-            {
-                Token = _currentToken,
-                ActionId = selectedAction.ActionId,
-                Mode = rbCount.Checked ? ExecutionMode.Count : ExecutionMode.Time,
-                CountLimit = (int)nudCount.Value,
-                TimeLimitMinutes = (int)nudMinutes.Value,
-                ExtraDelaySeconds = (double)nudExtraDelay.Value
-            };
-
-            // 計算並儲存目前的事件模式
-            bool isInline = rbManualEvent.Checked && rbInlineMode.Checked;
-            bool isPopup  = rbManualEvent.Checked && !rbInlineMode.Checked;
-            AppSettingsManager.Current.EventMode = rbAutoEvent.Checked ? "auto" :
-                                                   isInline ? "inline" : "popup";
-            AppSettingsManager.Save();
-
             _cts = new CancellationTokenSource();
-
-            _trainingLoop = new TrainingLoop(_trainingService, _eventService)
-            {
-                IsAutoEventMode = rbAutoEvent.Checked,
-                OnLog = AppendLog,
-                OnStatusChanged = UpdateStatus,
-                OnStatsUpdated = UpdateStats,
-                // 自動模式：OnManualEventSelect = null（TrainingLoop 自動選擇）
-                // 手動+彈窗：HandleManualEventAsync
-                // 手動+內嵌：HandleInlineEventAsync
-                OnManualEventSelect = rbAutoEvent.Checked ? null :
-                                      isInline ? HandleInlineEventAsync : HandleManualEventAsync,
-                OnManualEventResult = rbAutoEvent.Checked ? null :
-                                      isInline ? ShowInlineEventResultAsync : HandleManualEventResultAsync,
-                OnCloseManualUi = () => { _currentEventForm?.Close(); HideEventOverlay(); }
-            };
-
             SetControlsEnabled(false);
             btnStop.Enabled = true;
+            btnShowLastReport.Visible = false;
 
             _loopStartTime = DateTime.Now;
             _elapsedTimer.Tick += OnElapsedTick;
             _elapsedTimer.Start();
 
-            AppendLog($"開始訓練：{selectedAction.DisplayName}（{selectedAction.ActionId}）",
-                Color.FromArgb(140, 200, 255));
-
             try
             {
-                await Task.Run(() => _trainingLoop.RunAsync(settings, _cts.Token), _cts.Token);
+                if (isBattleMode)
+                {
+                    var battleSettings = new BattleLoopSettings
+                    {
+                        Token = _currentToken,
+                        TargetPlayerId = txtTargetPlayerId.Text.Trim(),
+                        TargetPlayerName = string.IsNullOrEmpty(_targetPlayerName) ? txtTargetPlayerId.Text.Trim() : _targetPlayerName,
+                        Type = rbBattleChallenge.Checked ? BattleType.Challenge : BattleType.Chado,
+                        Mode = rbCount.Checked ? ExecutionMode.Count : ExecutionMode.Time,
+                        CountLimit = (int)nudCount.Value,
+                        TimeLimitMinutes = (int)nudMinutes.Value,
+                        ExtraDelaySeconds = (double)nudExtraDelay.Value
+                    };
+
+                    // 儲存設定
+                    AppSettingsManager.Current.LastBattleTargetId = battleSettings.TargetPlayerId;
+                    AppSettingsManager.Current.BattleMode = rbBattleChallenge.Checked ? "Challenge" : "Chado";
+                    AppSettingsManager.Save();
+
+                    bool isInline = rbManualEvent.Checked && rbInlineMode.Checked;
+                    
+                    _battleLoop = new BattleLoop(_battleService, _eventService)
+                    {
+                        OnLog = AppendLog,
+                        OnStatusChanged = UpdateStatus,
+                        OnStatsUpdated = UpdateBattleStats,
+                        IsAutoEventMode = rbAutoEvent.Checked,
+                        OnManualEventSelect = rbAutoEvent.Checked ? null :
+                                              isInline ? HandleInlineEventAsync : HandleManualEventAsync,
+                        OnManualEventResult = rbAutoEvent.Checked ? null :
+                                              isInline ? ShowInlineEventResultAsync : HandleManualEventResultAsync,
+                        OnCloseManualUi = () => { _currentEventForm?.Close(); HideEventOverlay(); },
+                        OnLastBattleResultUpdated = (result) => 
+                        {
+                            _lastBattleResult = result;
+                            if (btnShowLastReport.InvokeRequired)
+                                btnShowLastReport.Invoke(() => btnShowLastReport.Visible = true);
+                            else
+                                btnShowLastReport.Visible = true;
+                        }
+                    };
+
+                    AppendLog($"開始自動戰鬥：{(battleSettings.Type == BattleType.Challenge ? "友好切磋" : "我要茶渡你")}，目標: {battleSettings.TargetPlayerName}", Color.FromArgb(140, 200, 255));
+                    await Task.Run(() => _battleLoop.RunAsync(battleSettings, _cts.Token), _cts.Token);
+                }
+                else
+                {
+                    var trainingSettings = new LoopSettings
+                    {
+                        Token = _currentToken,
+                        ActionId = selectedAction!.ActionId,
+                        Mode = rbCount.Checked ? ExecutionMode.Count : ExecutionMode.Time,
+                        CountLimit = (int)nudCount.Value,
+                        TimeLimitMinutes = (int)nudMinutes.Value,
+                        ExtraDelaySeconds = (double)nudExtraDelay.Value
+                    };
+
+                    bool isInline = rbManualEvent.Checked && rbInlineMode.Checked;
+                    bool isPopup  = rbManualEvent.Checked && !rbInlineMode.Checked;
+                    AppSettingsManager.Current.EventMode = rbAutoEvent.Checked ? "auto" :
+                                                           isInline ? "inline" : "popup";
+                    AppSettingsManager.Save();
+
+                    _trainingLoop = new TrainingLoop(_trainingService, _eventService)
+                    {
+                        IsAutoEventMode = rbAutoEvent.Checked,
+                        OnLog = AppendLog,
+                        OnStatusChanged = UpdateStatus,
+                        OnStatsUpdated = UpdateStats,
+                        OnManualEventSelect = rbAutoEvent.Checked ? null :
+                                              isInline ? HandleInlineEventAsync : HandleManualEventAsync,
+                        OnManualEventResult = rbAutoEvent.Checked ? null :
+                                              isInline ? ShowInlineEventResultAsync : HandleManualEventResultAsync,
+                        OnCloseManualUi = () => { _currentEventForm?.Close(); HideEventOverlay(); }
+                    };
+
+                    AppendLog($"開始訓練：{selectedAction.DisplayName}（{selectedAction.ActionId}）", Color.FromArgb(140, 200, 255));
+                    await Task.Run(() => _trainingLoop.RunAsync(trainingSettings, _cts.Token), _cts.Token);
+                }
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
@@ -823,6 +979,36 @@ namespace MyDoujinBot.Forms
                 : "—";
         }
 
+        private void UpdateBattleStats(BattleStats stats)
+        {
+            if (lblRunCount.InvokeRequired)
+            {
+                lblRunCount.Invoke(() => UpdateBattleStats(stats));
+                return;
+            }
+
+            lblRunCount.Text = $"{stats.RunCount} 次";
+            lblSuccessCount.Text = $"{stats.WinCount} 次";
+            lblFailCount.Text = $"{stats.LossCount} 次";
+            lblTotalExp.Text = $"{stats.TotalExp:N0}";
+            
+            lblEventCount.Text = $"{stats.EventCount} 次";
+            lblEventSuccessCount.Text = $"{stats.EventSuccessCount} 次";
+            lblEventFailCount.Text = $"{stats.EventFailCount} 次";
+            
+            lblLevel.Text = stats.CurrentLevel > 0 ? $"Lv.{stats.CurrentLevel}" : "—";
+            
+            if (stats.GainedCharacters.Count > 0)
+                lblGainedCharacters.Text = string.Join(", ", stats.GainedCharacters);
+            else
+                lblGainedCharacters.Text = "無";
+
+            if (stats.NextRunCountdownSeconds > 0)
+                lblNextRun.Text = $"{stats.NextRunCountdownSeconds:F1} 秒後";
+            else
+                lblNextRun.Text = "—";
+        }
+
         // =====================================================================
         // 運作時間計時器
         // =====================================================================
@@ -837,8 +1023,12 @@ namespace MyDoujinBot.Forms
         // =====================================================================
         private void SetControlsEnabled(bool enabled)
         {
+            rbModeTraining.Enabled = enabled;
+            rbModeBattle.Enabled   = enabled;
             btnSettings.Enabled    = enabled;
             cmbAction.Enabled      = enabled;
+            txtTargetPlayerId.Enabled = enabled;
+            btnGetPlayerInfo.Enabled = enabled;
             rbCount.Enabled        = enabled;
             rbTime.Enabled         = enabled;
             nudCount.Enabled       = enabled;

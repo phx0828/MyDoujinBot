@@ -33,14 +33,17 @@ namespace MyDoujinBot.Forms
             };
             this.Controls.Add(pnlMain);
 
+            string winStr = battleResult.Winner == "TEAM_A" ? "勝利" : "失敗";
+            Color winColor = battleResult.Winner == "TEAM_A" ? Color.FromArgb(80, 220, 120) : Color.FromArgb(220, 80, 80);
+            
             var lblWinner = new Label
             {
                 Dock = DockStyle.Top,
-                Text = $"戰鬥結束！勝者：{battleResult.Winner ?? "未知"}",
-                Font = new Font("Microsoft JhengHei UI", 12f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(255, 215, 80),
-                Height = 36,
-                TextAlign = ContentAlignment.MiddleLeft
+                Text = winStr,
+                Font = new Font("Microsoft JhengHei UI", 16f, FontStyle.Bold),
+                ForeColor = winColor,
+                Height = 40,
+                TextAlign = ContentAlignment.MiddleCenter
             };
             pnlMain.Controls.Add(lblWinner);
 
@@ -93,7 +96,7 @@ namespace MyDoujinBot.Forms
             // Aqua
             if (type == "DAMAGE" && log.IsNormalAttack == false)
                 return Color.FromArgb(79, 209, 197); // #4FD1C5
-            if (type == "SKILL_TEXT" || type == "BUFF_APPLY")
+            if (type == "SKILL_TEXT" || type == "BUFF_APPLY" || type == "SUMMON")
                 return Color.FromArgb(79, 209, 197);
 
             // Yellow / Orange
@@ -108,7 +111,7 @@ namespace MyDoujinBot.Forms
                 return Color.FromArgb(245, 245, 245);
 
             // Gray
-            if (type == "MISS")
+            if (type == "MISS" || type == "CHADO_MISS")
                 return Color.FromArgb(161, 161, 170); // #A1A1AA
 
             // Brown
@@ -118,6 +121,9 @@ namespace MyDoujinBot.Forms
             // Light Purple
             if (type == "LUCK_EVENT" && log.Tier == "PURPLE")
                 return Color.FromArgb(192, 132, 252); // #C084FC
+
+            if (type == "HEAL")
+                return Color.FromArgb(123, 213, 166); // #7BD5A6
 
             return Color.White;
         }
