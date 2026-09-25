@@ -1278,6 +1278,8 @@ namespace MyDoujinBot.Forms
                         ? "請切換至 MyDoujin Bot 視窗選擇應對選項。"
                         : pendingEvent.Description;
 
+                    try { ToastNotificationManagerCompat.History.Clear(); } catch { }
+
                     new ToastContentBuilder()
                         .AddText(title)
                         .AddText(content)
