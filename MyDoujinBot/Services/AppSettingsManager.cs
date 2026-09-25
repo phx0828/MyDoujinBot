@@ -73,9 +73,10 @@ namespace MyDoujinBot.Services
     /// 應用程式設定資料類別。
     ///
     /// EventMode 值：
-    ///   "auto"   → 自動選擇（最高成功率）
-    ///   "popup"  → 手動選擇 + 彈出視窗
-    ///   "inline" → 手動選擇 + 內嵌於主畫面
+    ///   "auto"        → 自動選擇（最高成功率）
+    ///   "auto-random" → 自動選擇（全隨機）
+    ///   "popup"       → 手動選擇 + 彈出視窗
+    ///   "inline"      → 手動選擇 + 內嵌於主畫面
     ///
     /// ManualDisplayMode 值：
     ///   "popup"  → 彈出視窗（奪取焦點）
@@ -91,7 +92,7 @@ namespace MyDoujinBot.Services
 
         /// <summary>
         /// 遭遇事件應對模式。
-        /// "auto" = 自動選擇；"popup" = 手動+彈窗；"inline" = 手動+內嵌
+        /// "auto" = 自動（最高成功率）；"auto-random" = 自動（全隨機）；"popup" = 手動+彈窗；"inline" = 手動+內嵌
         /// </summary>
         [JsonPropertyName("eventMode")]
         public string EventMode { get; set; } = "auto";

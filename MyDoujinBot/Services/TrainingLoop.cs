@@ -205,10 +205,10 @@ namespace MyDoujinBot.Services
                         var pe = response.PendingEvent;
                         string? chosenOptionId;
 
-                        if (IsAutoEventMode)
+                        if (AutoStrategy.HasValue)
                         {
-                            // 自動模式：在 TrainingLoop 內部自己選擇最高 successChance
-                            chosenOptionId = AutoSelectOption(pe);
+                            // 自動模式：根據策略選擇
+                            chosenOptionId = AutoSelectOption(pe, AutoStrategy.Value);
                             var chosenOption = pe.Options.Find(o => o.Id == chosenOptionId);
                             var chanceTxt = chosenOption?.SuccessChance.HasValue == true
                                 ? $"（成功率 {chosenOption.SuccessChance}%）"
@@ -221,9 +221,9 @@ namespace MyDoujinBot.Services
                             // 人工模式：等待 Form 的使用者選擇
                             if (OnManualEventSelect == null)
                             {
-                                Log($"[事件] {pe.Name} — 人工選擇未配置，自動切換為自動選擇。",
+                                Log($"[事件] {pe.Name} — 人工選擇未配置，自動切換為自動選擇（最高成功率）。",
                                     System.Drawing.Color.FromArgb(200, 160, 255));
-                                chosenOptionId = AutoSelectOption(pe);
+                                chosenOptionId = AutoSelectOption(pe, AutoEventStrategy.HighestSuccessRate);
                             }
                             else
                             {
@@ -245,7 +245,7 @@ namespace MyDoujinBot.Services
                             }
 
                             // 手動選擇模式下，若有結果且有配置 OnManualEventResult，則 await 結果展示（等待使用者按下關閉）
-                            if (!IsAutoEventMode)
+                            if (!AutoStrategy.HasValue)
                             {
                                 if (eventResult != null && OnManualEventResult != null)
                                 {
@@ -435,10 +435,16 @@ namespace MyDoujinBot.Services
         // OrderByDescending(o => o.SuccessChance!.Value)  → 由高到低排序
         // FirstOrDefault()  → 取第一個（最高的），如果空集合則回傳 null
         // =====================================================================
-        private static string? AutoSelectOption(PendingEvent pe)
+        private static string? AutoSelectOption(PendingEvent pe, AutoEventStrategy strategy)
         {
             if (pe.Options == null || pe.Options.Count == 0)
                 return null;
+
+            if (strategy == AutoEventStrategy.Random)
+            {
+                var idx = Random.Shared.Next(pe.Options.Count);
+                return pe.Options[idx].Id;
+            }
 
             // 找出有 SuccessChance 的 options
             var optionsWithChance = pe.Options
@@ -563,6 +569,6 @@ namespace MyDoujinBot.Services
             return parts;
         }
 
-        public bool IsAutoEventMode { get; set; } = true;
+        public AutoEventStrategy? AutoStrategy { get; set; } = AutoEventStrategy.HighestSuccessRate;
     }
 }

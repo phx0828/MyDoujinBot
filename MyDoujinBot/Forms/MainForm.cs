@@ -37,11 +37,15 @@ namespace MyDoujinBot.Forms
 
         // --- 事件應對 ---
         private RadioButton rbAutoEvent = null!;
+        private TableLayoutPanel pnlAutoSub = null!;
+        private RadioButton rbAutoHighestMode = null!;
+        private RadioButton rbAutoRandomMode = null!;
         private RadioButton rbManualEvent = null!;
         // 手動模式的子選項
+        private TableLayoutPanel pnlManualSub = null!;
         private RadioButton rbPopupMode = null!;
         private RadioButton rbInlineMode = null!;
-        private Panel pnlManualSub = null!;
+
 
         // --- 內嵌事件 Overlay（覆蓋 LOG 欄） ---
         private Panel pnlEventOverlay = null!;
@@ -144,9 +148,8 @@ namespace MyDoujinBot.Forms
             _currentToken = AppSettingsManager.Current.Token;
             UpdateTokenStatus();
 
-            // 依儲存的設定還原事件應對模式
-            // EventMode: "auto" = 自動；"popup" = 手動+彈窗；"inline" = 手動+內嵌
-            bool isManual = AppSettingsManager.Current.EventMode != "auto";
+            // EventMode: "auto" = 自動(最高)；"auto-random" = 自動(隨機)；"popup" = 手動+彈窗；"inline" = 手動+內嵌
+            bool isManual = AppSettingsManager.Current.EventMode == "popup" || AppSettingsManager.Current.EventMode == "inline";
             if (isManual)
             {
                 rbManualEvent.Checked = true; // 觸發 CheckedChanged → 子選項啟用
@@ -158,6 +161,10 @@ namespace MyDoujinBot.Forms
             else
             {
                 rbAutoEvent.Checked = true;
+                if (AppSettingsManager.Current.EventMode == "auto-random")
+                    rbAutoRandomMode.Checked = true;
+                else
+                    rbAutoHighestMode.Checked = true;
             }
         }
 
@@ -322,16 +329,32 @@ namespace MyDoujinBot.Forms
             // ── 遭遇事件應對 ──
             TblAddRow(tbl, MakeSectionHeader("遭遇事件應對"));
 
-            rbAutoEvent = new RadioButton { Text = "自動選擇（最高成功率）", Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
-            rbAutoEvent.CheckedChanged += OnManualSubModeChanged;
+            rbAutoEvent = new RadioButton { Text = "自動選擇", Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
+            rbAutoEvent.CheckedChanged += OnEventModeChanged;
             TblAddRow(tbl, rbAutoEvent);
 
+            // 自動子選項
+            pnlAutoSub = new TableLayoutPanel
+            {
+                ColumnCount = 1, RowCount = 0,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent, Enabled = true,
+                Margin = new Padding(24, 2, 0, 6),
+                CellBorderStyle = TableLayoutPanelCellBorderStyle.None
+            };
+            pnlAutoSub.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            rbAutoHighestMode = new RadioButton { Text = "最高成功率", Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
+            rbAutoRandomMode  = new RadioButton { Text = "完全隨機", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true, Margin = new Padding(0, 4, 0, 0) };
+            TblAddRow(pnlAutoSub, rbAutoHighestMode);
+            TblAddRow(pnlAutoSub, rbAutoRandomMode);
+            TblAddRow(tbl, pnlAutoSub);
+
             rbManualEvent = new RadioButton { Text = "手動選擇", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
-            rbManualEvent.CheckedChanged += OnManualSubModeChanged;
+            rbManualEvent.CheckedChanged += OnEventModeChanged;
             TblAddRow(tbl, rbManualEvent);
 
             // 手動子選項（縮排）
-            var subTbl = new TableLayoutPanel
+            pnlManualSub = new TableLayoutPanel
             {
                 ColumnCount = 1, RowCount = 0,
                 AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -339,12 +362,11 @@ namespace MyDoujinBot.Forms
                 Margin = new Padding(24, 2, 0, 6),
                 CellBorderStyle = TableLayoutPanelCellBorderStyle.None
             };
-            subTbl.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            pnlManualSub.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             rbPopupMode  = new RadioButton { Text = "彈出視窗（奪取焦點）",   Checked = true, ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true };
             rbInlineMode = new RadioButton { Text = "內嵌於主畫面（零干擾）", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true, Margin = new Padding(0, 4, 0, 0) };
-            TblAddRow(subTbl, rbPopupMode);
-            TblAddRow(subTbl, rbInlineMode);
-            pnlManualSub = subTbl;
+            TblAddRow(pnlManualSub, rbPopupMode);
+            TblAddRow(pnlManualSub, rbInlineMode);
             TblAddRow(tbl, pnlManualSub);
 
             // ── 訓練 / 戰鬥 專屬設定容器 ──
@@ -878,19 +900,19 @@ namespace MyDoujinBot.Forms
         }
 
         // =====================================================================
-        // 手動模式子選項顯示切換（自動→停用子面板；手動→啟用子面板）
+        // 事件應對模式切換（控制自動/手動子面板與視覺回饋）
         // =====================================================================
-        private void OnManualSubModeChanged(object? sender, EventArgs e)
+        private void OnEventModeChanged(object? sender, EventArgs e)
         {
             bool isManual = rbManualEvent.Checked;
             pnlManualSub.Enabled = isManual;
-            // 視覺回饋：停用時降低子選項亮度
-            rbPopupMode.ForeColor = isManual
-                ? Color.FromArgb(210, 210, 225)
-                : Color.FromArgb(120, 120, 140);
-            rbInlineMode.ForeColor = isManual
-                ? Color.FromArgb(210, 210, 225)
-                : Color.FromArgb(120, 120, 140);
+            rbPopupMode.ForeColor = isManual ? Color.FromArgb(210, 210, 225) : Color.FromArgb(120, 120, 140);
+            rbInlineMode.ForeColor = isManual ? Color.FromArgb(210, 210, 225) : Color.FromArgb(120, 120, 140);
+
+            bool isAuto = rbAutoEvent.Checked;
+            pnlAutoSub.Enabled = isAuto;
+            rbAutoHighestMode.ForeColor = isAuto ? Color.FromArgb(210, 210, 225) : Color.FromArgb(120, 120, 140);
+            rbAutoRandomMode.ForeColor = isAuto ? Color.FromArgb(210, 210, 225) : Color.FromArgb(120, 120, 140);
         }
 
         // =====================================================================
@@ -978,7 +1000,9 @@ namespace MyDoujinBot.Forms
                         OnLog = AppendLog,
                         OnStatusChanged = UpdateStatus,
                         OnStatsUpdated = UpdateBattleStats,
-                        IsAutoEventMode = rbAutoEvent.Checked,
+                        AutoStrategy = rbAutoEvent.Checked 
+                                       ? (rbAutoRandomMode.Checked ? AutoEventStrategy.Random : AutoEventStrategy.HighestSuccessRate)
+                                       : (AutoEventStrategy?)null,
                         OnManualEventSelect = rbAutoEvent.Checked ? null :
                                               isInline ? HandleInlineEventAsync : HandleManualEventAsync,
                         OnManualEventResult = rbAutoEvent.Checked ? null :
@@ -1011,13 +1035,16 @@ namespace MyDoujinBot.Forms
 
                     bool isInline = rbManualEvent.Checked && rbInlineMode.Checked;
                     bool isPopup  = rbManualEvent.Checked && !rbInlineMode.Checked;
-                    AppSettingsManager.Current.EventMode = rbAutoEvent.Checked ? "auto" :
-                                                           isInline ? "inline" : "popup";
+                    AppSettingsManager.Current.EventMode = rbAutoEvent.Checked
+                                                           ? (rbAutoRandomMode.Checked ? "auto-random" : "auto")
+                                                           : (isInline ? "inline" : "popup");
                     AppSettingsManager.Save();
 
                     _trainingLoop = new TrainingLoop(_trainingService, _eventService)
                     {
-                        IsAutoEventMode = rbAutoEvent.Checked,
+                        AutoStrategy = rbAutoEvent.Checked 
+                                       ? (rbAutoRandomMode.Checked ? AutoEventStrategy.Random : AutoEventStrategy.HighestSuccessRate)
+                                       : (AutoEventStrategy?)null,
                         OnLog = AppendLog,
                         OnStatusChanged = UpdateStatus,
                         OnStatsUpdated = UpdateStats,
@@ -1179,7 +1206,8 @@ namespace MyDoujinBot.Forms
             nudCount.Enabled       = enabled;
             nudMinutes.Enabled     = enabled;
             nudExtraDelay.Enabled  = enabled;
-            rbAutoEvent.Enabled    = enabled;
+            rbAutoEvent.Enabled       = enabled;
+            pnlAutoSub.Enabled        = enabled && rbAutoEvent.Checked;
             rbManualEvent.Enabled  = enabled;
             // pnlManualSub 整組控制 — 只有手動模式且 enabled=true 時才可操作
             pnlManualSub.Enabled   = enabled && rbManualEvent.Checked;

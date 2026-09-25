@@ -54,7 +54,7 @@ namespace MyDoujinBot.Services
         public Func<PendingEvent, CancellationToken, Task<string?>>? OnManualEventSelect { get; set; }
         public Func<EventResult, CancellationToken, Task>? OnManualEventResult { get; set; }
         public Action? OnCloseManualUi { get; set; }
-        public bool IsAutoEventMode { get; set; } = true;
+        public AutoEventStrategy? AutoStrategy { get; set; } = AutoEventStrategy.HighestSuccessRate;
 
         public BattleStats Stats { get; } = new();
 
@@ -185,9 +185,9 @@ namespace MyDoujinBot.Services
                         var pe = response.PendingEvent;
                         string? chosenOptionId;
 
-                        if (IsAutoEventMode)
+                        if (AutoStrategy.HasValue)
                         {
-                            chosenOptionId = AutoSelectOption(pe);
+                            chosenOptionId = AutoSelectOption(pe, AutoStrategy.Value);
                             var chosenOption = pe.Options.Find(o => o.Id == chosenOptionId);
                             var chanceTxt = chosenOption?.SuccessChance.HasValue == true
                                 ? $"（成功率 {chosenOption.SuccessChance}%）"
@@ -199,9 +199,9 @@ namespace MyDoujinBot.Services
                         {
                             if (OnManualEventSelect == null)
                             {
-                                Log($"[事件] {pe.Name} — 人工選擇未配置，自動切換為自動選擇。",
+                                Log($"[事件] {pe.Name} — 人工選擇未配置，自動切換為自動選擇（最高成功率）。",
                                     System.Drawing.Color.FromArgb(200, 160, 255));
-                                chosenOptionId = AutoSelectOption(pe);
+                                chosenOptionId = AutoSelectOption(pe, AutoEventStrategy.HighestSuccessRate);
                             }
                             else
                             {
@@ -221,7 +221,7 @@ namespace MyDoujinBot.Services
                                 return;
                             }
 
-                            if (!IsAutoEventMode)
+                            if (!AutoStrategy.HasValue)
                             {
                                 if (eventResult != null && OnManualEventResult != null)
                                 {
@@ -268,10 +268,16 @@ namespace MyDoujinBot.Services
             return cooldownMs + randomDelay;
         }
 
-        private static string? AutoSelectOption(PendingEvent pe)
+        private static string? AutoSelectOption(PendingEvent pe, AutoEventStrategy strategy)
         {
             if (pe.Options == null || pe.Options.Count == 0)
                 return null;
+
+            if (strategy == AutoEventStrategy.Random)
+            {
+                var idx = Random.Shared.Next(pe.Options.Count);
+                return pe.Options[idx].Id;
+            }
 
             var optionsWithChance = pe.Options
                 .Where(o => o.SuccessChance.HasValue)
