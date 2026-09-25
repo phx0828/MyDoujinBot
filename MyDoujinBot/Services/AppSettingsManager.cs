@@ -130,5 +130,11 @@ namespace MyDoujinBot.Services
         /// </summary>
         [JsonPropertyName("battleMode")]
         public string BattleMode { get; set; } = "Challenge";
+
+        /// <summary>
+        /// 訓練項目的輪流清單
+        /// </summary>
+        [JsonPropertyName("trainingSequence")]
+        public System.Collections.Generic.List<string> TrainingSequence { get; set; } = new();
     }
 }

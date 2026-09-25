@@ -24,6 +24,7 @@ namespace MyDoujinBot.Services
     {
         public string Token { get; init; } = string.Empty;
         public string ActionId { get; init; } = string.Empty;
+        public System.Collections.Generic.List<string> ActionSequence { get; init; } = new();
         public ExecutionMode Mode { get; init; }
         public int CountLimit { get; init; }        // 次數模式：最多執行幾次
         public int TimeLimitMinutes { get; init; }  // 時間模式：執行幾分鐘
@@ -155,8 +156,13 @@ namespace MyDoujinBot.Services
 
                     // ── 執行一次訓練 ──
                     OnStatusChanged?.Invoke(LoopStatus.Running);
+
+                    string currentActionId = settings.ActionSequence != null && settings.ActionSequence.Count > 0
+                        ? settings.ActionSequence[Stats.RunCount % settings.ActionSequence.Count]
+                        : settings.ActionId;
+
                     var result = await _trainingService.ExecuteTrainingAsync(
-                        settings.Token, settings.ActionId, cancellationToken);
+                        settings.Token, currentActionId, cancellationToken);
 
                     // 使用者取消
                     if (result.IsCancelled) return;

@@ -23,6 +23,9 @@ namespace MyDoujinBot.Forms
 
         // --- 訓練行動 ---
         private ComboBox cmbAction = null!;
+        private ListBox lstActionSequence = null!;
+        private Button btnAddAction = null!;
+        private Button btnClearSequence = null!;
 
         // --- 執行模式 ---
         private RadioButton rbCount = null!;
@@ -435,6 +438,69 @@ namespace MyDoujinBot.Forms
             foreach (var action in TrainingActions.All) cmbAction.Items.Add(action);
             if (cmbAction.Items.Count > 0) cmbAction.SelectedIndex = 0;
             TblAddRow(t, cmbAction);
+
+            // 加入/清除清單按鈕
+            btnAddAction = new Button
+            {
+                Text = "➕ 加入",
+                AutoSize = true, FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(60, 70, 110), ForeColor = Color.White,
+                Cursor = Cursors.Hand
+            };
+            btnAddAction.FlatAppearance.BorderSize = 0;
+            btnAddAction.Click += (s, e) =>
+            {
+                if (cmbAction.SelectedItem is TrainingAction action)
+                {
+                    lstActionSequence.Items.Add(action);
+                    SaveTrainingSequence();
+                }
+            };
+
+            btnClearSequence = new Button
+            {
+                Text = "🗑️ 清除",
+                AutoSize = true, FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(90, 50, 50), ForeColor = Color.White,
+                Cursor = Cursors.Hand
+            };
+            btnClearSequence.FlatAppearance.BorderSize = 0;
+            btnClearSequence.Click += (s, e) =>
+            {
+                lstActionSequence.Items.Clear();
+                SaveTrainingSequence();
+            };
+            
+            var rowButtons = MakeHRow(btnAddAction, btnClearSequence);
+            rowButtons.Margin = new Padding(0, 0, 0, 4);
+            TblAddRow(t, rowButtons);
+
+            // 清單顯示
+            lstActionSequence = new ListBox
+            {
+                Dock = DockStyle.Fill,
+                Height = 85,
+                BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230),
+                BorderStyle = BorderStyle.FixedSingle,
+                Margin = new Padding(0, 2, 0, 6)
+            };
+            
+            foreach (var actionId in AppSettingsManager.Current.TrainingSequence)
+            {
+                var action = TrainingActions.All.FirstOrDefault(a => a.ActionId == actionId);
+                if (action != null)
+                {
+                    lstActionSequence.Items.Add(action);
+                }
+            }
+            TblAddRow(t, lstActionSequence);
+        }
+
+        private void SaveTrainingSequence()
+        {
+            var seq = lstActionSequence.Items.Cast<TrainingAction>().Select(a => a.ActionId).ToList();
+            AppSettingsManager.Current.TrainingSequence = seq;
+            AppSettingsManager.Save();
         }
 
         private void BuildBattleSettingsPanel(TableLayoutPanel parent)
@@ -1027,6 +1093,7 @@ namespace MyDoujinBot.Forms
                     {
                         Token = _currentToken,
                         ActionId = selectedAction!.ActionId,
+                        ActionSequence = lstActionSequence.Items.Cast<TrainingAction>().Select(a => a.ActionId).ToList(),
                         Mode = rbCount.Checked ? ExecutionMode.Count : ExecutionMode.Time,
                         CountLimit = (int)nudCount.Value,
                         TimeLimitMinutes = (int)nudMinutes.Value,
@@ -1199,6 +1266,9 @@ namespace MyDoujinBot.Forms
             rbModeBattle.Enabled   = enabled;
             btnSettings.Enabled    = enabled;
             cmbAction.Enabled      = enabled;
+            btnAddAction.Enabled   = enabled;
+            btnClearSequence.Enabled = enabled;
+            lstActionSequence.Enabled = enabled;
             txtTargetPlayerId.Enabled = enabled;
             btnGetPlayerInfo.Enabled = enabled;
             rbCount.Enabled        = enabled;
