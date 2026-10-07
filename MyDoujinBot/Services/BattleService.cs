@@ -34,5 +34,11 @@ namespace MyDoujinBot.Services
             // Empty body for POST
             return await _httpService.PostAsync<BattleActionResponse>(url, token, null!, cancellationToken);
         }
+
+        public async Task<ApiResponse<BattleReportResponse>> GetBattleReportAsync(string reportId, string token, CancellationToken cancellationToken = default)
+        {
+            string url = $"{BaseUrl}/battle-reports/{reportId}";
+            return await _httpService.GetAsync<BattleReportResponse>(url, token, cancellationToken);
+        }
     }
 }

@@ -60,6 +60,7 @@ namespace MyDoujinBot.Forms
         private Button btnStart = null!;
         private Button btnStop = null!;
         private Button btnSettings = null!;
+        private Button btnBattleStats = null!;
 
         // --- Token 狀態顯示 ---
         private Label lblTokenStatus = null!;
@@ -307,6 +308,19 @@ namespace MyDoujinBot.Forms
             rbModeTraining.CheckedChanged += OnModeTypeChanged;
             rbModeBattle.CheckedChanged += OnModeTypeChanged;
             TblAddRow(tbl, MakeHRow(rbModeTraining, rbModeBattle));
+
+            btnBattleStats = new Button
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(12, 4, 12, 4),
+                Text = "📊  戰鬥數據",
+                BackColor = Color.FromArgb(50, 75, 95), ForeColor = Color.FromArgb(210, 235, 255),
+                FlatStyle = FlatStyle.Flat, Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
+                Cursor = Cursors.Hand, Anchor = AnchorStyles.Left, Margin = new Padding(0, 4, 0, 4)
+            };
+            btnBattleStats.FlatAppearance.BorderSize = 0;
+            btnBattleStats.Click += OnBattleStatsClicked;
+            TblAddRow(tbl, btnBattleStats);
 
             // ── 執行設定 ──
             TblAddRow(tbl, MakeSectionHeader("執行設定"));
@@ -883,6 +897,12 @@ namespace MyDoujinBot.Forms
                 _currentToken = settingsForm.Token;
                 UpdateTokenStatus();
             }
+        }
+
+        private void OnBattleStatsClicked(object? sender, EventArgs e)
+        {
+            using var form = new BattleStatsForm(() => _currentToken);
+            form.ShowDialog(this);
         }
 
         private void UpdateTokenStatus()
