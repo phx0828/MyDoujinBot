@@ -73,6 +73,14 @@
      - **Windows 氣泡通知**：可於設定獨立開關，事件觸發時利用系統右下角 `NotifyIcon` 提示，不再包含可能造成亂碼或版面異常的 emoji。
      - **設定獨立與持久化**：新增獨立【⚙ 設定】視窗，若未設定 Token 主畫面會以醒目紅字提示。包含 `Token`、`EventMode`、`EnableSystemNotify` 等偏好皆儲存於 `%AppData%\MyDoujinBot\settings.json`，重啟後自動讀取。
 
+7. **v1.2.0 戰鬥數據統計功能**：
+   - **需求背景**：提供戰報解析與視覺化數據統計，輸入戰報編號即可統計每位玩家與 BOSS 的輸出、承傷、治療、出手次數與爆擊率。
+   - **實作內容**：
+     - **架構分離**：新增 DTO 模型 (`BattleReportResponse`)、資料對照表 (`BattleReportIndex`)、共用狀態與陣營計算 (`BattleStatsContext`)、獨立事件處理函式 (`BattleEventHandlers`)、統計計算器 (`BattleStatsCalculator`) 與繪圖器 (`BattleStatsChartBuilder`)。
+     - **戰鬥數據視窗**：新增 `BattleStatsForm`，主畫面左側「執行類型」下方配置 **`📊  戰鬥數據`** 按鈕點擊開啟。
+     - **全場統一最大值基準 (Global Scale)**：所有單位的長條圖長度統一以全場單一最高數值作為 100% 基準，直觀展現真實數量級差距。
+     - **BOSS 與敵方統計**：玩家數據與 BOSS 數據以分隔線明確區隔顯示。
+
 ---
 
 ## 未來待辦與擴充規劃 (Future Roadmap)
