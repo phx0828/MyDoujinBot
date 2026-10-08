@@ -29,17 +29,28 @@ namespace MyDoujinBot.Models
         /// <summary>出手次數（含落空 MISS 與被完全擋下的 BLOCK，反擊不計入）</summary>
         public long Shots { get; set; }
 
+        /// <summary>命中次數（出手中扣除落空 MISS；被完全擋下的 BLOCK 仍算命中）</summary>
+        public long Hits { get; set; }
+
         /// <summary>爆擊次數</summary>
         public long Crits { get; set; }
 
         /// <summary>
-        /// 爆擊率（百分比，四捨五入到小數點後一位）＝ 爆擊次數 ÷ 出手次數 × 100。
+        /// 命中率（百分比，四捨五入到小數點後一位）＝ 命中次數 ÷ 出手次數 × 100。
         /// 出手次數為 0 時為 0，不會發生除以零。
         /// </summary>
-        public decimal CritRatePercent =>
-            Shots <= 0
+        public decimal HitRatePercent => ToPercent(Hits, Shots);
+
+        /// <summary>
+        /// 爆擊率（百分比，四捨五入到小數點後一位）＝ 爆擊次數 ÷ 命中次數 × 100。
+        /// 命中次數為 0 時為 0，不會發生除以零。
+        /// </summary>
+        public decimal CritRatePercent => ToPercent(Crits, Hits);
+
+        private static decimal ToPercent(long numerator, long denominator) =>
+            denominator <= 0
                 ? 0m
-                : decimal.Round((decimal)Crits * 100m / Shots, 1, MidpointRounding.AwayFromZero);
+                : decimal.Round((decimal)numerator * 100m / denominator, 1, MidpointRounding.AwayFromZero);
     }
 
     /// <summary>

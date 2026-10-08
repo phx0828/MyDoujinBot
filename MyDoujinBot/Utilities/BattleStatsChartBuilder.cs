@@ -180,12 +180,13 @@ namespace MyDoujinBot.Utilities
         }
 
         /// <summary>
-        /// 出手與爆擊行：出手 N 次｜爆擊 N 次｜爆擊率 N.N%
+        /// 出手與爆擊行：出手 N 次｜命中 N 次｜命中率 N.N%｜爆擊 N 次｜爆擊率 N.N%
         /// 數值直接取自統計欄位（不另外重算）；純文字、預設顏色、不畫長條。
         /// </summary>
         public static List<ChartSegment> BuildShotLine(UnitStats unit)
         {
-            string text = $"出手 {FormatNumber(unit.Shots)} 次｜爆擊 {FormatNumber(unit.Crits)} 次｜爆擊率 {FormatPercent(unit.CritRatePercent)}";
+            string text = $"出手 {FormatNumber(unit.Shots)} 次｜命中 {FormatNumber(unit.Hits)} 次｜命中率 {FormatPercent(unit.HitRatePercent)}"
+                        + $"｜爆擊 {FormatNumber(unit.Crits)} 次｜爆擊率 {FormatPercent(unit.CritRatePercent)}";
             return new List<ChartSegment> { new(text) };
         }
 

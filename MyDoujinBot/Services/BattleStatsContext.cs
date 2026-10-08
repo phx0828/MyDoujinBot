@@ -129,20 +129,22 @@ namespace MyDoujinBot.Services
         }
 
         /// <summary>
-        /// 累計一次落空的攻擊（MISS）：攻擊方出手 ＋1，不是爆擊、不累計傷害。
+        /// 累計一次落空的攻擊（MISS）：攻擊方出手 ＋1，不算命中、不是爆擊、不累計傷害。
         /// 同陣營不算出手。
         /// </summary>
         public void ApplyMiss(string actorId, string? targetId)
         {
             if (!string.IsNullOrEmpty(targetId) && IsSameTeam(actorId, targetId)) return;
 
-            AddShot(GetUnit(ResolveAttackOwnerId(actorId)), true, false);
+            AddShot(GetUnit(ResolveAttackOwnerId(actorId)), countAsShot: true, isCrit: false, isHit: false);
         }
 
-        private static void AddShot(UnitStats unit, bool countAsShot, bool isCrit)
+        private static void AddShot(UnitStats unit, bool countAsShot, bool isCrit, bool isHit = true)
         {
             if (!countAsShot) return;
             unit.Shots++;
+            if (!isHit) return;
+            unit.Hits++;
             if (isCrit) unit.Crits++;
         }
     }
