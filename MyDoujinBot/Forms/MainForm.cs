@@ -335,7 +335,7 @@ namespace MyDoujinBot.Forms
             // 次數 / 時間輸入
             nudCount    = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 99999, Value = 100, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230) };
             lblCountUnit = MakeLabel("次");
-            nudMinutes  = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 1440,  Value = 30,  BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230), Visible = false };
+            nudMinutes  = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 9999,  Value = 30,  BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230), Visible = false };
             lblTimeUnit  = MakeLabel("分鐘", visible: false);
             TblAddRow(tbl, MakeHRow(nudCount, lblCountUnit, nudMinutes, lblTimeUnit));
 
