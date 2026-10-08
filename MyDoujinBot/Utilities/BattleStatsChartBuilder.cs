@@ -80,19 +80,21 @@ namespace MyDoujinBot.Utilities
                 lines.Add(new List<ChartSegment>());
             }
 
-            // ── 敵方 / BOSS 區塊 ──
+            // ── 敵方 / BOSS / PVP 對手區塊 ──
             if (enemies.Count > 0)
             {
+                bool isPvp = enemies.All(e => e.IsPlayerOpponent);
                 lines.Add(new List<ChartSegment> { new("────────────────────────────────────────", ChartStyle.Muted) });
-                lines.Add(new List<ChartSegment> { new("【敵方 / BOSS 統計】", ChartStyle.Heading) });
+                lines.Add(new List<ChartSegment> { new(isPvp ? "【對手統計】" : "【敵方 / BOSS 統計】", ChartStyle.Heading) });
                 lines.Add(new List<ChartSegment>());
 
                 foreach (var enemy in enemies)
                 {
-                    if (string.IsNullOrWhiteSpace(enemy.EntityId)) continue;
+                    var enemyId = enemy.Id;
+                    if (string.IsNullOrWhiteSpace(enemyId)) continue;
 
-                    var unit = stats.GetUnitOrEmpty(enemy.EntityId);
-                    lines.Add(BuildEnemyTitleLine(enemy, isFallen: stats.IsFallen(enemy.EntityId)));
+                    var unit = stats.GetUnitOrEmpty(enemyId);
+                    lines.Add(BuildEnemyTitleLine(enemy, isFallen: stats.IsFallen(enemyId)));
                     lines.Add(BuildMetricLine("輸出", unit.Output, globalMax, ChartStyle.OutputBar));
                     lines.Add(BuildMetricLine("承傷", unit.Taken, globalMax, ChartStyle.TakenBar));
                     lines.Add(BuildMetricLine("治療", unit.Heal, globalMax, ChartStyle.HealBar));
@@ -146,10 +148,12 @@ namespace MyDoujinBot.Utilities
 
         /// <summary>
         /// 敵方標題行：敵方名稱 (稱號) 【倒下】
+        /// PVP 對手則跟玩家一樣顯示：玩家名稱 (角色名稱) 【倒下】
         /// </summary>
         public static List<ChartSegment> BuildEnemyTitleLine(BattleReportEnemy enemy, bool isFallen)
         {
-            string titlePart = string.IsNullOrWhiteSpace(enemy.Title) ? string.Empty : $" ({enemy.Title})";
+            string subtitle = !string.IsNullOrWhiteSpace(enemy.CharacterName) ? enemy.CharacterName! : enemy.Title ?? string.Empty;
+            string titlePart = string.IsNullOrWhiteSpace(subtitle) ? string.Empty : $" ({subtitle})";
             var line = new List<ChartSegment>
             {
                 new($"{enemy.Name}{titlePart}")

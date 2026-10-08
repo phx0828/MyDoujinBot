@@ -66,7 +66,10 @@ namespace MyDoujinBot.Services
             if (_players.TryGetValue(id, out var player))
                 return string.IsNullOrWhiteSpace(player.CharacterName) ? (player.Name ?? id) : player.CharacterName!;
             if (_enemies.TryGetValue(id, out var enemy))
+            {
+                if (!string.IsNullOrWhiteSpace(enemy.CharacterName)) return enemy.CharacterName!; // PVP 對手
                 return string.IsNullOrWhiteSpace(enemy.Name) ? id : enemy.Name!;
+            }
             return id;
         }
 
@@ -110,11 +113,13 @@ namespace MyDoujinBot.Services
                 return false;
             }
 
+            // PVE 敵方以 entityId 識別；PVP 對手沒有 entityId，改以 userId 識別（統一由 enemy.Id 取得）
             foreach (var enemy in report.Participants?.Enemies ?? new List<BattleReportEnemy>())
             {
-                if (string.IsNullOrWhiteSpace(enemy?.EntityId)) continue;
-                index._enemies[enemy.EntityId!] = enemy;
-                index._enemyList.Add(enemy);
+                var enemyId = enemy?.Id;
+                if (string.IsNullOrWhiteSpace(enemyId)) continue;
+                index._enemies[enemyId!] = enemy!;
+                index._enemyList.Add(enemy!);
             }
 
             foreach (var outcome in report.Outcomes ?? new List<BattleReportOutcome>())

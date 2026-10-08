@@ -95,17 +95,28 @@ namespace MyDoujinBot.Models
     /// <summary>
     /// 敵方單位。EntityId 為唯一識別（MonsterId 不可作為唯一識別）。
     /// 召喚物也可能出現在此清單，帶有 SummonerId，且 Stats 可能為 null。
+    /// PVP 戰報的對手同樣放在 enemies，但沒有 EntityId，改以 UserId 識別（並帶有 CharacterName）。
+    /// 一律透過 Id 取得唯一識別，不要直接讀 EntityId / UserId。
     /// </summary>
     public class BattleReportEnemy
     {
         [JsonPropertyName("entityId")]
         public string? EntityId { get; set; }
 
+        /// <summary>PVP 對手的 userId（PVE 敵方沒有此欄位）。</summary>
+        [JsonPropertyName("userId")]
+        public string? UserId { get; set; }
+
         [JsonPropertyName("monsterId")]
         public string? MonsterId { get; set; }
 
+        /// <summary>PVE：敵方名稱；PVP：對手的玩家名稱。</summary>
         [JsonPropertyName("name")]
         public string? Name { get; set; }
+
+        /// <summary>PVP 對手的角色名稱（PVE 敵方沒有此欄位）。</summary>
+        [JsonPropertyName("characterName")]
+        public string? CharacterName { get; set; }
 
         [JsonPropertyName("title")]
         public string? Title { get; set; }
@@ -122,6 +133,17 @@ namespace MyDoujinBot.Models
 
         [JsonPropertyName("stats")]
         public Dictionary<string, double>? Stats { get; set; }
+
+        /// <summary>唯一識別：PVE 用 entityId，PVP 對手用 userId；兩者皆無時為 null。</summary>
+        [JsonIgnore]
+        public string? Id =>
+            !string.IsNullOrWhiteSpace(EntityId) ? EntityId
+            : !string.IsNullOrWhiteSpace(UserId) ? UserId
+            : null;
+
+        /// <summary>是否為 PVP 對手（玩家），而非 PVE 怪物。</summary>
+        [JsonIgnore]
+        public bool IsPlayerOpponent => string.IsNullOrWhiteSpace(EntityId) && !string.IsNullOrWhiteSpace(UserId);
     }
 
     public class BattleReportOutcome
