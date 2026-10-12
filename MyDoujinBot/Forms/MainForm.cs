@@ -68,6 +68,7 @@ namespace MyDoujinBot.Forms
         // --- LOG ---
         private RichTextBox rtbLog = null!;
         private Label lblLogHeader = null!;
+        private int _logLineCount = 0;
 
         // --- 即時狀態 ---
         private Label lblStatusValue = null!;
@@ -1841,7 +1842,7 @@ namespace MyDoujinBot.Forms
         // =====================================================================
         // 向 LOG 追加彩色文字（執行緒安全）
         //
-        // LOG 上限：2000 行。超過時自動刪除最舊的 500 行。
+        // LOG 上限：1000 行。超過時自動刪除最舊的 500 行。
         // =====================================================================
         internal void AppendLog(string message, Color color)
         {
@@ -1852,13 +1853,25 @@ namespace MyDoujinBot.Forms
             }
 
             // LOG 行數上限管理
-            const int maxLines = 2000;
+            const int maxLines = 1000;
             const int trimLines = 500;
-            if (rtbLog.Lines.Length > maxLines)
+
+            _logLineCount++;
+            if (_logLineCount > maxLines)
             {
                 int trimToIndex = rtbLog.GetFirstCharIndexFromLine(trimLines);
-                rtbLog.Select(0, trimToIndex);
-                rtbLog.SelectedText = "";
+                if (trimToIndex > 0)
+                {
+                    rtbLog.ReadOnly = false; // 暫時解除唯讀，避免 Windows 警示音並允許清除舊資料
+                    rtbLog.Select(0, trimToIndex);
+                    rtbLog.SelectedText = "";
+                    rtbLog.ReadOnly = true;  // 立即恢復唯讀
+                    _logLineCount -= trimLines;
+                }
+                else
+                {
+                    _logLineCount = rtbLog.GetLineFromCharIndex(rtbLog.TextLength);
+                }
             }
 
             rtbLog.SelectionStart = rtbLog.TextLength;
