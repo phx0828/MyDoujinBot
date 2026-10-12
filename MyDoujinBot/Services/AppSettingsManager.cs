@@ -136,5 +136,41 @@ namespace MyDoujinBot.Services
         /// </summary>
         [JsonPropertyName("trainingSequence")]
         public System.Collections.Generic.List<string> TrainingSequence { get; set; } = new();
+
+        /// <summary>
+        /// 主執行模式："training"（自動訓練）或 "battle"（自動戰鬥）。預設："training"。
+        /// </summary>
+        [JsonPropertyName("mainMode")]
+        public string MainMode { get; set; } = "training";
+
+        /// <summary>
+        /// 執行限制模式："count"（指定次數）或 "time"（指定時間）。預設："count"。
+        /// </summary>
+        [JsonPropertyName("executionMode")]
+        public string ExecutionMode { get; set; } = "count";
+
+        /// <summary>
+        /// 指定執行次數。預設：500。
+        /// </summary>
+        [JsonPropertyName("targetCount")]
+        public int TargetCount { get; set; } = 500;
+
+        /// <summary>
+        /// 指定執行時間（分鐘）。預設：1440（24 小時）。
+        /// </summary>
+        [JsonPropertyName("targetMinutes")]
+        public int TargetMinutes { get; set; } = 1440;
+
+        /// <summary>
+        /// 額外冷卻延遲（秒）。預設：2。
+        /// </summary>
+        [JsonPropertyName("extraDelay")]
+        public int ExtraDelay { get; set; } = 2;
+
+        /// <summary>
+        /// 最後一次選擇的訓練動作 ID。
+        /// </summary>
+        [JsonPropertyName("lastSelectedActionId")]
+        public string LastSelectedActionId { get; set; } = string.Empty;
     }
 }

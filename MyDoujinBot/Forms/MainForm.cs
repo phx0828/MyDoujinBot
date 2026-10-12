@@ -153,6 +153,35 @@ namespace MyDoujinBot.Forms
             _currentToken = AppSettingsManager.Current.Token;
             UpdateTokenStatus();
 
+            // 還原執行類型（訓練 / 戰鬥）
+            if (AppSettingsManager.Current.MainMode == "battle")
+                rbModeBattle.Checked = true;
+            else
+                rbModeTraining.Checked = true;
+            OnModeTypeChanged(null, EventArgs.Empty);
+
+            // 還原執行限制模式（次數 / 時間）
+            if (AppSettingsManager.Current.ExecutionMode == "time")
+                rbTime.Checked = true;
+            else
+                rbCount.Checked = true;
+            OnExecutionModeChanged(null, EventArgs.Empty);
+
+            // 還原次數、時間與延遲數值（加入 Math.Clamp 防止數值超出控制項邊界）
+            nudCount.Value = Math.Clamp(AppSettingsManager.Current.TargetCount, (int)nudCount.Minimum, (int)nudCount.Maximum);
+            nudMinutes.Value = Math.Clamp(AppSettingsManager.Current.TargetMinutes, (int)nudMinutes.Minimum, (int)nudMinutes.Maximum);
+            nudExtraDelay.Value = Math.Clamp(AppSettingsManager.Current.ExtraDelay, (int)nudExtraDelay.Minimum, (int)nudExtraDelay.Maximum);
+
+            // 還原上次選擇的訓練行動
+            if (!string.IsNullOrEmpty(AppSettingsManager.Current.LastSelectedActionId))
+            {
+                var savedAction = TrainingActions.All.FirstOrDefault(a => a.ActionId == AppSettingsManager.Current.LastSelectedActionId);
+                if (savedAction != null)
+                {
+                    cmbAction.SelectedItem = savedAction;
+                }
+            }
+
             // EventMode: "auto" = 自動(最高)；"auto-random" = 自動(隨機)；"popup" = 手動+彈窗；"inline" = 手動+內嵌
             bool isManual = AppSettingsManager.Current.EventMode == "popup" || AppSettingsManager.Current.EventMode == "inline";
             if (isManual)
@@ -334,9 +363,9 @@ namespace MyDoujinBot.Forms
             TblAddRow(tbl, MakeHRow(rbCount, rbTime));
 
             // 次數 / 時間輸入
-            nudCount    = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 99999, Value = 100, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230) };
+            nudCount    = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 99999, Value = 500, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230) };
             lblCountUnit = MakeLabel("次");
-            nudMinutes  = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 9999,  Value = 30,  BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230), Visible = false };
+            nudMinutes  = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 9999,  Value = 1440, BackColor = Color.FromArgb(45, 45, 58), ForeColor = Color.FromArgb(220, 220, 230), Visible = false };
             lblTimeUnit  = MakeLabel("分鐘", visible: false);
             TblAddRow(tbl, MakeHRow(nudCount, lblCountUnit, nudMinutes, lblTimeUnit));
 
@@ -515,6 +544,28 @@ namespace MyDoujinBot.Forms
         {
             var seq = lstActionSequence.Items.Cast<TrainingAction>().Select(a => a.ActionId).ToList();
             AppSettingsManager.Current.TrainingSequence = seq;
+            AppSettingsManager.Save();
+        }
+
+        private void SaveUiSettings()
+        {
+            AppSettingsManager.Current.MainMode = rbModeBattle.Checked ? "battle" : "training";
+            AppSettingsManager.Current.ExecutionMode = rbTime.Checked ? "time" : "count";
+            AppSettingsManager.Current.TargetCount = (int)nudCount.Value;
+            AppSettingsManager.Current.TargetMinutes = (int)nudMinutes.Value;
+            AppSettingsManager.Current.ExtraDelay = (int)nudExtraDelay.Value;
+            if (cmbAction.SelectedItem is TrainingAction action)
+            {
+                AppSettingsManager.Current.LastSelectedActionId = action.ActionId;
+            }
+            AppSettingsManager.Current.LastBattleTargetId = txtTargetPlayerId.Text.Trim();
+            AppSettingsManager.Current.BattleMode = rbBattleChallenge.Checked ? "Challenge" : "Chado";
+
+            bool isInline = rbManualEvent.Checked && rbInlineMode.Checked;
+            AppSettingsManager.Current.EventMode = rbAutoEvent.Checked
+                ? (rbAutoRandomMode.Checked ? "auto-random" : "auto")
+                : (isInline ? "inline" : "popup");
+
             AppSettingsManager.Save();
         }
 
@@ -1049,6 +1100,8 @@ namespace MyDoujinBot.Forms
                 }
             }
 
+            SaveUiSettings();
+
             _cts = new CancellationTokenSource();
             SetControlsEnabled(false);
             btnStop.Enabled = true;
@@ -1074,11 +1127,6 @@ namespace MyDoujinBot.Forms
                         TimeLimitMinutes = (int)nudMinutes.Value,
                         ExtraDelaySeconds = (double)nudExtraDelay.Value
                     };
-
-                    // 儲存設定
-                    AppSettingsManager.Current.LastBattleTargetId = battleSettings.TargetPlayerId;
-                    AppSettingsManager.Current.BattleMode = rbBattleChallenge.Checked ? "Challenge" : "Chado";
-                    AppSettingsManager.Save();
 
                     bool isInline = rbManualEvent.Checked && rbInlineMode.Checked;
                     
@@ -1123,10 +1171,6 @@ namespace MyDoujinBot.Forms
 
                     bool isInline = rbManualEvent.Checked && rbInlineMode.Checked;
                     bool isPopup  = rbManualEvent.Checked && !rbInlineMode.Checked;
-                    AppSettingsManager.Current.EventMode = rbAutoEvent.Checked
-                                                           ? (rbAutoRandomMode.Checked ? "auto-random" : "auto")
-                                                           : (isInline ? "inline" : "popup");
-                    AppSettingsManager.Save();
 
                     _trainingLoop = new TrainingLoop(_trainingService, _eventService)
                     {
@@ -1888,6 +1932,7 @@ namespace MyDoujinBot.Forms
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             base.OnFormClosing(e);
+            SaveUiSettings();
             _cts?.Cancel();
             _currentEventForm?.Close();
             HideEventOverlay();
