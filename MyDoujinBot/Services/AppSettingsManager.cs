@@ -172,5 +172,17 @@ namespace MyDoujinBot.Services
         /// </summary>
         [JsonPropertyName("lastSelectedActionId")]
         public string LastSelectedActionId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 階梯行動排程清單
+        /// </summary>
+        [JsonPropertyName("pipelineStages")]
+        public System.Collections.Generic.List<MyDoujinBot.Models.PipelineStage> PipelineStages { get; set; } = new();
+
+        /// <summary>
+        /// 當前選取的導航分頁
+        /// </summary>
+        [JsonPropertyName("activeTab")]
+        public string ActiveTab { get; set; } = "training";
     }
 }
