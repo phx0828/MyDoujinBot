@@ -144,10 +144,10 @@ namespace MyDoujinBot.Services
         public string MainMode { get; set; } = "training";
 
         /// <summary>
-        /// 執行限制模式："count"（指定次數）或 "time"（指定時間）。預設："count"。
+        /// 執行限制模式："count"（指定次數）或 "time"（指定時間）。預設："time"。
         /// </summary>
         [JsonPropertyName("executionMode")]
-        public string ExecutionMode { get; set; } = "count";
+        public string ExecutionMode { get; set; } = "time";
 
         /// <summary>
         /// 指定執行次數。預設：500。
@@ -162,10 +162,40 @@ namespace MyDoujinBot.Services
         public int TargetMinutes { get; set; } = 1440;
 
         /// <summary>
-        /// 額外冷卻延遲（秒）。預設：2。
+        /// 額外冷卻延遲（秒）。預設：1。
         /// </summary>
         [JsonPropertyName("extraDelay")]
-        public int ExtraDelay { get; set; } = 2;
+        public int ExtraDelay { get; set; } = 1;
+
+        /// <summary>
+        /// 戰鬥執行限制模式："count"（指定次數）或 "time"（指定時間）。預設："time"。
+        /// </summary>
+        [JsonPropertyName("battleExecutionMode")]
+        public string BattleExecutionMode { get; set; } = "time";
+
+        /// <summary>
+        /// 戰鬥指定執行次數。預設：500。
+        /// </summary>
+        [JsonPropertyName("battleTargetCount")]
+        public int BattleTargetCount { get; set; } = 500;
+
+        /// <summary>
+        /// 戰鬥指定執行時間（分鐘）。預設：1440（24 小時）。
+        /// </summary>
+        [JsonPropertyName("battleTargetMinutes")]
+        public int BattleTargetMinutes { get; set; } = 1440;
+
+        /// <summary>
+        /// 戰鬥額外冷卻延遲（秒）。預設：1。
+        /// </summary>
+        [JsonPropertyName("battleExtraDelay")]
+        public int BattleExtraDelay { get; set; } = 1;
+
+        /// <summary>
+        /// 階梯排程額外冷卻延遲（秒）。預設：1。
+        /// </summary>
+        [JsonPropertyName("pipelineExtraDelay")]
+        public int PipelineExtraDelay { get; set; } = 1;
 
         /// <summary>
         /// 最後一次選擇的訓練動作 ID。
@@ -178,6 +208,12 @@ namespace MyDoujinBot.Services
         /// </summary>
         [JsonPropertyName("pipelineStages")]
         public System.Collections.Generic.List<MyDoujinBot.Models.PipelineStage> PipelineStages { get; set; } = new();
+
+        /// <summary>
+        /// 當前啟用的階梯排程方案 ID。
+        /// </summary>
+        [JsonPropertyName("activePipelinePresetId")]
+        public string ActivePipelinePresetId { get; set; } = string.Empty;
 
         /// <summary>
         /// 當前選取的導航分頁

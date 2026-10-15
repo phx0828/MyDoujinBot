@@ -11,7 +11,7 @@ namespace MyDoujinBot.Services
     {
         public string Token { get; init; } = string.Empty;
         public List<PipelineStage> Stages { get; init; } = new();
-        public double ExtraDelaySeconds { get; init; } = 2.0;
+        public double ExtraDelaySeconds { get; init; } = 1.0;
     }
 
     /// <summary>
