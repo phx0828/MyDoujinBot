@@ -21,12 +21,15 @@ namespace MyDoujinBot.Forms
         /// <summary>使用者點選選項時觸發，帶有 optionId</summary>
         public event Action<string>? OptionSelected;
 
+        private float DpiScale => (float)this.DeviceDpi / 96f;
+        private int ScaleDpi(int value) => (int)Math.Round(value * DpiScale);
+
         public EventSelectionForm(PendingEvent pendingEvent)
         {
             this.Text = $"⚡  遭遇事件：{pendingEvent.Name}";
-            this.Width = 520;
+            this.Width = ScaleDpi(520);
             this.AutoSize = true; this.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            this.MinimumSize = new Size(400, 250);
+            this.MinimumSize = new Size(ScaleDpi(400), ScaleDpi(250));
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(28, 28, 35);
             this.ForeColor = Color.FromArgb(220, 220, 230);
@@ -45,9 +48,9 @@ namespace MyDoujinBot.Forms
         private void BuildUI(PendingEvent pe)
         {
             this.SuspendLayout();
-            int y = 16;
-            const int pad = 16;
-            const int innerWidth = 460;
+            int pad = ScaleDpi(16);
+            int innerWidth = ScaleDpi(460);
+            int y = pad;
 
             // --- 事件名稱 ---
             var lblName = new Label
@@ -58,10 +61,10 @@ namespace MyDoujinBot.Forms
                 Font = new Font("Microsoft JhengHei UI", 13f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(255, 220, 80),
                 AutoSize = false,
-                Height = 32
+                Height = ScaleDpi(32)
             };
             this.Controls.Add(lblName);
-            y += 38;
+            y += ScaleDpi(38);
 
             // --- 事件描述 ---
             if (!string.IsNullOrWhiteSpace(pe.Description))
@@ -76,8 +79,8 @@ namespace MyDoujinBot.Forms
                 };
                 this.Controls.Add(lblDesc);
                 int preferredHeight = lblDesc.GetPreferredSize(new Size(innerWidth, 0)).Height;
-                lblDesc.Size = new Size(innerWidth, Math.Max(preferredHeight, 20));
-                y += lblDesc.Height + 12;
+                lblDesc.Size = new Size(innerWidth, Math.Max(preferredHeight, ScaleDpi(20)));
+                y += lblDesc.Height + ScaleDpi(12);
             }
 
             // --- 分隔線 ---
@@ -91,7 +94,7 @@ namespace MyDoujinBot.Forms
                 Text = ""
             };
             this.Controls.Add(sep);
-            y += 10;
+            y += ScaleDpi(10);
 
             // --- 選項標題 ---
             var lblChoose = new Label
@@ -103,7 +106,7 @@ namespace MyDoujinBot.Forms
                 Font = new Font("Microsoft JhengHei UI", 9f)
             };
             this.Controls.Add(lblChoose);
-            y += 26;
+            y += ScaleDpi(26);
 
             // --- 選項按鈕 ---
             foreach (var option in pe.Options)
@@ -132,7 +135,7 @@ namespace MyDoujinBot.Forms
                 {
                     Location = new Point(pad, y),
                     Width = innerWidth,
-                    Height = 46,
+                    Height = ScaleDpi(46),
                     FlatStyle = FlatStyle.Flat,
                     BackColor = btnBack,
                     Cursor = Cursors.Hand,
@@ -147,16 +150,16 @@ namespace MyDoujinBot.Forms
 
                 btn.Paint += (s, e) =>
                 {
-                    int leftPad = 12;
+                    int leftPad = ScaleDpi(12);
                     
-                    Size mainSize = TextRenderer.MeasureText(e.Graphics, mainText, mainFont, new Size(innerWidth, 46), TextFormatFlags.NoPadding);
-                    Size subSize = TextRenderer.MeasureText(e.Graphics, subText, subFont, new Size(innerWidth, 46), TextFormatFlags.NoPadding);
+                    Size mainSize = TextRenderer.MeasureText(e.Graphics, mainText, mainFont, new Size(innerWidth, btn.Height), TextFormatFlags.NoPadding);
+                    Size subSize = TextRenderer.MeasureText(e.Graphics, subText, subFont, new Size(innerWidth, btn.Height), TextFormatFlags.NoPadding);
 
                     int mainY = (btn.Height - mainSize.Height) / 2;
                     int subY = (btn.Height - subSize.Height) / 2;
 
                     TextRenderer.DrawText(e.Graphics, mainText, mainFont, new Point(leftPad, mainY), Color.FromArgb(235, 230, 255), TextFormatFlags.NoPadding);
-                    TextRenderer.DrawText(e.Graphics, subText, subFont, new Point(leftPad + mainSize.Width + 2, subY + 1), Color.FromArgb(170, 170, 190), TextFormatFlags.NoPadding);
+                    TextRenderer.DrawText(e.Graphics, subText, subFont, new Point(leftPad + mainSize.Width + ScaleDpi(2), subY + 1), Color.FromArgb(170, 170, 190), TextFormatFlags.NoPadding);
                 };
 
                 btn.Disposed += (s, e) => 
@@ -179,14 +182,14 @@ namespace MyDoujinBot.Forms
                 };
 
                 this.Controls.Add(btn);
-                y += 52;
+                y += ScaleDpi(52);
             }
 
             // 設定視窗高度以剛好容納所有選項，並避免超出螢幕
-            y += 16; // 底部邊距
+            y += ScaleDpi(16); // 底部邊距
             this.AutoScroll = true;
-            int maxHeight = (Screen.PrimaryScreen?.WorkingArea.Height ?? 1080) - 100;
-            this.ClientSize = new Size(500, Math.Min(y, maxHeight));
+            int maxHeight = (Screen.PrimaryScreen?.WorkingArea.Height ?? 1080) - ScaleDpi(100);
+            this.ClientSize = new Size(ScaleDpi(500), Math.Min(y, maxHeight));
 
             this.ResumeLayout(false);
         }
@@ -216,9 +219,9 @@ namespace MyDoujinBot.Forms
                 this.Controls.Clear();
                 this.Text = $"⚡  事件結果：{(er.IsSuccess ? "成功" : "失敗")}";
 
-                int y = 16;
-                const int pad = 16;
-                const int innerWidth = 460;
+                int y = ScaleDpi(16);
+                int pad = ScaleDpi(16);
+                int innerWidth = ScaleDpi(460);
 
                 // --- 標題：成功 / 失敗 ---
                 string resultTitle = er.IsSuccess ? "成功" : "失敗";
@@ -234,10 +237,10 @@ namespace MyDoujinBot.Forms
                     Font = new Font("Microsoft JhengHei UI", 16f, FontStyle.Bold),
                     ForeColor = titleColor,
                     AutoSize = false,
-                    Height = 36
+                    Height = ScaleDpi(36)
                 };
                 this.Controls.Add(lblTitle);
-                y += 42;
+                y += ScaleDpi(42);
 
                 // --- 判定結果區塊 ---
                 if (!string.IsNullOrEmpty(er.Stat) || er.Roll.HasValue)
@@ -245,7 +248,7 @@ namespace MyDoujinBot.Forms
                     var pnlCheck = MyDoujinBot.Utilities.EventUiHelper.CreateCheckResultPanel(er, innerWidth);
                     pnlCheck.Location = new Point(pad, y);
                     this.Controls.Add(pnlCheck);
-                    y += pnlCheck.Height + 14;
+                    y += pnlCheck.Height + ScaleDpi(14);
                 }
 
                 // --- 故事內文 ---
@@ -262,8 +265,8 @@ namespace MyDoujinBot.Forms
                     };
                     this.Controls.Add(lblStory);
                     int preferredHeight = lblStory.GetPreferredSize(new Size(innerWidth, 0)).Height;
-                    lblStory.Size = new Size(innerWidth, Math.Max(preferredHeight, 20));
-                    y += lblStory.Height + 14;
+                    lblStory.Size = new Size(innerWidth, Math.Max(preferredHeight, ScaleDpi(20)));
+                    y += lblStory.Height + ScaleDpi(14);
                 }
 
                 // --- 戰鬥結果 ---
@@ -273,8 +276,8 @@ namespace MyDoujinBot.Forms
                     {
                         Text = "⚔ 查看戰報",
                         Location = new Point(pad, y),
-                        Width = 120,
-                        Height = 36,
+                        Width = ScaleDpi(120),
+                        Height = ScaleDpi(36),
                         FlatStyle = FlatStyle.Flat,
                         BackColor = Color.FromArgb(50, 50, 70),
                         ForeColor = Color.White,
@@ -288,7 +291,7 @@ namespace MyDoujinBot.Forms
                         form.ShowDialog(this);
                     };
                     this.Controls.Add(btnBattle);
-                    y += btnBattle.Height + 14;
+                    y += btnBattle.Height + ScaleDpi(14);
                 }
 
                 // --- 獲得獎勵 ---
@@ -305,16 +308,18 @@ namespace MyDoujinBot.Forms
                         Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold)
                     };
                     this.Controls.Add(lblReward);
-                    y += lblReward.Height + 16;
+                    y += lblReward.Height + ScaleDpi(16);
                 }
 
                 // --- 關閉按鈕 ---
+                int btnW = ScaleDpi(120);
+                int btnH = ScaleDpi(36);
                 var btnClose = new Button
                 {
                     Text = "關閉",
-                    Location = new Point(pad + (innerWidth - 120) / 2, y),
-                    Width = 120,
-                    Height = 36,
+                    Location = new Point(pad + (innerWidth - btnW) / 2, y),
+                    Width = btnW,
+                    Height = btnH,
                     FlatStyle = FlatStyle.Flat,
                     BackColor = Color.FromArgb(60, 60, 80),
                     ForeColor = Color.White,
@@ -329,11 +334,12 @@ namespace MyDoujinBot.Forms
                     this.Close();
                 };
                 this.Controls.Add(btnClose);
-                y += 48;
+                y += btnH + ScaleDpi(16);
 
                 this.AutoScroll = true;
-                int resultMaxHeight = (Screen.PrimaryScreen?.WorkingArea.Height ?? 1080) - 100;
-                this.ClientSize = new Size(500, Math.Min(y, resultMaxHeight));
+                int workingH = Screen.FromControl(this)?.WorkingArea.Height ?? (Screen.PrimaryScreen?.WorkingArea.Height ?? 1080);
+                int resultMaxHeight = workingH - ScaleDpi(100);
+                this.ClientSize = new Size(ScaleDpi(500), Math.Min(y, resultMaxHeight));
                 this.ResumeLayout(true);
 
                 this.FormClosed += (_, _) =>

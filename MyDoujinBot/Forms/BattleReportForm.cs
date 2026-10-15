@@ -27,6 +27,22 @@ namespace MyDoujinBot.Forms
             BuildUI(battleResult);
         }
 
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            try
+            {
+                var wa = Screen.FromControl(this)?.WorkingArea ?? Screen.PrimaryScreen?.WorkingArea;
+                if (wa != null)
+                {
+                    if (this.Width > wa.Value.Width) this.Width = Math.Max(300, wa.Value.Width - 40);
+                    if (this.Height > wa.Value.Height) this.Height = Math.Max(250, wa.Value.Height - 40);
+                    this.CenterToParent();
+                }
+            }
+            catch { }
+        }
+
         private void BuildUI(BattleResult battleResult)
         {
             var pnlMain = new Panel

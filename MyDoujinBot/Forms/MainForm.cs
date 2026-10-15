@@ -78,21 +78,29 @@ namespace MyDoujinBot.Forms
         private Panel pnlViewSettings = null!;
         private Panel pnlEventOverlay = null!;
 
-        // --- 底部狀態列 ---
+        // --- 底部精簡狀態列 ---
         private Panel pnlStatusBar = null!;
-        private Label lblStatusBadge = null!;
-        private Label lblStatusProgress = null!;
+        private Label lblStatusToken = null!;
         private Label lblStatusLevel = null!;
-        private Label lblStatusEvents = null!;
-        private Label lblStatusPipeline = null!;
-        private Label lblStatusElapsed = null!;
-        private Button btnToggleLog = null!;
-        private Button btnGlobalStart = null!;
-        private Button btnGlobalStop = null!;
         private ToolTip statusToolTip = null!;
 
-        // --- 底部可收合日誌抽屜 ---
-        private Panel pnlLogDrawer = null!;
+        // --- 各頁面專屬開始 / 停止控制項 ---
+        private Button btnTrainStart = null!;
+        private Button btnTrainStop = null!;
+        private Button btnBattleStart = null!;
+        private Button btnBattleStop = null!;
+        private Button btnPipelineStart = null!;
+        private Button btnPipelineStop = null!;
+
+        // --- 右側面板 (即時狀態 + 即時 LOG) ---
+        private Panel pnlRightPanel = null!;
+        private Label lblStatusBadge = null!;
+        private Label lblStatusCooldown = null!;
+        private Label lblStatusElapsed = null!;
+        private Label lblStatusRuns = null!;
+        private Label lblStatusSuccessLoss = null!;
+        private Label lblStatusEvents = null!;
+        private Label lblStatusEventOutcome = null!;
         private RichTextBox rtbLog = null!;
         private CheckBox chkLogAutoScroll = null!;
         private int _logLineCount = 0;
@@ -128,20 +136,11 @@ namespace MyDoujinBot.Forms
 
         // --- 分頁 3: 階梯排程控制項 ---
         private TableLayoutPanel tblStageList = null!;
-        private TextBox txtNewStageName = null!;
-        private ComboBox cmbNewStageActionType = null!;
-        private ComboBox cmbNewStageTrainAction = null!;
-        private TextBox txtNewStageBattleTarget = null!;
-        private ComboBox cmbNewStageBattleType = null!;
-        private ComboBox cmbNewStageConditionType = null!;
-        private NumericUpDown nudNewStageConditionValue = null!;
         private Button btnAddStage = null!;
-        private Button btnCancelEditStage = null!;
         private Button btnClearStages = null!;
         private int _editingStageIndex = -1;
+        private bool _isAddingNewStage = false;
         private NumericUpDown nudPipelineDelay = null!;
-        private Panel pnlNewStageTrainSub = null!;
-        private Panel pnlNewStageBattleSub = null!;
 
         // --- 方案化排程管理 ---
         private readonly PresetManager<PipelinePreset> _pipelinePresetManager = new("pipeline");
@@ -184,8 +183,8 @@ namespace MyDoujinBot.Forms
             {
                 try { this.Icon = new Icon(iconPath); } catch { }
             }
-            this.Size = new Size(1060, 720);
-            this.MinimumSize = new Size(950, 620);
+            this.Size = new Size(1220, 760);
+            this.MinimumSize = new Size(1080, 660);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(24, 24, 30);
             this.ForeColor = Color.FromArgb(220, 220, 230);
@@ -201,24 +200,16 @@ namespace MyDoujinBot.Forms
             _currentToken = AppSettingsManager.Current.Token;
             _selectedNavTab = string.IsNullOrEmpty(AppSettingsManager.Current.ActiveTab) ? "training" : AppSettingsManager.Current.ActiveTab;
 
-            InitializeUI();
-            InitializeNotifyIcon();
-            RestoreSavedSettings();
-
-            this.KeyDown += OnFormKeyDown;
-        }
-
-        private void OnFormKeyDown(object? sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.F5 && btnGlobalStart.Enabled)
+            _isRestoringSettings = true;
+            try
             {
-                e.Handled = true;
-                btnGlobalStart.PerformClick();
+                InitializeUI();
+                InitializeNotifyIcon();
+                RestoreSavedSettings();
             }
-            else if (e.KeyCode == Keys.F6 && btnGlobalStop.Enabled)
+            finally
             {
-                e.Handled = true;
-                btnGlobalStop.PerformClick();
+                _isRestoringSettings = false;
             }
         }
 
@@ -243,20 +234,104 @@ namespace MyDoujinBot.Forms
         private int ScaleDpi(int value) => (int)Math.Round(value * DpiScale);
         private float ScaleDpi(float value) => value * DpiScale;
 
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            EnsureFormFitsScreen();
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            UpdateRightPanelWidth();
+        }
+
         protected override void OnDpiChanged(DpiChangedEventArgs e)
         {
             base.OnDpiChanged(e);
             ApplyDpiLayout();
+            EnsureFormFitsScreen();
+        }
+
+        /// <summary>
+        /// 螢幕邊界安全檢查：確保視窗與 MinimumSize 絕對不會超出使用者的實體螢幕工作區。
+        /// 徹底解決 Windows 150% ~ 200% 高縮放環境下視窗撐破螢幕、底部按鈕或右側面板被遮蔽的跑版問題。
+        /// </summary>
+        private void EnsureFormFitsScreen()
+        {
+            try
+            {
+                var screen = Screen.FromControl(this) ?? Screen.PrimaryScreen;
+                if (screen == null) return;
+
+                var workingArea = screen.WorkingArea;
+
+                // 彈性動態計算 MinimumSize：限制不可超過工作區
+                int minW = Math.Min(ScaleDpi(860), workingArea.Width);
+                int minH = Math.Min(ScaleDpi(520), workingArea.Height);
+                this.MinimumSize = new Size(minW, minH);
+
+                // 若 DPI 自動縮放後的初始視窗超出螢幕可視區域，自動限縮並置中
+                int targetW = Math.Min(this.Width, workingArea.Width);
+                int targetH = Math.Min(this.Height, workingArea.Height);
+
+                if (this.Width > workingArea.Width || this.Height > workingArea.Height)
+                {
+                    this.Size = new Size(targetW, targetH);
+                    this.Location = new Point(
+                        workingArea.X + Math.Max(0, (workingArea.Width - targetW) / 2),
+                        workingArea.Y + Math.Max(0, (workingArea.Height - targetH) / 2)
+                    );
+                }
+
+                UpdateRightPanelWidth();
+            }
+            catch
+            {
+                // 忽略非關鍵螢幕測量異常
+            }
+        }
+
+        /// <summary>
+        /// 動態調整右側面板寬度：依目前可視空間按比例自適應分配，保證中央主畫布有充足寬度。
+        /// </summary>
+        private void UpdateRightPanelWidth()
+        {
+            if (tblRoot == null || tblRoot.ColumnStyles.Count < 3) return;
+
+            bool showRightPanel = pnlRightPanel != null && pnlRightPanel.Visible;
+            if (!showRightPanel)
+            {
+                tblRoot.ColumnStyles[2].Width = 0F;
+                return;
+            }
+
+            int sidebarWidth = (int)tblRoot.ColumnStyles[0].Width;
+            int availableWidth = this.ClientSize.Width - sidebarWidth;
+            int idealRightWidth = ScaleDpi(390);
+
+            // 保證中央主畫布至少有 ScaleDpi(320) 的工作空間
+            int minCanvasWidth = ScaleDpi(320);
+            int maxRightWidth = Math.Max(ScaleDpi(260), availableWidth - minCanvasWidth);
+            int finalRightWidth = Math.Min(idealRightWidth, maxRightWidth);
+
+            int targetWidth = Math.Max(ScaleDpi(260), finalRightWidth);
+            if (Math.Abs(tblRoot.ColumnStyles[2].Width - targetWidth) < 1f) return;
+
+            tblRoot.SuspendLayout();
+            tblRoot.ColumnStyles[2].Width = targetWidth;
+            tblRoot.ResumeLayout(true);
         }
 
         private void ApplyDpiLayout()
         {
             if (tblRoot == null) return;
             tblRoot.ColumnStyles[0].Width = ScaleDpi(195F);
-            tblRoot.RowStyles[2].Height = ScaleDpi(40F);
-            if (pnlLogDrawer != null && pnlLogDrawer.Visible)
+            UpdateRightPanelWidth();
+
+            if (tblRoot.RowStyles.Count > 1)
             {
-                tblRoot.RowStyles[1].Height = ScaleDpi(170F);
+                tblRoot.RowStyles[1].Height = ScaleDpi(38F);
             }
             if (pnlNav != null)
             {
@@ -284,33 +359,33 @@ namespace MyDoujinBot.Forms
                 ForeColor = Color.FromArgb(230, 230, 240)
             };
 
-            // ── 根容器：TableLayoutPanel（2欄 3列，DPI 自適應）──
-            // Col 0: 側邊導航欄 (基底 195px，隨 DPI 動態縮放：100%->195, 150%->293, 200%->390)
+            // ── 根容器：TableLayoutPanel（3欄 2列，DPI 自適應）──
+            // Col 0: 側邊導航欄 (基底 195px，隨 DPI 動態縮放)
             // Col 1: 主內容畫布 (100% 彈性填滿其餘寬度)
+            // Col 2: 右側面板 (即時狀態 + 即時 LOG，基底 390px)
             // Row 0: 工作畫布 (100% 彈性高度)
-            // Row 1: 日誌抽屜 (收合時 0px，展開時 ScaleDpi(170px))
-            // Row 2: 底部狀態列 (ScaleDpi(40px))
+            // Row 1: 底部狀態列 (ScaleDpi(38px))
             tblRoot = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 2,
-                RowCount = 3,
+                ColumnCount = 3,
+                RowCount = 2,
                 BackColor = Color.FromArgb(24, 24, 30),
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
             tblRoot.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaleDpi(195F)));
             tblRoot.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            tblRoot.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ScaleDpi(390F)));
             tblRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tblRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));
-            tblRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, ScaleDpi(40F)));
+            tblRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, ScaleDpi(38F)));
             this.Controls.Add(tblRoot);
 
             // 建立各面板並加入 tblRoot
             BuildSidebar();
-            BuildStatusBar();
-            BuildLogDrawer();
             BuildMainCanvas();
+            BuildRightPanel();
+            BuildStatusBar();
 
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -324,226 +399,244 @@ namespace MyDoujinBot.Forms
             pnlStatusBar = new Panel
             {
                 Dock = DockStyle.Fill,
-                Height = 38,
+                Height = ScaleDpi(38),
                 BackColor = Color.FromArgb(18, 18, 24),
-                Padding = new Padding(ScaleDpi(12), ScaleDpi(3), ScaleDpi(12), ScaleDpi(3)),
+                Padding = new Padding(ScaleDpi(16), ScaleDpi(3), ScaleDpi(16), ScaleDpi(3)),
                 Margin = Padding.Empty
             };
-            tblRoot.Controls.Add(pnlStatusBar, 0, 2);
-            tblRoot.SetColumnSpan(pnlStatusBar, 2);
+            tblRoot.Controls.Add(pnlStatusBar, 0, 1);
+            tblRoot.SetColumnSpan(pnlStatusBar, 3);
 
             var tblStatus = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 10,
+                ColumnCount = 1,
                 RowCount = 1,
                 BackColor = Color.Transparent,
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
-            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // 0: 狀態
-            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // 1: 進度
-            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // 2: 等級
-            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // 3: 事件
-            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // 4: 排程階段
-            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // 5: 運作時間
-            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // 6: Spacer
-            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // 7: 日誌按鈕
-            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // 8: 開始
-            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // 9: 停止
+            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             tblStatus.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             pnlStatusBar.Controls.Add(tblStatus);
+
+            var pnlStatusLeft = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                Anchor = AnchorStyles.Left
+            };
+            tblStatus.Controls.Add(pnlStatusLeft, 0, 0);
+
+            lblStatusToken = new Label
+            {
+                Text = "● Token: 已就緒",
+                ForeColor = Color.FromArgb(80, 220, 120),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, ScaleDpi(2), ScaleDpi(16), ScaleDpi(2))
+            };
+            lblStatusToken.Click += (s, e) => SwitchNavTab("settings");
+            pnlStatusLeft.Controls.Add(lblStatusToken);
+
+            lblStatusLevel = new Label
+            {
+                Text = "等級: Lv.—",
+                ForeColor = Color.FromArgb(200, 200, 220),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                Margin = new Padding(0, ScaleDpi(2), 0, ScaleDpi(2))
+            };
+            pnlStatusLeft.Controls.Add(lblStatusLevel);
+        }
+
+        // =====================================================================
+        // 2. 右側面板 (即時狀態 + 即時日誌)
+        // =====================================================================
+        private void BuildRightPanel()
+        {
+            pnlRightPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(20, 20, 26),
+                Padding = Padding.Empty,
+                Margin = Padding.Empty
+            };
+            tblRoot.Controls.Add(pnlRightPanel, 2, 0);
+
+            var tblRight = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            tblRight.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            tblRight.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // 上方即時狀態 (自適應字型高度)
+            tblRight.RowStyles.Add(new RowStyle(SizeType.Percent, 100F)); // 下方即時日誌
+            pnlRightPanel.Controls.Add(tblRight);
+
+            // ── 上方即時狀態面板 ──
+            var pnlStatusCard = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.FromArgb(26, 26, 36),
+                Padding = new Padding(ScaleDpi(14), ScaleDpi(10), ScaleDpi(14), ScaleDpi(10)),
+                Margin = new Padding(0, 0, 0, ScaleDpi(2))
+            };
+            tblRight.Controls.Add(pnlStatusCard, 0, 0);
+
+            var tblStatusContent = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                ColumnCount = 2,
+                RowCount = 3,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            tblStatusContent.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            tblStatusContent.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            for (int r = 0; r < 3; r++)
+                tblStatusContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            pnlStatusCard.Controls.Add(tblStatusContent);
+
+            // Row 0: [圈圈]執行中/已停止 + [冷卻倒數]    運作時間
+            var pnlBadgeGroup = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                Anchor = AnchorStyles.Left
+            };
+            tblStatusContent.Controls.Add(pnlBadgeGroup, 0, 0);
 
             lblStatusBadge = new Label
             {
                 Text = "● 已停止",
                 ForeColor = Color.FromArgb(160, 160, 175),
                 AutoSize = true,
-                Anchor = AnchorStyles.Left,
                 Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 14, 0)
-            };
-            tblStatus.Controls.Add(lblStatusBadge, 0, 0);
-
-            lblStatusProgress = new Label
-            {
-                Text = "進度: 0 / 500 次",
-                ForeColor = Color.FromArgb(200, 200, 215),
-                AutoSize = true,
                 Anchor = AnchorStyles.Left,
-                Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 14, 0)
+                Margin = new Padding(0, ScaleDpi(2), 0, ScaleDpi(2))
             };
-            tblStatus.Controls.Add(lblStatusProgress, 1, 0);
+            pnlBadgeGroup.Controls.Add(lblStatusBadge);
 
-            lblStatusLevel = new Label
+            lblStatusCooldown = new Label
             {
-                Text = "等級: Lv.—",
-                ForeColor = Color.FromArgb(255, 215, 80),
+                Text = "",
+                ForeColor = Color.FromArgb(140, 205, 255),
                 AutoSize = true,
+                Font = new Font("Microsoft JhengHei UI", 9f),
                 Anchor = AnchorStyles.Left,
-                Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 14, 0)
+                Margin = new Padding(ScaleDpi(6), ScaleDpi(3), 0, ScaleDpi(2))
             };
-            tblStatus.Controls.Add(lblStatusLevel, 2, 0);
-
-            lblStatusEvents = new Label
-            {
-                Text = "事件: 0 次",
-                ForeColor = Color.FromArgb(190, 160, 255),
-                AutoSize = true,
-                Anchor = AnchorStyles.Left,
-                Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 14, 0)
-            };
-            tblStatus.Controls.Add(lblStatusEvents, 3, 0);
-
-            lblStatusPipeline = new Label
-            {
-                Text = "排程: 階段 1/1",
-                ForeColor = Color.FromArgb(140, 200, 255),
-                AutoSize = true,
-                Anchor = AnchorStyles.Left,
-                Visible = false,
-                Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 14, 0)
-            };
-            tblStatus.Controls.Add(lblStatusPipeline, 4, 0);
+            pnlBadgeGroup.Controls.Add(lblStatusCooldown);
 
             lblStatusElapsed = new Label
             {
-                Text = "運作: 00:00:00",
-                ForeColor = Color.FromArgb(160, 160, 180),
+                Text = "00:00:00",
+                ForeColor = Color.FromArgb(200, 200, 215),
                 AutoSize = true,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(0, 0, 14, 0)
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                Anchor = AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleRight,
+                Margin = new Padding(0, ScaleDpi(2), 0, ScaleDpi(2))
             };
-            tblStatus.Controls.Add(lblStatusElapsed, 5, 0);
+            tblStatusContent.Controls.Add(lblStatusElapsed, 1, 0);
 
-            // Spacer
-            tblStatus.Controls.Add(new Label { Text = "", AutoSize = false }, 6, 0);
-
-            btnToggleLog = new Button
+            // Row 1: 運作次數 (戰鬥次數)  成功/失敗 (勝利/失敗)
+            lblStatusRuns = new Label
             {
-                Text = "▲ 展開日誌",
+                Text = "運作次數: 0 次",
+                ForeColor = Color.FromArgb(210, 210, 225),
                 AutoSize = true,
-                BackColor = Color.FromArgb(40, 40, 52),
-                ForeColor = Color.FromArgb(200, 200, 220),
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
                 Font = new Font("Microsoft JhengHei UI", 9f),
-                Margin = new Padding(0, 0, 10, 0)
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, ScaleDpi(2), 0, ScaleDpi(2))
             };
-            btnToggleLog.FlatAppearance.BorderSize = 0;
-            btnToggleLog.Click += (s, e) => ToggleLogDrawer();
-            tblStatus.Controls.Add(btnToggleLog, 7, 0);
-
-            btnGlobalStart = new Button
+            lblStatusSuccessLoss = new Label
             {
-                Text = "▶ 開始 (F5)",
+                Text = "0 成功 / 0 失敗",
+                ForeColor = Color.FromArgb(90, 215, 110),
                 AutoSize = true,
-                BackColor = Color.FromArgb(35, 140, 70),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Padding = new Padding(12, 2, 12, 2),
-                Margin = new Padding(0, 0, 6, 0)
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Anchor = AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleRight,
+                Margin = new Padding(0, ScaleDpi(2), 0, ScaleDpi(2))
             };
-            btnGlobalStart.FlatAppearance.BorderSize = 0;
-            btnGlobalStart.Click += OnStartClicked;
-            tblStatus.Controls.Add(btnGlobalStart, 8, 0);
+            tblStatusContent.Controls.Add(lblStatusRuns, 0, 1);
+            tblStatusContent.Controls.Add(lblStatusSuccessLoss, 1, 1);
 
-            btnGlobalStop = new Button
+            // Row 2: 觸發事件  成功/失敗
+            lblStatusEvents = new Label
             {
-                Text = "⏹ 停止 (F6)",
+                Text = "觸發事件: 0 次",
+                ForeColor = Color.FromArgb(190, 160, 255),
                 AutoSize = true,
-                BackColor = Color.FromArgb(150, 45, 45),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Enabled = false,
-                Padding = new Padding(12, 2, 12, 2),
-                Margin = Padding.Empty
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, ScaleDpi(2), 0, ScaleDpi(2))
             };
-            btnGlobalStop.FlatAppearance.BorderSize = 0;
-            btnGlobalStop.Click += OnStopClicked;
-            tblStatus.Controls.Add(btnGlobalStop, 9, 0);
+            lblStatusEventOutcome = new Label
+            {
+                Text = "0 成功 / 0 失敗",
+                ForeColor = Color.FromArgb(170, 190, 240),
+                AutoSize = true,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Anchor = AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleRight,
+                Margin = new Padding(0, ScaleDpi(2), 0, ScaleDpi(2))
+            };
+            tblStatusContent.Controls.Add(lblStatusEvents, 0, 2);
+            tblStatusContent.Controls.Add(lblStatusEventOutcome, 1, 2);
 
-            UpdateTooltips();
-        }
-
-        private void UpdateTooltips()
-        {
-            double winRate = _currentStats.RunCount > 0
-                ? (_currentStats.SuccessCount * 100.0 / _currentStats.RunCount)
-                : 0.0;
-            statusToolTip.SetToolTip(lblStatusProgress,
-                $"已執行總數：{_currentStats.RunCount} 次\n" +
-                $"成功 / 勝利：{_currentStats.SuccessCount} 次\n" +
-                $"失敗 / 戰敗：{_currentStats.FailCount} 次\n" +
-                $"達成率 / 勝率：{winRate:F1}%");
-
-            string gainedCharStr = _currentStats.GainedCharacters.Count > 0
-                ? string.Join("、", _currentStats.GainedCharacters)
-                : "無";
-            statusToolTip.SetToolTip(lblStatusLevel,
-                $"當前角色等級：Lv.{_currentStats.CurrentLevel}\n" +
-                $"累積獲得 EXP：{_currentStats.TotalExp:N0}\n" +
-                $"本次獲得角色：{gainedCharStr}");
-
-            double eventPassRate = _currentStats.EventCount > 0
-                ? (_currentStats.EventSuccessCount * 100.0 / _currentStats.EventCount)
-                : 0.0;
-            statusToolTip.SetToolTip(lblStatusEvents,
-                $"遭遇事件總數：{_currentStats.EventCount} 次\n" +
-                $"事件判定成功：{_currentStats.EventSuccessCount} 次\n" +
-                $"事件判定失敗：{_currentStats.EventFailCount} 次\n" +
-                $"事件成功率：{eventPassRate:F1}%");
-
-            statusToolTip.SetToolTip(lblStatusBadge,
-                $"運作狀態：{lblStatusBadge.Text}\n" +
-                $"點擊「開始」即可啟動當前頁籤之任務。");
-        }
-
-        // =====================================================================
-        // 2. 底部可收合日誌抽屜 (Log Drawer)
-        // =====================================================================
-        private void BuildLogDrawer()
-        {
-            pnlLogDrawer = new Panel
+            // ── 下方即時日誌面板 ──
+            var pnlLogCard = new Panel
             {
                 Dock = DockStyle.Fill,
-                Height = 170,
-                Visible = false,
-                BackColor = Color.FromArgb(14, 14, 18),
+                BackColor = Color.FromArgb(16, 16, 22),
                 Padding = Padding.Empty,
                 Margin = Padding.Empty
             };
-            tblRoot.Controls.Add(pnlLogDrawer, 0, 1);
-            tblRoot.SetColumnSpan(pnlLogDrawer, 2);
+            tblRight.Controls.Add(pnlLogCard, 0, 1);
 
-            var pnlLogHeader = new Panel
+            var pnlLogTop = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 28,
-                BackColor = Color.FromArgb(25, 25, 34),
-                Padding = new Padding(10, 0, 10, 0)
+                Height = ScaleDpi(32),
+                BackColor = Color.FromArgb(28, 28, 38),
+                Padding = new Padding(ScaleDpi(12), ScaleDpi(3), ScaleDpi(12), ScaleDpi(3))
             };
-            pnlLogDrawer.Controls.Add(pnlLogHeader);
+            pnlLogCard.Controls.Add(pnlLogTop);
 
-            var lblLogTitle = new Label
+            var lblLogHeader = new Label
             {
-                Text = "運行日誌 (Live Log)",
-                ForeColor = Color.FromArgb(180, 180, 200),
-                Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
+                Text = "執行紀錄",
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(200, 200, 220),
                 Dock = DockStyle.Left,
                 TextAlign = ContentAlignment.MiddleLeft,
                 AutoSize = true
             };
-            pnlLogHeader.Controls.Add(lblLogTitle);
+            pnlLogTop.Controls.Add(lblLogHeader);
 
             var pnlLogActions = new FlowLayoutPanel
             {
@@ -553,7 +646,7 @@ namespace MyDoujinBot.Forms
                 BackColor = Color.Transparent,
                 Margin = Padding.Empty
             };
-            pnlLogHeader.Controls.Add(pnlLogActions);
+            pnlLogTop.Controls.Add(pnlLogActions);
 
             chkLogAutoScroll = new CheckBox
             {
@@ -561,60 +654,81 @@ namespace MyDoujinBot.Forms
                 Checked = true,
                 ForeColor = Color.FromArgb(170, 170, 190),
                 AutoSize = true,
-                Margin = new Padding(0, 4, 12, 0)
+                Margin = new Padding(0, ScaleDpi(4), ScaleDpi(6), 0)
             };
             pnlLogActions.Controls.Add(chkLogAutoScroll);
 
+            btnShowLastReport = new Button
+            {
+                Text = "📄 最後戰報",
+                AutoSize = true,
+                BackColor = Color.FromArgb(45, 50, 70),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Visible = false,
+                Font = new Font("Microsoft JhengHei UI", 8.5f),
+                Margin = new Padding(0, ScaleDpi(2), ScaleDpi(6), 0)
+            };
+            btnShowLastReport.FlatAppearance.BorderSize = 0;
+            btnShowLastReport.Click += (s, e) =>
+            {
+                if (_lastBattleResult != null)
+                {
+                    using var f = new BattleReportForm(_lastBattleResult);
+                    f.ShowDialog(this);
+                }
+            };
+            pnlLogActions.Controls.Add(btnShowLastReport);
+
             var btnClearLog = new Button
             {
-                Text = "清空",
+                Text = "🗑 清空",
                 AutoSize = true,
-                BackColor = Color.FromArgb(45, 45, 58),
-                ForeColor = Color.FromArgb(200, 200, 215),
+                BackColor = Color.FromArgb(50, 40, 40),
+                ForeColor = Color.FromArgb(220, 200, 200),
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand,
                 Font = new Font("Microsoft JhengHei UI", 8.5f),
-                Margin = new Padding(0, 2, 6, 0)
+                Margin = new Padding(0, ScaleDpi(2), 0, 0)
             };
             btnClearLog.FlatAppearance.BorderSize = 0;
             btnClearLog.Click += (s, e) => { rtbLog.Clear(); _logLineCount = 0; };
             pnlLogActions.Controls.Add(btnClearLog);
 
-            var btnCloseLog = new Button
+            // LOG 內容本體容器（帶有各自專屬 Padding，文字與邊框不緊貼）
+            var pnlLogBody = new Panel
             {
-                Text = "✕ 隱藏",
-                AutoSize = true,
-                BackColor = Color.FromArgb(45, 45, 58),
-                ForeColor = Color.FromArgb(200, 200, 215),
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("Microsoft JhengHei UI", 8.5f),
-                Margin = new Padding(0, 2, 0, 0)
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(14, 14, 18),
+                Padding = new Padding(ScaleDpi(12), ScaleDpi(6), ScaleDpi(6), ScaleDpi(8)),
+                Margin = Padding.Empty
             };
-            btnCloseLog.FlatAppearance.BorderSize = 0;
-            btnCloseLog.Click += (s, e) => ToggleLogDrawer();
-            pnlLogActions.Controls.Add(btnCloseLog);
+            pnlLogCard.Controls.Add(pnlLogBody);
+            pnlLogBody.BringToFront();
 
             rtbLog = new RichTextBox
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(12, 12, 16),
+                BackColor = Color.FromArgb(14, 14, 18),
                 ForeColor = Color.FromArgb(210, 210, 225),
                 BorderStyle = BorderStyle.None,
                 Font = new Font("Consolas", 9.5f),
                 ReadOnly = true,
                 ScrollBars = RichTextBoxScrollBars.Vertical
             };
-            pnlLogDrawer.Controls.Add(rtbLog);
-            rtbLog.BringToFront();
-        }
+            pnlLogBody.Controls.Add(rtbLog);
 
-        private void ToggleLogDrawer()
-        {
-            bool show = !pnlLogDrawer.Visible;
-            pnlLogDrawer.Visible = show;
-            tblRoot.RowStyles[1].Height = show ? ScaleDpi(170F) : 0F;
-            btnToggleLog.Text = show ? "▼ 收合日誌" : "▲ 展開日誌";
+            // 內嵌事件 Overlay（掛在 pnlLogBody 內，遮蔽 rtbLog）
+            pnlEventOverlay = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(22, 22, 32),
+                Visible = false,
+                Padding = Padding.Empty
+            };
+            pnlLogBody.Controls.Add(pnlEventOverlay);
+            rtbLog.BringToFront();
         }
 
         // =====================================================================
@@ -772,6 +886,14 @@ namespace MyDoujinBot.Forms
                 btn.ForeColor = isActive ? Color.FromArgb(250, 250, 255) : Color.FromArgb(170, 170, 190);
             }
 
+            // 2. 右側面板依分頁顯示/隱藏：訓練、戰鬥、排程顯示；事件、統計、設定隱藏
+            bool showRightPanel = tabKey == "training" || tabKey == "battle" || tabKey == "pipeline";
+            if (pnlRightPanel != null)
+            {
+                pnlRightPanel.Visible = showRightPanel;
+            }
+            UpdateRightPanelWidth();
+
             // 抑制主畫布繪製與排版，一次性切換分頁，避免多重遞迴測量
             pnlMainCanvas.SuspendLayout();
             try
@@ -800,15 +922,9 @@ namespace MyDoujinBot.Forms
                 pnlMainCanvas.PerformLayout();
             }
 
-            // 依目前頁籤動態更新開始按鈕文字
-            if (_cts == null && btnGlobalStart != null)
+            if (_cts == null && lblStatusRuns != null)
             {
-                btnGlobalStart.Text = tabKey switch
-                {
-                    "battle"   => "▶ 開始戰鬥 (F5)",
-                    "pipeline" => "▶ 開始排程 (F5)",
-                    _          => "▶ 開始訓練 (F5)"
-                };
+                UpdateTelemetryStats(_currentStats);
             }
         }
 
@@ -837,25 +953,16 @@ namespace MyDoujinBot.Forms
             pnlViewStats    = BuildStatsView();
             pnlViewSettings = BuildSettingsView();
 
-            // 內嵌事件 Overlay（覆蓋於主畫布）
-            pnlEventOverlay = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(20, 20, 28),
-                Visible = false,
-                Padding = Padding.Empty
-            };
-
             pnlMainCanvas.Controls.Add(pnlViewTraining);
             pnlMainCanvas.Controls.Add(pnlViewBattle);
             pnlMainCanvas.Controls.Add(pnlViewPipeline);
             pnlMainCanvas.Controls.Add(pnlViewEvents);
             pnlMainCanvas.Controls.Add(pnlViewStats);
             pnlMainCanvas.Controls.Add(pnlViewSettings);
-            pnlMainCanvas.Controls.Add(pnlEventOverlay);
 
             // 預先熱身所有控制項的 Win32 Handle 與雙緩衝，徹底根除首次切換或複雜頁籤卡頓
             PrewarmControls(pnlMainCanvas);
+            if (pnlRightPanel != null) PrewarmControls(pnlRightPanel);
 
             SwitchNavTab(_selectedNavTab);
         }
@@ -947,18 +1054,51 @@ namespace MyDoujinBot.Forms
             rbTrainCount.CheckedChanged += (s, e) => { if (!_isRestoringSettings) { OnTrainExecutionModeChanged(); SaveCurrentUiSettings(); } };
             TblAdd(tbl, MakeHRow(rbTrainTime, rbTrainCount));
 
-            nudTrainMinutes = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 9999,  Value = 1440, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230), Visible = true };
+            nudTrainMinutes = new NumericUpDown { Width = ScaleDpi(110), Minimum = 1, Maximum = 9999,  Value = 1440, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230), Visible = true };
             lblTrainMinutesUnit = MakeLabel("分鐘", visible: true);
-            nudTrainCount   = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 99999, Value = 500, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230), Visible = false };
+            nudTrainCount   = new NumericUpDown { Width = ScaleDpi(110), Minimum = 1, Maximum = 99999, Value = 500, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230), Visible = false };
             lblTrainCountUnit = MakeLabel("次", visible: false);
             nudTrainMinutes.ValueChanged += (s, e) => { if (!_isRestoringSettings) SaveCurrentUiSettings(); };
             nudTrainCount.ValueChanged   += (s, e) => { if (!_isRestoringSettings) SaveCurrentUiSettings(); };
             TblAdd(tbl, MakeHRow(nudTrainMinutes, lblTrainMinutesUnit, nudTrainCount, lblTrainCountUnit));
 
             AddRowLabel(tbl, "隨機延遲：");
-            nudTrainExtraDelay = new NumericUpDown { Width = 110, Minimum = 0, Maximum = 60, Value = 1, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230) };
+            nudTrainExtraDelay = new NumericUpDown { Width = ScaleDpi(110), Minimum = 0, Maximum = 60, Value = 1, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230) };
             nudTrainExtraDelay.ValueChanged += (s, e) => { if (!_isRestoringSettings) SaveCurrentUiSettings(); };
             TblAdd(tbl, MakeHRow(nudTrainExtraDelay, MakeLabel("秒 (0 ~ 此值)")));
+
+            AddSectionHeader(tbl, "執行控制");
+            btnTrainStart = new Button
+            {
+                Text = "▶ 開始訓練",
+                AutoSize = true,
+                BackColor = Color.FromArgb(35, 140, 70),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Padding = new Padding(ScaleDpi(16), ScaleDpi(6), ScaleDpi(16), ScaleDpi(6)),
+                Margin = new Padding(0, 0, ScaleDpi(10), 0)
+            };
+            btnTrainStart.FlatAppearance.BorderSize = 0;
+            btnTrainStart.Click += OnStartClicked;
+
+            btnTrainStop = new Button
+            {
+                Text = "⏹ 停止",
+                AutoSize = true,
+                BackColor = Color.FromArgb(150, 45, 45),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Enabled = false,
+                Padding = new Padding(ScaleDpi(16), ScaleDpi(6), ScaleDpi(16), ScaleDpi(6)),
+                Margin = Padding.Empty
+            };
+            btnTrainStop.FlatAppearance.BorderSize = 0;
+            btnTrainStop.Click += OnStopClicked;
+            TblAdd(tbl, MakeHRow(btnTrainStart, btnTrainStop), topMargin: ScaleDpi(8));
 
             RefreshTrainingSequencePills();
             return outer;
@@ -966,10 +1106,11 @@ namespace MyDoujinBot.Forms
 
         private void OnTrainExecutionModeChanged()
         {
+            if (rbTrainTime == null) return;
             bool isTime = rbTrainTime.Checked;
-            nudTrainMinutes.Visible = isTime;
+            if (nudTrainMinutes != null) nudTrainMinutes.Visible = isTime;
             if (lblTrainMinutesUnit != null) lblTrainMinutesUnit.Visible = isTime;
-            nudTrainCount.Visible = !isTime;
+            if (nudTrainCount != null) nudTrainCount.Visible = !isTime;
             if (lblTrainCountUnit != null) lblTrainCountUnit.Visible = !isTime;
         }
 
@@ -1217,7 +1358,6 @@ namespace MyDoujinBot.Forms
             rbBattleChado     = new RadioButton { Text = "我要茶渡你 (特殊挑戰)", ForeColor = Color.FromArgb(210, 210, 225), AutoSize = true, Margin = new Padding(12, 0, 0, 0) };
             rbBattleChallenge.CheckedChanged += (s, e) => { if (!_isRestoringSettings) SaveCurrentUiSettings(); };
             rbBattleChado.CheckedChanged     += (s, e) => { if (!_isRestoringSettings) SaveCurrentUiSettings(); };
-            if (AppSettingsManager.Current.BattleMode == "Chado") rbBattleChado.Checked = true;
             TblAdd(tbl, MakeHRow(rbBattleChallenge, rbBattleChado));
 
             btnShowLastReport = new Button
@@ -1249,28 +1389,62 @@ namespace MyDoujinBot.Forms
             rbBattleCount.CheckedChanged += (s, e) => { if (!_isRestoringSettings) { OnBattleExecutionModeChanged(); SaveCurrentUiSettings(); } };
             TblAdd(tbl, MakeHRow(rbBattleTime, rbBattleCount));
 
-            nudBattleMinutes = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 9999,  Value = 1440, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230), Visible = true };
+            nudBattleMinutes = new NumericUpDown { Width = ScaleDpi(110), Minimum = 1, Maximum = 9999,  Value = 1440, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230), Visible = true };
             lblBattleMinutesUnit = MakeLabel("分鐘", visible: true);
-            nudBattleCount   = new NumericUpDown { Width = 110, Minimum = 1, Maximum = 99999, Value = 500, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230), Visible = false };
+            nudBattleCount   = new NumericUpDown { Width = ScaleDpi(110), Minimum = 1, Maximum = 99999, Value = 500, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230), Visible = false };
             lblBattleCountUnit = MakeLabel("次", visible: false);
             nudBattleMinutes.ValueChanged += (s, e) => { if (!_isRestoringSettings) SaveCurrentUiSettings(); };
             nudBattleCount.ValueChanged   += (s, e) => { if (!_isRestoringSettings) SaveCurrentUiSettings(); };
             TblAdd(tbl, MakeHRow(nudBattleMinutes, lblBattleMinutesUnit, nudBattleCount, lblBattleCountUnit));
 
             AddRowLabel(tbl, "隨機延遲：");
-            nudBattleExtraDelay = new NumericUpDown { Width = 110, Minimum = 0, Maximum = 60, Value = 1, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230) };
+            nudBattleExtraDelay = new NumericUpDown { Width = ScaleDpi(110), Minimum = 0, Maximum = 60, Value = 1, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230) };
             nudBattleExtraDelay.ValueChanged += (s, e) => { if (!_isRestoringSettings) SaveCurrentUiSettings(); };
             TblAdd(tbl, MakeHRow(nudBattleExtraDelay, MakeLabel("秒 (0 ~ 此值)")));
+
+            AddSectionHeader(tbl, "執行控制");
+            btnBattleStart = new Button
+            {
+                Text = "▶ 開始戰鬥",
+                AutoSize = true,
+                BackColor = Color.FromArgb(35, 140, 70),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Padding = new Padding(ScaleDpi(16), ScaleDpi(6), ScaleDpi(16), ScaleDpi(6)),
+                Margin = new Padding(0, 0, ScaleDpi(10), 0)
+            };
+            btnBattleStart.FlatAppearance.BorderSize = 0;
+            btnBattleStart.Click += OnStartClicked;
+
+            btnBattleStop = new Button
+            {
+                Text = "⏹ 停止",
+                AutoSize = true,
+                BackColor = Color.FromArgb(150, 45, 45),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Enabled = false,
+                Padding = new Padding(ScaleDpi(16), ScaleDpi(6), ScaleDpi(16), ScaleDpi(6)),
+                Margin = Padding.Empty
+            };
+            btnBattleStop.FlatAppearance.BorderSize = 0;
+            btnBattleStop.Click += OnStopClicked;
+            TblAdd(tbl, MakeHRow(btnBattleStart, btnBattleStop), topMargin: ScaleDpi(8));
 
             return outer;
         }
 
         private void OnBattleExecutionModeChanged()
         {
+            if (rbBattleTime == null) return;
             bool isTime = rbBattleTime.Checked;
-            nudBattleMinutes.Visible = isTime;
+            if (nudBattleMinutes != null) nudBattleMinutes.Visible = isTime;
             if (lblBattleMinutesUnit != null) lblBattleMinutesUnit.Visible = isTime;
-            nudBattleCount.Visible = !isTime;
+            if (nudBattleCount != null) nudBattleCount.Visible = !isTime;
             if (lblBattleCountUnit != null) lblBattleCountUnit.Visible = !isTime;
         }
 
@@ -1340,198 +1514,145 @@ namespace MyDoujinBot.Forms
 
             AddSectionHeader(tbl, "📋  排程階段清單 (Stages)");
 
-            // 階段列表容器
+            // 階段列表容器 (卡片式)
             tblStageList = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
                 ColumnCount = 1,
                 RowCount = 0,
                 AutoSize = true,
-                BackColor = Color.FromArgb(20, 20, 26),
-                Padding = new Padding(6),
-                Margin = new Padding(0, 0, 0, 8)
+                BackColor = Color.FromArgb(18, 18, 24),
+                Padding = new Padding(ScaleDpi(6)),
+                Margin = new Padding(0, 0, 0, ScaleDpi(10))
             };
             tblStageList.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             TblAdd(tbl, tblStageList);
 
-            // 清空排程按鈕
+            // 底部操作按鈕行 (新增行動 / 清空所有階段)
+            var pnlStageBar = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, 0, 0, ScaleDpi(14))
+            };
+
+            btnAddStage = new Button
+            {
+                Text = "➕  新增行動",
+                AutoSize = true,
+                BackColor = Color.FromArgb(40, 130, 75),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Padding = new Padding(ScaleDpi(12), ScaleDpi(6), ScaleDpi(12), ScaleDpi(6)),
+                Margin = new Padding(0, 0, ScaleDpi(10), 0)
+            };
+            btnAddStage.FlatAppearance.BorderSize = 0;
+            btnAddStage.Click += OnAddNewStageClicked;
+
             btnClearStages = new Button
             {
-                Text = "🗑️ 清空所有階段",
+                Text = "🗑️  清空所有階段",
                 AutoSize = true,
                 BackColor = Color.FromArgb(85, 45, 45),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 0, 12)
+                Padding = new Padding(ScaleDpi(10), ScaleDpi(6), ScaleDpi(10), ScaleDpi(6)),
+                Margin = Padding.Empty
             };
             btnClearStages.FlatAppearance.BorderSize = 0;
             btnClearStages.Click += (s, e) =>
             {
-                CancelStageEdit();
-                AppSettingsManager.Current.PipelineStages.Clear();
-                _activePipelinePreset.Stages.Clear();
-                _pipelinePresetManager.Save(_activePipelinePreset);
-                AppSettingsManager.Save();
-                RefreshPresetComboBox(_activePipelinePreset.Id);
-                RefreshPipelineStageList();
+                if (AppSettingsManager.Current.PipelineStages.Count == 0) return;
+                var res = MessageBox.Show("確定要清空所有排程階段嗎？", "清空確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (res == DialogResult.Yes)
+                {
+                    _editingStageIndex = -1;
+                    _isAddingNewStage = false;
+                    AppSettingsManager.Current.PipelineStages.Clear();
+                    _activePipelinePreset.Stages.Clear();
+                    _pipelinePresetManager.Save(_activePipelinePreset);
+                    AppSettingsManager.Save();
+                    RefreshPresetComboBox(_activePipelinePreset.Id);
+                    RefreshPipelineStageList();
+                }
             };
-            TblAdd(tbl, btnClearStages);
 
-            AddSectionHeader(tbl, "➕  新增排程階段");
+            pnlStageBar.Controls.Add(btnAddStage);
+            pnlStageBar.Controls.Add(btnClearStages);
+            TblAdd(tbl, pnlStageBar);
 
-            AddRowLabel(tbl, "階段名稱：");
-            txtNewStageName = new TextBox
+            // 額外隨機延遲設定
+            AddRowLabel(tbl, "排程冷卻額外隨機延遲：");
+            nudPipelineDelay = new NumericUpDown
             {
-                Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(40, 40, 52),
-                ForeColor = Color.FromArgb(220, 220, 230),
-                BorderStyle = BorderStyle.FixedSingle,
-                Text = "階段 1"
-            };
-            TblAdd(tbl, txtNewStageName);
-
-            AddRowLabel(tbl, "執行動作類型：");
-            cmbNewStageActionType = new ComboBox
-            {
-                Dock = DockStyle.Fill,
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = Color.FromArgb(40, 40, 52),
-                ForeColor = Color.FromArgb(220, 220, 230),
-                FlatStyle = FlatStyle.Flat
-            };
-            cmbNewStageActionType.Items.Add("訓練 (Training)");
-            cmbNewStageActionType.Items.Add("戰鬥 (Battle)");
-            cmbNewStageActionType.SelectedIndex = 0;
-            cmbNewStageActionType.SelectedIndexChanged += (s, e) =>
-            {
-                bool isTrain = cmbNewStageActionType.SelectedIndex == 0;
-                pnlNewStageTrainSub.Visible = isTrain;
-                pnlNewStageBattleSub.Visible = !isTrain;
-            };
-            TblAdd(tbl, cmbNewStageActionType);
-
-            // 訓練子選項
-            pnlNewStageTrainSub = new Panel { Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(0, 2, 0, 4) };
-            cmbNewStageTrainAction = new ComboBox
-            {
-                Dock = DockStyle.Fill,
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = Color.FromArgb(40, 40, 52),
-                ForeColor = Color.FromArgb(220, 220, 230),
-                FlatStyle = FlatStyle.Flat
-            };
-            foreach (var act in TrainingActions.All) cmbNewStageTrainAction.Items.Add(act);
-            if (cmbNewStageTrainAction.Items.Count > 0) cmbNewStageTrainAction.SelectedIndex = 0;
-            pnlNewStageTrainSub.Controls.Add(cmbNewStageTrainAction);
-            TblAdd(tbl, pnlNewStageTrainSub);
-
-            // 戰鬥子選項
-            pnlNewStageBattleSub = new Panel { Dock = DockStyle.Fill, AutoSize = true, Visible = false, Margin = new Padding(0, 2, 0, 4) };
-            var tblBattleSub = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 1 };
-            tblBattleSub.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-            tblBattleSub.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-            txtNewStageBattleTarget = new TextBox
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(40, 40, 52),
-                ForeColor = Color.FromArgb(220, 220, 230),
-                BorderStyle = BorderStyle.FixedSingle,
-                PlaceholderText = "輸入戰鬥對象玩家 ID"
-            };
-            cmbNewStageBattleType = new ComboBox
-            {
-                Dock = DockStyle.Fill,
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = Color.FromArgb(40, 40, 52),
-                ForeColor = Color.FromArgb(220, 220, 230),
-                FlatStyle = FlatStyle.Flat
-            };
-            cmbNewStageBattleType.Items.Add("友好切磋");
-            cmbNewStageBattleType.Items.Add("我要茶渡你");
-            cmbNewStageBattleType.SelectedIndex = 0;
-            tblBattleSub.Controls.Add(txtNewStageBattleTarget, 0, 0);
-            tblBattleSub.Controls.Add(cmbNewStageBattleType, 1, 0);
-            pnlNewStageBattleSub.Controls.Add(tblBattleSub);
-            TblAdd(tbl, pnlNewStageBattleSub);
-
-            AddRowLabel(tbl, "切換至下一階段之達成條件：");
-            var tblCondition = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 1 };
-            tblCondition.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-            tblCondition.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-            cmbNewStageConditionType = new ComboBox
-            {
-                Dock = DockStyle.Fill,
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = Color.FromArgb(40, 40, 52),
-                ForeColor = Color.FromArgb(220, 220, 230),
-                FlatStyle = FlatStyle.Flat
-            };
-            cmbNewStageConditionType.Items.Add("角色等級達到 (>= Lv)");
-            cmbNewStageConditionType.Items.Add("執行滿次數 (次)");
-            cmbNewStageConditionType.Items.Add("運行滿時間 (分鐘)");
-            cmbNewStageConditionType.SelectedIndex = 0;
-
-            nudNewStageConditionValue = new NumericUpDown
-            {
-                Dock = DockStyle.Fill,
-                Minimum = 1, Maximum = 99999, Value = 80,
+                Width = ScaleDpi(110),
+                Minimum = 0,
+                Maximum = 60,
+                Value = 1,
                 BackColor = Color.FromArgb(40, 40, 52),
                 ForeColor = Color.FromArgb(220, 220, 230)
             };
-            tblCondition.Controls.Add(cmbNewStageConditionType, 0, 0);
-            tblCondition.Controls.Add(nudNewStageConditionValue, 1, 0);
-            TblAdd(tbl, tblCondition);
-
-            btnAddStage = new Button
-            {
-                Text = "➕ 加入排程清單",
-                AutoSize = true,
-                BackColor = Color.FromArgb(40, 120, 70),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Margin = new Padding(0, 6, 8, 10)
-            };
-            btnAddStage.FlatAppearance.BorderSize = 0;
-            btnAddStage.Click += OnAddOrSaveStageClicked;
-
-            btnCancelEditStage = new Button
-            {
-                Text = "✕ 取消修改",
-                AutoSize = true,
-                Visible = false,
-                BackColor = Color.FromArgb(70, 70, 85),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 9.5f),
-                Cursor = Cursors.Hand,
-                Margin = new Padding(0, 6, 0, 10)
-            };
-            btnCancelEditStage.FlatAppearance.BorderSize = 0;
-            btnCancelEditStage.Click += (s, e) => CancelStageEdit();
-
-            var pnlStageActions = new FlowLayoutPanel
-            {
-                AutoSize = true,
-                FlowDirection = FlowDirection.LeftToRight,
-                BackColor = Color.Transparent,
-                WrapContents = false,
-                Margin = Padding.Empty,
-                Padding = Padding.Empty
-            };
-            pnlStageActions.Controls.Add(btnAddStage);
-            pnlStageActions.Controls.Add(btnCancelEditStage);
-            TblAdd(tbl, pnlStageActions);
-
-            AddRowLabel(tbl, "排程冷卻額外隨機延遲：");
-            nudPipelineDelay = new NumericUpDown { Width = 110, Minimum = 0, Maximum = 60, Value = 1, BackColor = Color.FromArgb(40, 40, 52), ForeColor = Color.FromArgb(220, 220, 230) };
             nudPipelineDelay.ValueChanged += (s, e) => { if (!_isRestoringSettings) SaveCurrentUiSettings(); };
             TblAdd(tbl, MakeHRow(nudPipelineDelay, MakeLabel("秒 (0 ~ 此值)")));
 
+            AddSectionHeader(tbl, "執行控制");
+            btnPipelineStart = new Button
+            {
+                Text = "▶ 開始排程",
+                AutoSize = true,
+                BackColor = Color.FromArgb(35, 140, 70),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Padding = new Padding(ScaleDpi(16), ScaleDpi(6), ScaleDpi(16), ScaleDpi(6)),
+                Margin = new Padding(0, 0, ScaleDpi(10), 0)
+            };
+            btnPipelineStart.FlatAppearance.BorderSize = 0;
+            btnPipelineStart.Click += OnStartClicked;
+
+            btnPipelineStop = new Button
+            {
+                Text = "⏹ 停止",
+                AutoSize = true,
+                BackColor = Color.FromArgb(150, 45, 45),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Enabled = false,
+                Padding = new Padding(ScaleDpi(16), ScaleDpi(6), ScaleDpi(16), ScaleDpi(6)),
+                Margin = Padding.Empty
+            };
+            btnPipelineStop.FlatAppearance.BorderSize = 0;
+            btnPipelineStop.Click += OnStopClicked;
+            TblAdd(tbl, MakeHRow(btnPipelineStart, btnPipelineStop), topMargin: ScaleDpi(8));
+
             RefreshPipelineStageList();
             return outer;
+        }
+
+        private void OnAddNewStageClicked(object? sender, EventArgs e)
+        {
+            var stages = AppSettingsManager.Current.PipelineStages;
+            var newStage = new PipelineStage
+            {
+                Name = $"階段 #{stages.Count + 1}",
+                ActionType = StageActionType.Training,
+                TrainingActionId = "hunt",
+                ConditionType = StageConditionType.LevelReach,
+                ConditionValue = 80
+            };
+            stages.Add(newStage);
+            _editingStageIndex = stages.Count - 1;
+            _isAddingNewStage = true;
+            RefreshPipelineStageList();
         }
 
         private void StartEditStage(int index)
@@ -1539,120 +1660,41 @@ namespace MyDoujinBot.Forms
             var stages = AppSettingsManager.Current.PipelineStages;
             if (index < 0 || index >= stages.Count) return;
 
+            if (_isAddingNewStage && _editingStageIndex >= 0 && _editingStageIndex < stages.Count && _editingStageIndex != index)
+            {
+                stages.RemoveAt(_editingStageIndex);
+                if (index > _editingStageIndex) index--;
+            }
+
+            _isAddingNewStage = false;
             _editingStageIndex = index;
-            var st = stages[index];
-
-            txtNewStageName.Text = st.Name;
-            cmbNewStageActionType.SelectedIndex = st.ActionType == StageActionType.Training ? 0 : 1;
-
-            if (st.ActionType == StageActionType.Training)
-            {
-                for (int i = 0; i < cmbNewStageTrainAction.Items.Count; i++)
-                {
-                    if (cmbNewStageTrainAction.Items[i] is TrainingAction act && act.ActionId == st.TrainingActionId)
-                    {
-                        cmbNewStageTrainAction.SelectedIndex = i;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                txtNewStageBattleTarget.Text = st.BattleTargetId;
-                cmbNewStageBattleType.SelectedIndex = st.BattleType == BattleType.Challenge ? 0 : 1;
-            }
-
-            cmbNewStageConditionType.SelectedIndex = st.ConditionType switch
-            {
-                StageConditionType.RunCountReach => 1,
-                StageConditionType.MinutesReach => 2,
-                _ => 0
-            };
-            nudNewStageConditionValue.Value = Math.Max(nudNewStageConditionValue.Minimum, Math.Min(nudNewStageConditionValue.Maximum, st.ConditionValue));
-
-            btnAddStage.Text = $"💾 儲存修改 (階段 #{index + 1})";
-            btnAddStage.BackColor = Color.FromArgb(45, 100, 160);
-            btnCancelEditStage.Visible = true;
-
             RefreshPipelineStageList();
         }
 
         private void CancelStageEdit()
         {
+            var stages = AppSettingsManager.Current.PipelineStages;
+            if (_isAddingNewStage && _editingStageIndex >= 0 && _editingStageIndex < stages.Count)
+            {
+                stages.RemoveAt(_editingStageIndex);
+            }
             _editingStageIndex = -1;
-            btnAddStage.Text = "➕ 加入排程清單";
-            btnAddStage.BackColor = Color.FromArgb(40, 120, 70);
-            btnCancelEditStage.Visible = false;
-            txtNewStageName.Text = $"階段 {AppSettingsManager.Current.PipelineStages.Count + 1}";
+            _isAddingNewStage = false;
             RefreshPipelineStageList();
         }
 
-        private void OnAddOrSaveStageClicked(object? sender, EventArgs e)
+        private void MoveStage(int index, int direction)
         {
             var stages = AppSettingsManager.Current.PipelineStages;
-            bool isEditing = _editingStageIndex >= 0 && _editingStageIndex < stages.Count;
+            int targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= stages.Count) return;
 
-            string stageName = string.IsNullOrWhiteSpace(txtNewStageName.Text)
-                ? (isEditing ? stages[_editingStageIndex].Name : $"階段 {stages.Count + 1}")
-                : txtNewStageName.Text.Trim();
+            var temp = stages[index];
+            stages[index] = stages[targetIndex];
+            stages[targetIndex] = temp;
 
-            var actionType = cmbNewStageActionType.SelectedIndex == 0 ? StageActionType.Training : StageActionType.Battle;
-            string trainingActionId = "hunt";
-            string battleTargetId = string.Empty;
-            var battleType = BattleType.Challenge;
-
-            if (actionType == StageActionType.Training)
-            {
-                if (cmbNewStageTrainAction.SelectedItem is TrainingAction act)
-                    trainingActionId = act.ActionId;
-            }
-            else
-            {
-                battleTargetId = txtNewStageBattleTarget.Text.Trim();
-                battleType = cmbNewStageBattleType.SelectedIndex == 0 ? BattleType.Challenge : BattleType.Chado;
-                if (string.IsNullOrEmpty(battleTargetId))
-                {
-                    MessageBox.Show("請輸入戰鬥目標玩家 ID", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-            }
-
-            var conditionType = cmbNewStageConditionType.SelectedIndex switch
-            {
-                1 => StageConditionType.RunCountReach,
-                2 => StageConditionType.MinutesReach,
-                _ => StageConditionType.LevelReach
-            };
-            int conditionVal = (int)nudNewStageConditionValue.Value;
-
-            if (isEditing)
-            {
-                var target = stages[_editingStageIndex];
-                target.Name = stageName;
-                target.ActionType = actionType;
-                target.TrainingActionId = trainingActionId;
-                target.BattleTargetId = battleTargetId;
-                target.BattleType = battleType;
-                target.ConditionType = conditionType;
-                target.ConditionValue = conditionVal;
-
-                CancelStageEdit();
-            }
-            else
-            {
-                var stage = new PipelineStage
-                {
-                    Name = stageName,
-                    ActionType = actionType,
-                    TrainingActionId = trainingActionId,
-                    BattleTargetId = battleTargetId,
-                    BattleType = battleType,
-                    ConditionType = conditionType,
-                    ConditionValue = conditionVal
-                };
-                stages.Add(stage);
-                txtNewStageName.Text = $"階段 {stages.Count + 1}";
-            }
+            if (_editingStageIndex == index) _editingStageIndex = targetIndex;
+            else if (_editingStageIndex == targetIndex) _editingStageIndex = index;
 
             AppSettingsManager.Save();
             _pipelinePresetManager.Save(_activePipelinePreset);
@@ -1660,22 +1702,110 @@ namespace MyDoujinBot.Forms
             RefreshPipelineStageList();
         }
 
+        private Button CreateStageNavButton(string arrow, bool enabled)
+        {
+            var btn = new Button
+            {
+                Text = arrow,
+                Width = ScaleDpi(28),
+                Height = ScaleDpi(26),
+                BackColor = enabled ? Color.FromArgb(46, 48, 62) : Color.FromArgb(24, 24, 32),
+                ForeColor = enabled ? Color.FromArgb(220, 220, 235) : Color.FromArgb(85, 85, 105),
+                Enabled = enabled,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = enabled ? Cursors.Hand : Cursors.Default,
+                Font = new Font("Microsoft JhengHei UI", 8.5f),
+                Margin = new Padding(ScaleDpi(2), 0, ScaleDpi(2), 0)
+            };
+            btn.FlatAppearance.BorderSize = 0;
+            return btn;
+        }
+
+        private static string GetTrainingActionDisplayName(string actionId)
+        {
+            var act = TrainingActions.All.FirstOrDefault(a => a.ActionId == actionId);
+            return act?.DisplayName ?? actionId;
+        }
+
+        private async Task VerifyStageBattlePlayerAsync(string targetId, Label lblResult, Button btnVerify, Action<string> onVerifiedName)
+        {
+            if (string.IsNullOrWhiteSpace(targetId))
+            {
+                lblResult.Text = "⚠ 請輸入玩家 ID";
+                lblResult.ForeColor = Color.FromArgb(220, 80, 80);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_currentToken))
+            {
+                lblResult.Text = "⚠ 請先至「設定」輸入 Token";
+                lblResult.ForeColor = Color.FromArgb(220, 80, 80);
+                return;
+            }
+
+            btnVerify.Enabled = false;
+            lblResult.Text = "查詢中...";
+            lblResult.ForeColor = Color.FromArgb(170, 215, 255);
+            try
+            {
+                var result = await _battleService.GetPlayerProfileAsync(targetId, _currentToken);
+                if (result.IsSuccess && result.Data != null)
+                {
+                    var data = result.Data;
+                    string cName = data.Character != null ? data.Character.Name : "無";
+                    int cLevel = data.Character != null ? data.Character.Level : 0;
+                    string nick = data.Nickname ?? targetId;
+                    lblResult.Text = $"✓ 對手：{nick} ｜ 角色：Lv.{cLevel} {cName}";
+                    lblResult.ForeColor = Color.FromArgb(80, 220, 120);
+                    onVerifiedName(nick);
+                }
+                else
+                {
+                    lblResult.Text = $"✗ 查詢失敗：{result.ErrorMessage}";
+                    lblResult.ForeColor = Color.FromArgb(220, 80, 80);
+                }
+            }
+            catch (Exception ex)
+            {
+                lblResult.Text = $"✗ 錯誤：{ex.Message}";
+                lblResult.ForeColor = Color.FromArgb(220, 80, 80);
+            }
+            finally
+            {
+                btnVerify.Enabled = true;
+            }
+        }
+
         private void RefreshPipelineStageList()
         {
+            if (tblStageList == null) return;
+
             tblStageList.SuspendLayout();
             tblStageList.Controls.Clear();
             tblStageList.RowCount = 0;
+            tblStageList.RowStyles.Clear();
 
             var stages = AppSettingsManager.Current.PipelineStages;
             if (stages.Count == 0)
             {
-                tblStageList.Controls.Add(new Label
+                var pnlEmpty = new Panel
                 {
-                    Text = "尚未新增任何階段。請使用下方表單新增排程階段。",
-                    ForeColor = Color.FromArgb(140, 140, 160),
-                    AutoSize = true,
-                    Padding = new Padding(6)
-                });
+                    Dock = DockStyle.Fill,
+                    Height = ScaleDpi(70),
+                    BackColor = Color.FromArgb(24, 24, 32),
+                    Padding = new Padding(ScaleDpi(12)),
+                    Margin = new Padding(0, ScaleDpi(4), 0, ScaleDpi(4))
+                };
+                var lblEmpty = new Label
+                {
+                    Dock = DockStyle.Fill,
+                    Text = "尚未新增任何排程階段。\n點擊下方「➕ 新增行動」按鈕直接新增卡片設定行動！",
+                    ForeColor = Color.FromArgb(145, 145, 170),
+                    Font = new Font("Microsoft JhengHei UI", 9.5f),
+                    TextAlign = ContentAlignment.MiddleCenter
+                };
+                pnlEmpty.Controls.Add(lblEmpty);
+                tblStageList.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                tblStageList.Controls.Add(pnlEmpty, 0, 0);
             }
             else
             {
@@ -1683,173 +1813,558 @@ namespace MyDoujinBot.Forms
                 {
                     int index = i;
                     var st = stages[i];
-                    bool isBeingEdited = _editingStageIndex == index;
+                    Control card = (_editingStageIndex == index)
+                        ? CreateStageEditCard(index, st)
+                        : CreateStageLockedCard(index, st);
 
-                    int cardH = ScaleDpi(34);
-                    var card = new TableLayoutPanel
-                    {
-                        Dock = DockStyle.Fill,
-                        ColumnCount = 3,
-                        RowCount = 1,
-                        Height = cardH,
-                        BackColor = isBeingEdited ? Color.FromArgb(38, 52, 78) : Color.FromArgb(32, 32, 42),
-                        Padding = new Padding(ScaleDpi(10), 0, ScaleDpi(10), 0),
-                        Margin = new Padding(0, ScaleDpi(2), 0, ScaleDpi(2))
-                    };
-                    card.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-                    card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-                    card.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-                    card.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-                    var lblIdx = new Label
-                    {
-                        Text = isBeingEdited ? $"#{index + 1} ✎" : $"#{index + 1}",
-                        ForeColor = isBeingEdited ? Color.FromArgb(255, 215, 80) : Color.FromArgb(130, 170, 255),
-                        Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
-                        AutoSize = true,
-                        Anchor = AnchorStyles.Left
-                    };
-
-                    var lblInfo = new Label
-                    {
-                        Text = $"【{st.Name}】 {st.GetActionSummary()}  ──►  達成條件：{st.GetConditionSummary()}",
-                        ForeColor = isBeingEdited ? Color.White : Color.FromArgb(220, 220, 235),
-                        AutoSize = true,
-                        Anchor = AnchorStyles.Left,
-                        Margin = new Padding(10, 0, 0, 0),
-                        Cursor = Cursors.Hand
-                    };
-                    lblInfo.Click += (s, e) => StartEditStage(index);
-
-                    // 按鈕操作列 (上移、下移、編輯、刪除)
-                    var pnlBtnGroup = new FlowLayoutPanel
-                    {
-                        AutoSize = true,
-                        FlowDirection = FlowDirection.LeftToRight,
-                        BackColor = Color.Transparent,
-                        WrapContents = false,
-                        Margin = Padding.Empty,
-                        Padding = Padding.Empty,
-                        Anchor = AnchorStyles.Right
-                    };
-
-                    var btnUp = new Button
-                    {
-                        Text = "▲",
-                        Width = ScaleDpi(28),
-                        Height = ScaleDpi(24),
-                        BackColor = index > 0 ? Color.FromArgb(48, 48, 62) : Color.FromArgb(28, 28, 36),
-                        ForeColor = index > 0 ? Color.FromArgb(210, 210, 230) : Color.FromArgb(90, 90, 110),
-                        Enabled = index > 0,
-                        FlatStyle = FlatStyle.Flat,
-                        Cursor = index > 0 ? Cursors.Hand : Cursors.Default,
-                        Margin = new Padding(ScaleDpi(2), 0, ScaleDpi(2), 0)
-                    };
-                    btnUp.FlatAppearance.BorderSize = 0;
-                    btnUp.Click += (s, e) =>
-                    {
-                        if (index <= 0) return;
-                        var temp = stages[index];
-                        stages[index] = stages[index - 1];
-                        stages[index - 1] = temp;
-                        if (_editingStageIndex == index) _editingStageIndex = index - 1;
-                        else if (_editingStageIndex == index - 1) _editingStageIndex = index;
-                        AppSettingsManager.Save();
-                        _pipelinePresetManager.Save(_activePipelinePreset);
-                        RefreshPresetComboBox(_activePipelinePreset.Id);
-                        if (_editingStageIndex >= 0)
-                            btnAddStage.Text = $"💾 儲存修改 (階段 #{_editingStageIndex + 1})";
-                        RefreshPipelineStageList();
-                    };
-
-                    var btnDown = new Button
-                    {
-                        Text = "▼",
-                        Width = ScaleDpi(28),
-                        Height = ScaleDpi(24),
-                        BackColor = index < stages.Count - 1 ? Color.FromArgb(48, 48, 62) : Color.FromArgb(28, 28, 36),
-                        ForeColor = index < stages.Count - 1 ? Color.FromArgb(210, 210, 230) : Color.FromArgb(90, 90, 110),
-                        Enabled = index < stages.Count - 1,
-                        FlatStyle = FlatStyle.Flat,
-                        Cursor = index < stages.Count - 1 ? Cursors.Hand : Cursors.Default,
-                        Margin = new Padding(ScaleDpi(2), 0, ScaleDpi(2), 0)
-                    };
-                    btnDown.FlatAppearance.BorderSize = 0;
-                    btnDown.Click += (s, e) =>
-                    {
-                        if (index >= stages.Count - 1) return;
-                        var temp = stages[index];
-                        stages[index] = stages[index + 1];
-                        stages[index + 1] = temp;
-                        if (_editingStageIndex == index) _editingStageIndex = index + 1;
-                        else if (_editingStageIndex == index + 1) _editingStageIndex = index;
-                        AppSettingsManager.Save();
-                        _pipelinePresetManager.Save(_activePipelinePreset);
-                        RefreshPresetComboBox(_activePipelinePreset.Id);
-                        if (_editingStageIndex >= 0)
-                            btnAddStage.Text = $"💾 儲存修改 (階段 #{_editingStageIndex + 1})";
-                        RefreshPipelineStageList();
-                    };
-
-                    var btnEdit = new Button
-                    {
-                        Text = "✏",
-                        Width = ScaleDpi(28),
-                        Height = ScaleDpi(24),
-                        BackColor = isBeingEdited ? Color.FromArgb(45, 100, 160) : Color.FromArgb(48, 58, 80),
-                        ForeColor = Color.White,
-                        FlatStyle = FlatStyle.Flat,
-                        Cursor = Cursors.Hand,
-                        Margin = new Padding(ScaleDpi(2), 0, ScaleDpi(2), 0)
-                    };
-                    btnEdit.FlatAppearance.BorderSize = 0;
-                    btnEdit.Click += (s, e) =>
-                    {
-                        if (isBeingEdited) CancelStageEdit();
-                        else StartEditStage(index);
-                    };
-
-                    var btnDel = new Button
-                    {
-                        Text = "✕",
-                        Width = ScaleDpi(28),
-                        Height = ScaleDpi(24),
-                        BackColor = Color.FromArgb(70, 40, 40),
-                        ForeColor = Color.White,
-                        FlatStyle = FlatStyle.Flat,
-                        Cursor = Cursors.Hand,
-                        Margin = new Padding(ScaleDpi(2), 0, 0, 0)
-                    };
-                    btnDel.FlatAppearance.BorderSize = 0;
-                    btnDel.Click += (s, e) =>
-                    {
-                        if (_editingStageIndex == index) CancelStageEdit();
-                        else if (_editingStageIndex > index) _editingStageIndex--;
-                        stages.RemoveAt(index);
-                        AppSettingsManager.Save();
-                        _pipelinePresetManager.Save(_activePipelinePreset);
-                        RefreshPresetComboBox(_activePipelinePreset.Id);
-                        if (_editingStageIndex >= 0)
-                            btnAddStage.Text = $"💾 儲存修改 (階段 #{_editingStageIndex + 1})";
-                        RefreshPipelineStageList();
-                    };
-
-                    pnlBtnGroup.Controls.Add(btnUp);
-                    pnlBtnGroup.Controls.Add(btnDown);
-                    pnlBtnGroup.Controls.Add(btnEdit);
-                    pnlBtnGroup.Controls.Add(btnDel);
-
-                    card.Controls.Add(lblIdx, 0, 0);
-                    card.Controls.Add(lblInfo, 1, 0);
-                    card.Controls.Add(pnlBtnGroup, 2, 0);
-
-                    tblStageList.RowStyles.Add(new RowStyle(SizeType.Absolute, cardH + ScaleDpi(4)));
+                    tblStageList.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                     tblStageList.Controls.Add(card, 0, index);
                 }
             }
 
             EnableDoubleBuffering(tblStageList);
             tblStageList.ResumeLayout(true);
+        }
+
+        private Control CreateStageLockedCard(int index, PipelineStage st)
+        {
+            var stages = AppSettingsManager.Current.PipelineStages;
+
+            var card = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                ColumnCount = 2,
+                RowCount = 2,
+                AutoSize = true,
+                BackColor = Color.FromArgb(28, 28, 38),
+                Padding = new Padding(ScaleDpi(12), ScaleDpi(10), ScaleDpi(12), ScaleDpi(10)),
+                Margin = new Padding(0, ScaleDpi(4), 0, ScaleDpi(4))
+            };
+            card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            card.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            // Row 0, Col 0: 標號與執行動作
+            var pnlActionRow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty
+            };
+
+            var lblBadge = new Label
+            {
+                Text = $"#{index + 1}",
+                ForeColor = Color.FromArgb(130, 185, 255),
+                Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, ScaleDpi(2), ScaleDpi(8), 0)
+            };
+
+            var lblActionTitle = new Label
+            {
+                Text = "執行：",
+                ForeColor = Color.FromArgb(170, 175, 195),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, ScaleDpi(3), ScaleDpi(2), 0)
+            };
+
+            string actionText = st.ActionType == StageActionType.Training
+                ? $"[訓練] {GetTrainingActionDisplayName(st.TrainingActionId)}"
+                : $"[戰鬥] {(st.BattleType == BattleType.Challenge ? "友好切磋" : "我要茶渡你")} - 對手: {(string.IsNullOrEmpty(st.BattleTargetName) ? st.BattleTargetId : $"{st.BattleTargetId} ({st.BattleTargetName})")}";
+
+            var lblActionVal = new Label
+            {
+                Text = actionText,
+                ForeColor = Color.FromArgb(235, 235, 245),
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, ScaleDpi(3), 0, 0),
+                Cursor = Cursors.Hand
+            };
+            lblActionVal.Click += (s, e) => StartEditStage(index);
+
+            pnlActionRow.Controls.Add(lblBadge);
+            pnlActionRow.Controls.Add(lblActionTitle);
+            pnlActionRow.Controls.Add(lblActionVal);
+
+            // Row 0, Col 1: 右側操作按鈕列 (▲, ▼, ✏, ✕)
+            var pnlButtons = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Margin = Padding.Empty
+            };
+
+            var btnUp = CreateStageNavButton("▲", index > 0);
+            btnUp.Click += (s, e) => MoveStage(index, -1);
+
+            var btnDown = CreateStageNavButton("▼", index < stages.Count - 1);
+            btnDown.Click += (s, e) => MoveStage(index, 1);
+
+            var btnEdit = new Button
+            {
+                Text = "✏",
+                Width = ScaleDpi(30),
+                Height = ScaleDpi(26),
+                BackColor = Color.FromArgb(48, 62, 88),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Margin = new Padding(ScaleDpi(2), 0, ScaleDpi(2), 0)
+            };
+            btnEdit.FlatAppearance.BorderSize = 0;
+            btnEdit.Click += (s, e) => StartEditStage(index);
+
+            var btnDel = new Button
+            {
+                Text = "✕",
+                Width = ScaleDpi(30),
+                Height = ScaleDpi(26),
+                BackColor = Color.FromArgb(75, 42, 42),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Margin = new Padding(ScaleDpi(2), 0, 0, 0)
+            };
+            btnDel.FlatAppearance.BorderSize = 0;
+            btnDel.Click += (s, e) =>
+            {
+                stages.RemoveAt(index);
+                if (_editingStageIndex == index) _editingStageIndex = -1;
+                else if (_editingStageIndex > index) _editingStageIndex--;
+                _isAddingNewStage = false;
+                AppSettingsManager.Save();
+                _pipelinePresetManager.Save(_activePipelinePreset);
+                RefreshPresetComboBox(_activePipelinePreset.Id);
+                RefreshPipelineStageList();
+            };
+
+            pnlButtons.Controls.Add(btnUp);
+            pnlButtons.Controls.Add(btnDown);
+            pnlButtons.Controls.Add(btnEdit);
+            pnlButtons.Controls.Add(btnDel);
+
+            // Row 1, Col 0: 達成條件
+            var pnlCondRow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, ScaleDpi(4), 0, 0)
+            };
+
+            var lblCondTitle = new Label
+            {
+                Text = "直到：",
+                ForeColor = Color.FromArgb(170, 175, 195),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(ScaleDpi(28), ScaleDpi(1), ScaleDpi(2), 0)
+            };
+
+            var lblCondVal = new Label
+            {
+                Text = st.GetConditionSummary(),
+                ForeColor = Color.FromArgb(200, 215, 240),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, ScaleDpi(1), 0, 0),
+                Cursor = Cursors.Hand
+            };
+            lblCondVal.Click += (s, e) => StartEditStage(index);
+
+            pnlCondRow.Controls.Add(lblCondTitle);
+            pnlCondRow.Controls.Add(lblCondVal);
+
+            card.Controls.Add(pnlActionRow, 0, 0);
+            card.Controls.Add(pnlButtons, 1, 0);
+            card.Controls.Add(pnlCondRow, 0, 1);
+
+            return card;
+        }
+
+        private Control CreateStageEditCard(int index, PipelineStage st)
+        {
+            var stages = AppSettingsManager.Current.PipelineStages;
+            string verifiedOpponentName = st.BattleTargetName;
+
+            var card = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                ColumnCount = 1,
+                RowCount = 3,
+                AutoSize = true,
+                BackColor = Color.FromArgb(34, 40, 56),
+                Padding = new Padding(ScaleDpi(12), ScaleDpi(10), ScaleDpi(12), ScaleDpi(10)),
+                Margin = new Padding(0, ScaleDpi(4), 0, ScaleDpi(4))
+            };
+            card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            // --- Row 0: 標頭與右側操作按鈕 (▲, ▼, ✔ 儲存, ✕ 取消) ---
+            var tblHeader = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
+                AutoSize = true,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, 0, 0, ScaleDpi(8))
+            };
+            tblHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            tblHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+            var lblHeaderTitle = new Label
+            {
+                Text = $"#{index + 1}  ✎  編輯階段設定",
+                ForeColor = Color.FromArgb(255, 215, 80),
+                Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left
+            };
+            tblHeader.Controls.Add(lblHeaderTitle, 0, 0);
+
+            var pnlEditButtons = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent,
+                Anchor = AnchorStyles.Right,
+                Margin = Padding.Empty
+            };
+
+            var btnUp = CreateStageNavButton("▲", index > 0);
+            btnUp.Click += (s, e) => MoveStage(index, -1);
+
+            var btnDown = CreateStageNavButton("▼", index < stages.Count - 1);
+            btnDown.Click += (s, e) => MoveStage(index, 1);
+
+            var btnSave = new Button
+            {
+                Text = "✔ 儲存",
+                AutoSize = true,
+                BackColor = Color.FromArgb(40, 140, 80),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
+                Margin = new Padding(ScaleDpi(4), 0, ScaleDpi(2), 0)
+            };
+            btnSave.FlatAppearance.BorderSize = 0;
+
+            var btnCancel = new Button
+            {
+                Text = "✕ 取消",
+                AutoSize = true,
+                BackColor = Color.FromArgb(70, 70, 85),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Margin = new Padding(ScaleDpi(2), 0, 0, 0)
+            };
+            btnCancel.FlatAppearance.BorderSize = 0;
+
+            pnlEditButtons.Controls.Add(btnUp);
+            pnlEditButtons.Controls.Add(btnDown);
+            pnlEditButtons.Controls.Add(btnSave);
+            pnlEditButtons.Controls.Add(btnCancel);
+            tblHeader.Controls.Add(pnlEditButtons, 1, 0);
+            card.Controls.Add(tblHeader, 0, 0);
+
+            // --- Row 1: 執行動作編輯區 ---
+            var pnlActionSection = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, 0, 0, ScaleDpi(6))
+            };
+
+            var lblActionPrompt = new Label
+            {
+                Text = "執行：",
+                ForeColor = Color.FromArgb(210, 215, 235),
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, ScaleDpi(4), ScaleDpi(4), 0)
+            };
+            pnlActionSection.Controls.Add(lblActionPrompt);
+
+            var cmbActionType = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = ScaleDpi(125),
+                BackColor = Color.FromArgb(48, 52, 70),
+                ForeColor = Color.FromArgb(235, 235, 245),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Margin = new Padding(0, 0, ScaleDpi(6), 0)
+            };
+            cmbActionType.Items.Add("訓練 (Training)");
+            cmbActionType.Items.Add("戰鬥 (Battle)");
+            cmbActionType.SelectedIndex = st.ActionType == StageActionType.Training ? 0 : 1;
+            pnlActionSection.Controls.Add(cmbActionType);
+
+            // 訓練下拉
+            var cmbTrainAction = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = ScaleDpi(160),
+                BackColor = Color.FromArgb(48, 52, 70),
+                ForeColor = Color.FromArgb(235, 235, 245),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Visible = st.ActionType == StageActionType.Training,
+                Margin = new Padding(0, 0, ScaleDpi(6), 0)
+            };
+            foreach (var act in TrainingActions.All) cmbTrainAction.Items.Add(act);
+            int selectedTrainIdx = 0;
+            for (int i = 0; i < cmbTrainAction.Items.Count; i++)
+            {
+                if (cmbTrainAction.Items[i] is TrainingAction act && act.ActionId == st.TrainingActionId)
+                {
+                    selectedTrainIdx = i;
+                    break;
+                }
+            }
+            if (cmbTrainAction.Items.Count > 0) cmbTrainAction.SelectedIndex = selectedTrainIdx;
+            pnlActionSection.Controls.Add(cmbTrainAction);
+
+            // 戰鬥子設定面板
+            var pnlBattleSub = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                BackColor = Color.Transparent,
+                Visible = st.ActionType == StageActionType.Battle,
+                Margin = Padding.Empty
+            };
+
+            var cmbBattleType = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = ScaleDpi(110),
+                BackColor = Color.FromArgb(48, 52, 70),
+                ForeColor = Color.FromArgb(235, 235, 245),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Margin = new Padding(0, 0, ScaleDpi(6), 0)
+            };
+            cmbBattleType.Items.Add("友好切磋");
+            cmbBattleType.Items.Add("我要茶渡你");
+            cmbBattleType.SelectedIndex = st.BattleType == BattleType.Challenge ? 0 : 1;
+            pnlBattleSub.Controls.Add(cmbBattleType);
+
+            var txtBattleTarget = new TextBox
+            {
+                Width = ScaleDpi(130),
+                BackColor = Color.FromArgb(48, 52, 70),
+                ForeColor = Color.FromArgb(235, 235, 245),
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                PlaceholderText = "輸入對手玩家 ID",
+                Text = st.BattleTargetId,
+                Margin = new Padding(0, ScaleDpi(1), ScaleDpi(6), 0)
+            };
+            pnlBattleSub.Controls.Add(txtBattleTarget);
+
+            var btnVerifyId = new Button
+            {
+                Text = "🔍 驗證",
+                AutoSize = true,
+                BackColor = Color.FromArgb(50, 75, 120),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Font = new Font("Microsoft JhengHei UI", 8.5f),
+                Margin = new Padding(0, 0, ScaleDpi(6), 0)
+            };
+            btnVerifyId.FlatAppearance.BorderSize = 0;
+            pnlBattleSub.Controls.Add(btnVerifyId);
+
+            var lblBattleFeedback = new Label
+            {
+                Text = string.IsNullOrEmpty(st.BattleTargetName) ? string.Empty : $"✓ 對手: {st.BattleTargetName}",
+                ForeColor = Color.FromArgb(80, 220, 120),
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, ScaleDpi(4), 0, 0)
+            };
+            pnlBattleSub.Controls.Add(lblBattleFeedback);
+
+            btnVerifyId.Click += async (s, e) =>
+            {
+                await VerifyStageBattlePlayerAsync(txtBattleTarget.Text.Trim(), lblBattleFeedback, btnVerifyId, nick => verifiedOpponentName = nick);
+            };
+
+            cmbActionType.SelectedIndexChanged += (s, e) =>
+            {
+                bool isTrain = cmbActionType.SelectedIndex == 0;
+                cmbTrainAction.Visible = isTrain;
+                pnlBattleSub.Visible = !isTrain;
+            };
+
+            pnlActionSection.Controls.Add(pnlBattleSub);
+            card.Controls.Add(pnlActionSection, 0, 1);
+
+            // --- Row 2: 達成條件編輯區 ---
+            var pnlConditionSection = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, 0, 0, ScaleDpi(2))
+            };
+
+            var lblCondPrompt = new Label
+            {
+                Text = "直到：",
+                ForeColor = Color.FromArgb(210, 215, 235),
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, ScaleDpi(4), ScaleDpi(4), 0)
+            };
+            pnlConditionSection.Controls.Add(lblCondPrompt);
+
+            var cmbConditionType = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = ScaleDpi(190),
+                BackColor = Color.FromArgb(48, 52, 70),
+                ForeColor = Color.FromArgb(235, 235, 245),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Margin = new Padding(0, 0, ScaleDpi(6), 0)
+            };
+            cmbConditionType.Items.Add("角色等級達到 (>= Lv)");
+            cmbConditionType.Items.Add("執行滿次數 (次)");
+            cmbConditionType.Items.Add("運行滿時間 (分鐘)");
+            cmbConditionType.SelectedIndex = st.ConditionType switch
+            {
+                StageConditionType.RunCountReach => 1,
+                StageConditionType.MinutesReach => 2,
+                _ => 0
+            };
+            pnlConditionSection.Controls.Add(cmbConditionType);
+
+            var nudConditionVal = new NumericUpDown
+            {
+                Width = ScaleDpi(100),
+                Minimum = 1,
+                Maximum = 99999,
+                Value = Math.Max(1, Math.Min(99999, st.ConditionValue)),
+                BackColor = Color.FromArgb(48, 52, 70),
+                ForeColor = Color.FromArgb(235, 235, 245),
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Margin = new Padding(0, 0, ScaleDpi(6), 0)
+            };
+            pnlConditionSection.Controls.Add(nudConditionVal);
+
+            var lblCondHint = new Label
+            {
+                Text = "（達標後自動切換至下一階段）",
+                ForeColor = Color.FromArgb(145, 150, 175),
+                Font = new Font("Microsoft JhengHei UI", 8.5f),
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, ScaleDpi(4), 0, 0)
+            };
+            pnlConditionSection.Controls.Add(lblCondHint);
+
+            card.Controls.Add(pnlConditionSection, 0, 2);
+
+            // 儲存與取消事件繫結
+            btnSave.Click += (s, e) =>
+            {
+                var actionType = cmbActionType.SelectedIndex == 0 ? StageActionType.Training : StageActionType.Battle;
+                string trainingActionId = "hunt";
+                string battleTargetId = string.Empty;
+                var battleType = BattleType.Challenge;
+
+                if (actionType == StageActionType.Training)
+                {
+                    if (cmbTrainAction.SelectedItem is TrainingAction act)
+                        trainingActionId = act.ActionId;
+                }
+                else
+                {
+                    battleTargetId = txtBattleTarget.Text.Trim();
+                    battleType = cmbBattleType.SelectedIndex == 0 ? BattleType.Challenge : BattleType.Chado;
+                    if (string.IsNullOrEmpty(battleTargetId))
+                    {
+                        MessageBox.Show("請輸入戰鬥對象玩家 ID", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+
+                var conditionType = cmbConditionType.SelectedIndex switch
+                {
+                    1 => StageConditionType.RunCountReach,
+                    2 => StageConditionType.MinutesReach,
+                    _ => StageConditionType.LevelReach
+                };
+                int conditionVal = (int)nudConditionVal.Value;
+
+                st.Name = $"階段 #{index + 1}";
+                st.ActionType = actionType;
+                st.TrainingActionId = trainingActionId;
+                st.BattleTargetId = battleTargetId;
+                st.BattleType = battleType;
+                if (!string.IsNullOrEmpty(verifiedOpponentName))
+                    st.BattleTargetName = verifiedOpponentName;
+                st.ConditionType = conditionType;
+                st.ConditionValue = conditionVal;
+
+                _editingStageIndex = -1;
+                _isAddingNewStage = false;
+                AppSettingsManager.Save();
+                _pipelinePresetManager.Save(_activePipelinePreset);
+                RefreshPresetComboBox(_activePipelinePreset.Id);
+                RefreshPipelineStageList();
+            };
+
+            btnCancel.Click += (s, e) =>
+            {
+                if (_isAddingNewStage && _editingStageIndex == index)
+                {
+                    stages.RemoveAt(index);
+                }
+                _editingStageIndex = -1;
+                _isAddingNewStage = false;
+                RefreshPipelineStageList();
+            };
+
+            return card;
         }
 
         // =====================================================================
@@ -2514,6 +3029,15 @@ namespace MyDoujinBot.Forms
                 lblSidebarToken.Text = "⚠ Token 未設定";
                 lblSidebarToken.ForeColor = Color.FromArgb(220, 90, 90);
                 lblSidebarToken.Visible = true;
+                if (lblStatusToken != null)
+                {
+                    lblStatusToken.Text = "● Token: 未設定";
+                    lblStatusToken.ForeColor = Color.FromArgb(220, 90, 90);
+                }
+                if (lblStatusLevel != null)
+                {
+                    lblStatusLevel.Text = "等級: Lv.—";
+                }
                 if (lblTokenStatusDetail != null)
                 {
                     lblTokenStatusDetail.Text = "⚠ 尚未設定 Token，無法發送任何 API 請求。";
@@ -2524,6 +3048,11 @@ namespace MyDoujinBot.Forms
             {
                 lblSidebarToken.Text = string.Empty;
                 lblSidebarToken.Visible = false;
+                if (lblStatusToken != null)
+                {
+                    lblStatusToken.Text = "● Token: 已就緒";
+                    lblStatusToken.ForeColor = Color.FromArgb(80, 220, 120);
+                }
                 if (lblTokenStatusDetail != null)
                 {
                     lblTokenStatusDetail.Text = "✓ Token 已設定";
@@ -2583,10 +3112,12 @@ namespace MyDoujinBot.Forms
 
             _cts = new CancellationTokenSource();
             SetControlsEnabled(false);
-            btnGlobalStop.Enabled = true;
             btnShowLastReport.Visible = false;
 
             _loopStartTime = DateTime.Now;
+            _currentStats = new LoopStats();
+            UpdateTelemetryStats(_currentStats);
+            lblStatusElapsed.Text = "00:00:00";
             _elapsedTimer.Tick += OnElapsedTick;
             _elapsedTimer.Start();
 
@@ -2600,7 +3131,6 @@ namespace MyDoujinBot.Forms
             {
                 if (_activeRunningMode == "training")
                 {
-                    lblStatusPipeline.Visible = false;
                     var settings = new LoopSettings
                     {
                         Token = _currentToken,
@@ -2628,7 +3158,6 @@ namespace MyDoujinBot.Forms
                 }
                 else if (_activeRunningMode == "battle")
                 {
-                    lblStatusPipeline.Visible = false;
                     var bSettings = new BattleLoopSettings
                     {
                         Token = _currentToken,
@@ -2675,7 +3204,6 @@ namespace MyDoujinBot.Forms
                 }
                 else if (_activeRunningMode == "pipeline")
                 {
-                    lblStatusPipeline.Visible = true;
                     var pSettings = new PipelineLoopSettings
                     {
                         Token = _currentToken,
@@ -2691,11 +3219,7 @@ namespace MyDoujinBot.Forms
                         OnStatsUpdated = UpdateTelemetryStats,
                         OnStageChanged = (idx, total, stage) =>
                         {
-                            this.BeginInvoke(() =>
-                            {
-                                lblStatusPipeline.Text = $"排程: 階段 {idx}/{total} ({stage.Name})";
-                                UpdateTooltips();
-                            });
+                            AppendLog($"[排程進度] 進入第 {idx}/{total} 階段：{stage.Name}", Color.FromArgb(140, 200, 255));
                         },
                         OnManualEventSelect = isAutoEvent ? null : (isInline ? HandleInlineEventAsync : HandleManualEventAsync),
                         OnManualEventResult = isAutoEvent ? null : (isInline ? ShowInlineEventResultAsync : HandleManualEventResultAsync),
@@ -2716,7 +3240,6 @@ namespace MyDoujinBot.Forms
                 _elapsedTimer.Stop();
                 _elapsedTimer.Tick -= OnElapsedTick;
                 SetControlsEnabled(true);
-                btnGlobalStop.Enabled = false;
                 UpdateStatusBadge(LoopStatus.Stopped);
             }
         }
@@ -2727,7 +3250,20 @@ namespace MyDoujinBot.Forms
             _currentEventForm?.Close();
             HideEventOverlay();
             AppendLog("使用者按下停止，正在安全中止排程...", Color.FromArgb(220, 160, 80));
-            btnGlobalStop.Enabled = false;
+            SetActionButtonsRunning(false);
+            if (lblStatusCooldown != null)
+                lblStatusCooldown.Text = "";
+        }
+
+        private void SetActionButtonsRunning(bool running)
+        {
+            if (btnTrainStart != null) btnTrainStart.Enabled = !running;
+            if (btnBattleStart != null) btnBattleStart.Enabled = !running;
+            if (btnPipelineStart != null) btnPipelineStart.Enabled = !running;
+
+            if (btnTrainStop != null) btnTrainStop.Enabled = running;
+            if (btnBattleStop != null) btnBattleStop.Enabled = running;
+            if (btnPipelineStop != null) btnPipelineStop.Enabled = running;
         }
 
         private void SetControlsEnabled(bool enabled)
@@ -2737,17 +3273,19 @@ namespace MyDoujinBot.Forms
             btnNavPipeline.Enabled = enabled;
             btnNavEvents.Enabled   = enabled;
             btnNavSettings.Enabled = enabled;
-            btnGlobalStart.Enabled = enabled;
+            SetActionButtonsRunning(!enabled);
         }
 
         private void OnElapsedTick(object? sender, EventArgs e)
         {
             var elapsed = DateTime.Now - _loopStartTime;
-            lblStatusElapsed.Text = $"運作: {elapsed:hh\\:mm\\:ss}";
+            if (lblStatusElapsed != null)
+                lblStatusElapsed.Text = elapsed.ToString(@"hh\:mm\:ss");
         }
 
         private void UpdateStatusBadge(LoopStatus status)
         {
+            if (lblStatusBadge == null) return;
             if (lblStatusBadge.InvokeRequired)
             {
                 lblStatusBadge.Invoke(() => UpdateStatusBadge(status));
@@ -2757,44 +3295,80 @@ namespace MyDoujinBot.Forms
             (lblStatusBadge.Text, lblStatusBadge.ForeColor) = status switch
             {
                 LoopStatus.Running         => ("● 執行中",     Color.FromArgb(80, 220, 120)),
-                LoopStatus.WaitingCooldown => (_currentStats.NextRunCountdownSeconds > 0
-                                                ? $"● 冷卻: {_currentStats.NextRunCountdownSeconds:F1}s"
-                                                : "● 等待冷卻",   Color.FromArgb(170, 215, 255)),
-                LoopStatus.WaitingEvent    => ("● 等待事件決策", Color.FromArgb(200, 160, 255)),
+                LoopStatus.WaitingCooldown => ("● 執行中",     Color.FromArgb(80, 220, 120)),
+                LoopStatus.WaitingEvent    => ("● 等待中",     Color.FromArgb(200, 160, 255)),
                 LoopStatus.Completed       => ("● 已完成",     Color.FromArgb(140, 200, 255)),
                 LoopStatus.Error           => ("● 發生錯誤",   Color.FromArgb(220, 80, 80)),
                 _                          => ("● 已停止",     Color.FromArgb(160, 160, 175))
             };
 
-            UpdateTooltips();
+            if (status != LoopStatus.Running && status != LoopStatus.WaitingCooldown && lblStatusCooldown != null)
+            {
+                lblStatusCooldown.Text = "";
+            }
         }
 
         private void UpdateTelemetryStats(LoopStats stats)
         {
-            if (lblStatusProgress.InvokeRequired)
+            if (lblStatusRuns == null) return;
+            if (lblStatusRuns.InvokeRequired)
             {
-                lblStatusProgress.Invoke(() => UpdateTelemetryStats(stats));
+                lblStatusRuns.Invoke(() => UpdateTelemetryStats(stats));
                 return;
             }
 
             _currentStats = stats;
-            bool isTimeMode = _activeRunningMode == "battle" ? rbBattleTime.Checked : rbTrainTime.Checked;
-            if (isTimeMode && _activeRunningMode != "pipeline")
+            bool isBattle = _activeRunningMode == "battle" || (_cts == null && _selectedNavTab == "battle");
+            bool isTimeMode = isBattle ? rbBattleTime.Checked : rbTrainTime.Checked;
+
+            if (isBattle)
             {
-                lblStatusProgress.Text = $"進度: {stats.RunCount} 次";
+                if (isTimeMode)
+                    lblStatusRuns.Text = $"戰鬥次數: {stats.RunCount} 次";
+                else
+                {
+                    int targetLimit = (int)nudBattleCount.Value;
+                    lblStatusRuns.Text = $"戰鬥次數: {stats.RunCount} / {targetLimit} 次";
+                }
+                lblStatusSuccessLoss.Text = $"{stats.SuccessCount} 勝 / {stats.FailCount} 敗";
+                lblStatusSuccessLoss.ForeColor = stats.SuccessCount >= stats.FailCount 
+                    ? Color.FromArgb(90, 215, 110) 
+                    : Color.FromArgb(240, 100, 100);
             }
             else
             {
-                int targetLimit = _activeRunningMode == "battle" ? (int)nudBattleCount.Value : (int)nudTrainCount.Value;
-                lblStatusProgress.Text = $"進度: {stats.RunCount} / {targetLimit} 次";
+                if (isTimeMode && _activeRunningMode != "pipeline")
+                    lblStatusRuns.Text = $"運作次數: {stats.RunCount} 次";
+                else
+                {
+                    int targetLimit = (int)nudTrainCount.Value;
+                    lblStatusRuns.Text = $"運作次數: {stats.RunCount} / {targetLimit} 次";
+                }
+                lblStatusSuccessLoss.Text = $"{stats.SuccessCount} 成功 / {stats.FailCount} 失敗";
+                lblStatusSuccessLoss.ForeColor = stats.SuccessCount >= stats.FailCount 
+                    ? Color.FromArgb(90, 215, 110) 
+                    : Color.FromArgb(240, 100, 100);
             }
-            lblStatusLevel.Text    = stats.CurrentLevel > 0 ? $"等級: Lv.{stats.CurrentLevel}" : "等級: Lv.—";
-            lblStatusEvents.Text   = $"事件: {stats.EventCount} 次";
 
-            if (stats.NextRunCountdownSeconds > 0)
-                lblStatusBadge.Text = $"● 冷卻: {stats.NextRunCountdownSeconds:F1}s";
+            lblStatusEvents.Text = $"觸發事件: {stats.EventCount} 次";
+            lblStatusEventOutcome.Text = $"{stats.EventSuccessCount} 成功 / {stats.EventFailCount} 失敗";
+            lblStatusEventOutcome.ForeColor = stats.EventSuccessCount >= stats.EventFailCount 
+                ? Color.FromArgb(170, 190, 240) 
+                : Color.FromArgb(240, 120, 120);
 
-            UpdateTooltips();
+            if (lblStatusCooldown != null)
+            {
+                lblStatusCooldown.Text = stats.NextRunCountdownSeconds > 0
+                    ? $"(冷卻: {stats.NextRunCountdownSeconds:F1}s)"
+                    : "";
+            }
+
+            if (lblStatusLevel != null)
+            {
+                lblStatusLevel.Text = stats.CurrentLevel > 0 
+                    ? $"等級: Lv.{stats.CurrentLevel}" 
+                    : "等級: Lv.—";
+            }
         }
 
         // =====================================================================
@@ -2883,58 +3457,157 @@ namespace MyDoujinBot.Forms
 
         private void ShowInlineEventUI(PendingEvent pe, Action<string> onSelected)
         {
-            pnlEventOverlay.Controls.Clear();
-            pnlEventOverlay.Visible = true;
-            pnlEventOverlay.BringToFront();
-
-            var outer = CreateScrollableTabPanel();
-            var tbl = CreateContentTable(outer);
-
-            AddSectionHeader(tbl, $"⚡  遭遇隨機事件：{pe.Name}");
-
-            if (!string.IsNullOrWhiteSpace(pe.Description))
+            if (pnlEventOverlay.InvokeRequired)
             {
-                var lblDesc = new Label
+                pnlEventOverlay.Invoke(() => ShowInlineEventUI(pe, onSelected));
+                return;
+            }
+
+            pnlEventOverlay.SuspendLayout();
+            try
+            {
+                pnlEventOverlay.Controls.Clear();
+                pnlEventOverlay.Visible = true;
+                pnlEventOverlay.BringToFront();
+
+                var outer = CreateScrollableTabPanel();
+                var tbl = CreateContentTable(outer);
+
+                // ── 事件名稱（金黃色醒目標題）──
+                var lblEventTitle = new Label
                 {
-                    Text = pe.Description,
-                    Dock = DockStyle.Fill,
+                    Text = $"⚡  遭遇事件：{pe.Name}",
+                    Font = new Font("Microsoft JhengHei UI", 12f, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(255, 215, 80),
                     AutoSize = true,
-                    ForeColor = Color.FromArgb(200, 200, 215),
-                    Margin = new Padding(0, 4, 0, 10)
+                    Margin = new Padding(0, ScaleDpi(4), 0, ScaleDpi(6))
                 };
-                TblAdd(tbl, lblDesc);
-            }
+                TblAdd(tbl, lblEventTitle);
 
-            AddRowLabel(tbl, "請點選應對選項：");
-
-            foreach (var opt in pe.Options)
-            {
-                string chanceTxt = opt.SuccessChance.HasValue ? $"（成功率: {opt.SuccessChance}%）" : "（無判定）";
-                string statTxt = !string.IsNullOrEmpty(opt.CheckStat) ? $" [{opt.CheckStat.ToUpper()} 檢定]" : "";
-
-                var btnOpt = new Button
+                // ── 事件描述 ──
+                if (!string.IsNullOrWhiteSpace(pe.Description))
                 {
-                    Text = $"{opt.Name}{statTxt} {chanceTxt}",
+                    var lblDesc = new Label
+                    {
+                        Text = pe.Description,
+                        Font = new Font("Microsoft JhengHei UI", 9.5f),
+                        Dock = DockStyle.Fill,
+                        AutoSize = true,
+                        ForeColor = Color.FromArgb(205, 205, 225),
+                        Margin = new Padding(0, 0, 0, ScaleDpi(8))
+                    };
+                    TblAdd(tbl, lblDesc);
+                }
+
+                // ── 細分隔線 ──
+                var sep = new Panel
+                {
                     Dock = DockStyle.Top,
-                    Height = 44,
-                    BackColor = Color.FromArgb(45, 50, 75),
-                    ForeColor = Color.White,
-                    FlatStyle = FlatStyle.Flat,
-                    Cursor = Cursors.Hand,
-                    TextAlign = ContentAlignment.MiddleLeft,
-                    Padding = new Padding(14, 0, 0, 0),
-                    Font = new Font("Microsoft JhengHei UI", 9.5f),
-                    Margin = new Padding(0, 3, 0, 4)
+                    Height = 1,
+                    BackColor = Color.FromArgb(70, 65, 95),
+                    Margin = new Padding(0, 0, 0, ScaleDpi(8))
                 };
-                btnOpt.FlatAppearance.BorderSize = 0;
-                btnOpt.Click += (s, e) =>
-                {
-                    onSelected(opt.Id);
-                };
-                TblAdd(tbl, btnOpt);
-            }
+                TblAdd(tbl, sep);
 
-            pnlEventOverlay.Controls.Add(outer);
+                // ── 選項提示 ──
+                var lblChoose = new Label
+                {
+                    Text = "請點選應對選項：",
+                    Font = new Font("Microsoft JhengHei UI", 9f),
+                    ForeColor = Color.FromArgb(160, 160, 200),
+                    AutoSize = true,
+                    Margin = new Padding(0, 0, 0, ScaleDpi(4))
+                };
+                TblAdd(tbl, lblChoose);
+
+                // ── 選項按鈕清單 ──
+                foreach (var opt in pe.Options)
+                {
+                    string rateText = opt.SuccessChance.HasValue ? $"{opt.SuccessChance}%" : "未知";
+                    string statName = !string.IsNullOrEmpty(opt.CheckStat)
+                        ? MyDoujinBot.Utilities.StatHelper.GetDisplayName(opt.CheckStat)
+                        : "";
+                    string mainText = opt.Name;
+                    string subText = string.IsNullOrEmpty(opt.CheckStat)
+                        ? " (直接行動)"
+                        : $" ({statName}檢定 / 成功率：{rateText})";
+
+                    // 依成功率給予深色系視覺回饋（高率偏綠、中率偏褐橘、低率偏深紅、無檢定偏深藍紫）
+                    Color btnBack = opt.SuccessChance.HasValue
+                        ? (opt.SuccessChance.Value >= 70
+                            ? Color.FromArgb(36, 64, 46)
+                            : opt.SuccessChance.Value >= 40
+                                ? Color.FromArgb(58, 52, 36)
+                                : Color.FromArgb(68, 38, 38))
+                        : Color.FromArgb(45, 45, 65);
+
+                    Color btnBackHover = Color.FromArgb(
+                        Math.Min(btnBack.R + 24, 255),
+                        Math.Min(btnBack.G + 24, 255),
+                        Math.Min(btnBack.B + 24, 255));
+
+                    var btnOpt = new Button
+                    {
+                        Dock = DockStyle.Top,
+                        Height = ScaleDpi(48),
+                        FlatStyle = FlatStyle.Flat,
+                        BackColor = btnBack,
+                        Cursor = Cursors.Hand,
+                        Tag = opt.Id,
+                        Text = "",
+                        Margin = new Padding(0, ScaleDpi(3), 0, ScaleDpi(4))
+                    };
+                    btnOpt.FlatAppearance.BorderColor = Color.FromArgb(90, 75, 130);
+                    btnOpt.FlatAppearance.BorderSize = 1;
+
+                    var mainFont = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold);
+                    var subFont = new Font("Microsoft JhengHei UI", 8.5f);
+
+                    btnOpt.Paint += (s, e) =>
+                    {
+                        int leftPad = ScaleDpi(12);
+                        Size mainSize = TextRenderer.MeasureText(e.Graphics, mainText, mainFont, new Size(btnOpt.Width, btnOpt.Height), TextFormatFlags.NoPadding);
+                        Size subSize = TextRenderer.MeasureText(e.Graphics, subText, subFont, new Size(btnOpt.Width, btnOpt.Height), TextFormatFlags.NoPadding);
+
+                        if (leftPad + mainSize.Width + ScaleDpi(4) + subSize.Width <= btnOpt.Width - leftPad)
+                        {
+                            int mainY = (btnOpt.Height - mainSize.Height) / 2;
+                            int subY = (btnOpt.Height - subSize.Height) / 2;
+                            TextRenderer.DrawText(e.Graphics, mainText, mainFont, new Point(leftPad, mainY), Color.FromArgb(245, 240, 255), TextFormatFlags.NoPadding);
+                            TextRenderer.DrawText(e.Graphics, subText, subFont, new Point(leftPad + mainSize.Width + ScaleDpi(4), subY + 1), Color.FromArgb(175, 175, 200), TextFormatFlags.NoPadding);
+                        }
+                        else
+                        {
+                            int topY = ScaleDpi(7);
+                            TextRenderer.DrawText(e.Graphics, mainText, mainFont, new Point(leftPad, topY), Color.FromArgb(245, 240, 255), TextFormatFlags.NoPadding);
+                            TextRenderer.DrawText(e.Graphics, subText, subFont, new Point(leftPad, topY + mainSize.Height + ScaleDpi(3)), Color.FromArgb(175, 175, 200), TextFormatFlags.NoPadding);
+                        }
+                    };
+
+                    btnOpt.Disposed += (s, e) =>
+                    {
+                        mainFont.Dispose();
+                        subFont.Dispose();
+                    };
+
+                    btnOpt.MouseEnter += (s, e) => btnOpt.BackColor = btnBackHover;
+                    btnOpt.MouseLeave += (s, e) => btnOpt.BackColor = btnBack;
+
+                    var optId = opt.Id;
+                    btnOpt.Click += (s, e) =>
+                    {
+                        onSelected(optId);
+                    };
+
+                    TblAdd(tbl, btnOpt);
+                }
+
+                pnlEventOverlay.Controls.Add(outer);
+            }
+            finally
+            {
+                pnlEventOverlay.ResumeLayout(true);
+            }
         }
 
         private Task ShowInlineEventResultAsync(EventResult er, CancellationToken ct)
@@ -2947,64 +3620,95 @@ namespace MyDoujinBot.Forms
 
             this.Invoke(() =>
             {
-                pnlEventOverlay.Controls.Clear();
-                pnlEventOverlay.Visible = true;
-                pnlEventOverlay.BringToFront();
-
-                var outer = CreateScrollableTabPanel();
-                var tbl = CreateContentTable(outer);
-
-                string title = er.IsSuccess ? "✓  事件判定成功！" : "✕  事件判定失敗";
-                Color col = er.IsSuccess ? Color.FromArgb(80, 220, 120) : Color.FromArgb(220, 80, 80);
-                AddSectionHeader(tbl, title);
-
-                if (!string.IsNullOrWhiteSpace(er.Text))
+                pnlEventOverlay.SuspendLayout();
+                try
                 {
-                    var lblRes = new Label
+                    pnlEventOverlay.Controls.Clear();
+                    pnlEventOverlay.Visible = true;
+                    pnlEventOverlay.BringToFront();
+
+                    var outer = CreateScrollableTabPanel();
+                    var tbl = CreateContentTable(outer);
+
+                    string title = er.IsSuccess ? "✓  事件判定成功！" : "✕  事件判定失敗";
+                    Color titleColor = er.IsSuccess ? Color.FromArgb(80, 220, 120) : Color.FromArgb(240, 80, 80);
+
+                    var lblResultTitle = new Label
                     {
-                        Text = er.Text,
-                        Dock = DockStyle.Fill,
+                        Text = title,
+                        Font = new Font("Microsoft JhengHei UI", 13f, FontStyle.Bold),
+                        ForeColor = titleColor,
                         AutoSize = true,
-                        ForeColor = Color.FromArgb(220, 220, 230),
-                        Margin = new Padding(0, 6, 0, 10)
+                        Margin = new Padding(0, ScaleDpi(4), 0, ScaleDpi(6))
                     };
-                    TblAdd(tbl, lblRes);
-                }
+                    TblAdd(tbl, lblResultTitle);
 
-                if (er.Roll.HasValue)
-                {
-                    var lblRoll = new Label
+                    // 判定詳細明細面板（拉滿寬度）
+                    if (!string.IsNullOrEmpty(er.Stat) || er.Roll.HasValue)
                     {
-                        Text = $"擲骰明細：Roll ({er.Roll}) + 屬性 ({er.EffectiveStat}) = 總計 {er.Total} ｜ 難度 DC: {er.DC}",
-                        ForeColor = Color.FromArgb(170, 170, 200),
+                        var pnlCheck = MyDoujinBot.Utilities.EventUiHelper.CreateCheckResultPanel(er, 0);
+                        pnlCheck.Dock = DockStyle.Top;
+                        pnlCheck.Margin = new Padding(0, 0, 0, ScaleDpi(10));
+                        TblAdd(tbl, pnlCheck);
+                    }
+
+                    // 故事內文
+                    if (!string.IsNullOrWhiteSpace(er.Text))
+                    {
+                        var lblRes = new Label
+                        {
+                            Text = er.Text,
+                            Dock = DockStyle.Fill,
+                            AutoSize = true,
+                            Font = new Font("Microsoft JhengHei UI", 9.5f),
+                            ForeColor = Color.FromArgb(220, 220, 235),
+                            Margin = new Padding(0, ScaleDpi(4), 0, ScaleDpi(10))
+                        };
+                        TblAdd(tbl, lblRes);
+                    }
+
+                    // 獲得獎勵
+                    var bonusParts = MyDoujinBot.Utilities.EventUiHelper.BuildBonusStatsParts(er.Rewards?.BonusStats);
+                    if (bonusParts.Count > 0)
+                    {
+                        var lblBonus = new Label
+                        {
+                            Text = $"🎁 獲得能力提升：{string.Join("、", bonusParts)}",
+                            ForeColor = Color.FromArgb(255, 215, 80),
+                            Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                            AutoSize = true,
+                            Margin = new Padding(0, 0, 0, ScaleDpi(10))
+                        };
+                        TblAdd(tbl, lblBonus);
+                    }
+
+                    var btnOk = new Button
+                    {
+                        Text = "關閉並繼續 (OK)",
                         AutoSize = true,
-                        Margin = new Padding(0, 0, 0, 10)
+                        BackColor = er.IsSuccess ? Color.FromArgb(40, 140, 80) : Color.FromArgb(70, 70, 90),
+                        ForeColor = Color.White,
+                        FlatStyle = FlatStyle.Flat,
+                        Cursor = Cursors.Hand,
+                        Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                        Padding = new Padding(ScaleDpi(16), ScaleDpi(4), ScaleDpi(16), ScaleDpi(4)),
+                        Margin = new Padding(0, ScaleDpi(4), 0, 0)
                     };
-                    TblAdd(tbl, lblRoll);
+                    btnOk.FlatAppearance.BorderSize = 0;
+                    btnOk.Click += (s, e) =>
+                    {
+                        reg.Dispose();
+                        HideEventOverlay();
+                        tcs.TrySetResult(true);
+                    };
+                    TblAdd(tbl, btnOk);
+
+                    pnlEventOverlay.Controls.Add(outer);
                 }
-
-                var btnOk = new Button
+                finally
                 {
-                    Text = "關閉並繼續 (OK)",
-                    AutoSize = true,
-                    BackColor = Color.FromArgb(40, 140, 80),
-                    ForeColor = Color.White,
-                    FlatStyle = FlatStyle.Flat,
-                    Cursor = Cursors.Hand,
-                    Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                    Padding = new Padding(16, 4, 16, 4),
-                    Margin = new Padding(0, 8, 0, 0)
-                };
-                btnOk.FlatAppearance.BorderSize = 0;
-                btnOk.Click += (s, e) =>
-                {
-                    reg.Dispose();
-                    HideEventOverlay();
-                    tcs.TrySetResult(true);
-                };
-                TblAdd(tbl, btnOk);
-
-                pnlEventOverlay.Controls.Add(outer);
+                    pnlEventOverlay.ResumeLayout(true);
+                }
             });
 
             return tcs.Task;
@@ -3012,8 +3716,17 @@ namespace MyDoujinBot.Forms
 
         private void HideEventOverlay()
         {
+            if (pnlEventOverlay.InvokeRequired)
+            {
+                pnlEventOverlay.Invoke(HideEventOverlay);
+                return;
+            }
+
             pnlEventOverlay.Visible = false;
             pnlEventOverlay.Controls.Clear();
+            rtbLog.BringToFront();
+            pnlEventOverlay.Parent?.PerformLayout();
+            UpdateRightPanelWidth();
         }
 
         // =====================================================================
@@ -3133,38 +3846,38 @@ namespace MyDoujinBot.Forms
         {
             if (_isRestoringSettings) return;
 
-            AppSettingsManager.Current.TargetCount = (int)nudTrainCount.Value;
-            AppSettingsManager.Current.TargetMinutes = (int)nudTrainMinutes.Value;
-            AppSettingsManager.Current.ExtraDelay = (int)nudTrainExtraDelay.Value;
-            AppSettingsManager.Current.ExecutionMode = rbTrainTime.Checked ? "time" : "count";
+            if (nudTrainCount != null) AppSettingsManager.Current.TargetCount = (int)nudTrainCount.Value;
+            if (nudTrainMinutes != null) AppSettingsManager.Current.TargetMinutes = (int)nudTrainMinutes.Value;
+            if (nudTrainExtraDelay != null) AppSettingsManager.Current.ExtraDelay = (int)nudTrainExtraDelay.Value;
+            if (rbTrainTime != null) AppSettingsManager.Current.ExecutionMode = rbTrainTime.Checked ? "time" : "count";
 
-            AppSettingsManager.Current.BattleTargetCount = (int)nudBattleCount.Value;
-            AppSettingsManager.Current.BattleTargetMinutes = (int)nudBattleMinutes.Value;
-            AppSettingsManager.Current.BattleExtraDelay = (int)nudBattleExtraDelay.Value;
-            AppSettingsManager.Current.BattleExecutionMode = rbBattleTime.Checked ? "time" : "count";
+            if (nudBattleCount != null) AppSettingsManager.Current.BattleTargetCount = (int)nudBattleCount.Value;
+            if (nudBattleMinutes != null) AppSettingsManager.Current.BattleTargetMinutes = (int)nudBattleMinutes.Value;
+            if (nudBattleExtraDelay != null) AppSettingsManager.Current.BattleExtraDelay = (int)nudBattleExtraDelay.Value;
+            if (rbBattleTime != null) AppSettingsManager.Current.BattleExecutionMode = rbBattleTime.Checked ? "time" : "count";
 
             if (nudPipelineDelay != null)
                 AppSettingsManager.Current.PipelineExtraDelay = (int)nudPipelineDelay.Value;
 
-            if (cmbAction.SelectedItem is TrainingAction action)
+            if (cmbAction?.SelectedItem is TrainingAction action)
                 AppSettingsManager.Current.LastSelectedActionId = action.ActionId;
 
-            AppSettingsManager.Current.LastBattleTargetId = txtTargetPlayerId.Text.Trim();
-            AppSettingsManager.Current.BattleMode = rbBattleChallenge.Checked ? "Challenge" : "Chado";
+            if (txtTargetPlayerId != null) AppSettingsManager.Current.LastBattleTargetId = txtTargetPlayerId.Text.Trim();
+            if (rbBattleChallenge != null) AppSettingsManager.Current.BattleMode = rbBattleChallenge.Checked ? "Challenge" : "Chado";
             AppSettingsManager.Save();
         }
 
         // =====================================================================
         // 9. UI Layout Helper 方法（全面 TableLayoutPanel，無寫死固定 PX）
         // =====================================================================
-        private static Panel CreateScrollableTabPanel()
+        private Panel CreateScrollableTabPanel()
         {
             return new Panel
             {
                 Dock = DockStyle.Fill,
                 AutoScroll = true,
                 BackColor = Color.FromArgb(24, 24, 30),
-                Padding = new Padding(16, 12, 16, 16)
+                Padding = new Padding(ScaleDpi(16), ScaleDpi(12), ScaleDpi(16), ScaleDpi(16))
             };
         }
 

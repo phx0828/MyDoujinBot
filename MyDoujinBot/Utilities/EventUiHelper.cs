@@ -24,11 +24,11 @@ namespace MyDoujinBot.Utilities
             return parts;
         }
 
-        public static Panel CreateCheckResultPanel(EventResult er, int width)
+        public static Panel CreateCheckResultPanel(EventResult er, int width = 0)
         {
             var panel = new FlowLayoutPanel
             {
-                Width = width,
+                Dock = width <= 0 ? DockStyle.Top : DockStyle.None,
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
                 AutoSize = true,
@@ -36,6 +36,10 @@ namespace MyDoujinBot.Utilities
                 BackColor = Color.FromArgb(32, 32, 44),
                 Padding = new Padding(12, 8, 12, 8)
             };
+            if (width > 0)
+            {
+                panel.Width = width;
+            }
 
             panel.Paint += (s, e) =>
             {
