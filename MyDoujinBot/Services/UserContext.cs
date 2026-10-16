@@ -43,6 +43,9 @@ namespace MyDoujinBot.Services
         /// <summary>當前出戰角色等級</summary>
         public int Level => ActiveCharacter?.Level ?? 0;
 
+        /// <summary>當前出戰角色名稱</summary>
+        public string CharacterName => ActiveCharacter?.Name ?? string.Empty;
+
         /// <summary>當前所在最高樓層</summary>
         public int CurrentFloor => UserMe?.CurrentFloor ?? 0;
 
@@ -81,8 +84,8 @@ namespace MyDoujinBot.Services
         }
 
         /// <summary>
-        /// 格式化摘要字串：玩家名 ｜ 等級 ｜ 目前樓層：41F
-        /// 例："阿爾吉利亞 ｜ Lv.74 ｜ 目前樓層：41F"
+        /// 格式化摘要字串：玩家名 ｜ 等級 角色名 ｜ 目前樓層：41F
+        /// 例："阿爾吉利亞 ｜ Lv.79 同人 ｜ 目前樓層：41F"
         /// </summary>
         public string SummaryText
         {
@@ -91,7 +94,8 @@ namespace MyDoujinBot.Services
                 if (!IsAuthenticated)
                     return "— ｜ Lv.— ｜ 目前樓層：—F";
 
-                var lvlStr = Level > 0 ? $"Lv.{Level}" : "Lv.—";
+                var charNameSuffix = !string.IsNullOrWhiteSpace(CharacterName) ? $" {CharacterName}" : string.Empty;
+                var lvlStr = Level > 0 ? $"Lv.{Level}{charNameSuffix}" : "Lv.—";
                 var floorStr = CurrentFloor > 0 ? $"{CurrentFloor}F" : "—F";
                 return $"{PlayerName} ｜ {lvlStr} ｜ 目前樓層：{floorStr}";
             }

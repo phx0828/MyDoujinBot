@@ -41,7 +41,7 @@
 
 ---
 
-## 3. 階梯排程模組 (Pipeline Loop & Presets)
+## 3. 行動排程模組 (Pipeline Loop & Presets)
 
 - **核心程式碼**：[PipelineLoop.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/PipelineLoop.cs)、[PresetManager.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/PresetManager.cs)、[PipelineStage.cs](file:///d:/MyDoujinBot/MyDoujinBot/Models/PipelineStage.cs)
 - **功能特性**：
@@ -111,14 +111,19 @@
   - 運行總時間計時器 (`HH:mm:ss`)。
   - Token 就緒標記與即時等級展示 (`Lv.X`)。
 - **底部狀態列與 Tooltip**：
-  - 左側：Token 狀態燈號（● Token: 已驗證 / 未設定 / 失效）。
+  - 左側：Token 狀態燈號（● Token： 已驗證 / 未設定 / 失效）。
   - 右側：
     - 樓層獎勵狀態（`樓層獎勵：自動領取` / `樓層獎勵：可領取` / `樓層獎勵：冷卻中`），具備 Tooltip 顯示下次可領取時間（`下次領取時間：yyyy/MM/dd HH:mm:ss`）。
-    - 角色資料摘要標籤（黃色呈現：`玩家名 ｜ Lv.X ｜ 目前樓層：XXF`）。
-- **中間指標統計**：
-  - 戰鬥勝敗：勝利（綠色）/ 失敗（紅色），兩字嚴格對齊。
-  - 茶渡成功次數：`丟下小零食並螺旋下指: X 次`。
-  - 觸發事件計數。
+    - 角色資料摘要標籤（黃色呈現：`玩家名 ｜ Lv.X 角色名 ｜ 目前樓層：XXF`）。
+- **中間指標統計**（冒號皆統一為全形 `：`）：
+  - 訓練模式：`訓練次數：X / Y 次`、`成功 / 失敗`。
+  - 戰鬥模式：`戰鬥次數：X / Y 次`、勝利（綠色）/ 失敗（紅色），兩字嚴格對齊。
+  - 行動排程模式：
+    - 當前階段：`#? 階段 執行什麼 直到什麼`（僅在排程執行中顯示，停止時自動收合隱藏）。
+    - 總計訓練列：`總計訓練次數：X 次` ｜ `X 成功 / Y 失敗`。
+    - 總計戰鬥列：`總計戰鬥次數：X 次` ｜ `X 勝利 / Y 失敗`（若有茶渡則附帶 `💩 N`）。
+  - 茶渡成功次數：`丟下小零食並螺旋下指：X 次`。
+  - 觸發事件計數：`觸發事件：X 次`、`成功 / 失敗`。
 - **彩色日誌面板 (RichTextBox)**：
   - 成功為綠色、失敗/錯誤為紅色、冷卻/狀態為藍色、事件為紫色、樓層獎勵為黃色。
   - 行數保護機制：上限 1000 行，超過自動精簡最舊的 500 行，唯讀鎖定避免 Windows 系統錯誤音效。
@@ -140,3 +145,21 @@
      - 系統每 60 秒比對本地時間與冷卻時間戳記；已達領取時間且開啟自動時自動呼叫領取 API。
      - 切換勾選或 Token 驗證完成時，若已達領取條件即時觸發領取。
      - 領取成功時記錄黃色 LOG：`[樓層獎勵] 已領取 {floor}F 樓層獎勵：獲得經驗值 +{exp}`（若升級則接續：`，升級 +{levelUps}，目前等級 {level}`）。
+
+---
+
+## 8. 自訂應用程式圖示 (Custom Application Icons)
+
+- **核心程式碼**：[IconSelectionForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/IconSelectionForm.cs)、[MainForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/MainForm.cs)、[AppSettingsManager.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/AppSettingsManager.cs)、[MyDoujinBot.csproj](file:///d:/MyDoujinBot/MyDoujinBot/MyDoujinBot.csproj)
+- **功能特性**：
+  1. **精簡乾淨的設定介面**：
+     - 在「設定」頁籤的「應用程式圖示設定」區塊，僅顯示目前圖示縮圖、目前圖示檔名與【更改圖示】按鈕，版面清爽不繁雜。
+  2. **獨立圖示選擇對話框 (IconSelectionForm)**：
+     - 點擊【更改圖示】後開啟專用對話框，每次開啟皆會自動掃描 `Resources/` 資料夾內所有的 `.ico` 檔案。
+     - 以 48x48 高畫質縮圖卡片陳列，顯示檔案名稱與「✓ 已選取」視覺狀態。
+     - 支援滑鼠點選後按下【儲存】套用，亦支援雙擊圖示卡片快速確認套用；點擊【取消】則放棄變更。
+  3. **即時熱抽換與持久化**：
+     - 儲存後立即生效：熱抽換至 Windows 視窗標題列、工作列以及系統匣常駐圖示（NotifyIcon）。
+     - 設定持久化儲存於 `settings.json`（`selectedAppIcon`），重啟應用程式自動恢復使用者的圖示偏好。
+  4. **建置與發布支援**：
+     - 專案檔設定為 `<Content Include="Resources\*.ico">`，編譯與發布時自動複製所有放在 Resources 的圖示檔案。

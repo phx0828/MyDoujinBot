@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MyDoujinBot.Models;
+using MyDoujinBot.Utilities;
 
 namespace MyDoujinBot.Services
 {
@@ -113,12 +114,12 @@ namespace MyDoujinBot.Services
                     if (!result.IsSuccess)
                     {
                         Stats.FailCount++;
-                        Log($"[失敗] {result.ErrorMessage}", System.Drawing.Color.FromArgb(220, 80, 80));
+                        Log(LoopLogHelper.FormatError(result.ErrorMessage));
                         NotifyStats();
 
                         if (result.IsUnauthorized)
                         {
-                            Log("[錯誤] Token 無效或已過期，戰鬥終止。", System.Drawing.Color.FromArgb(220, 80, 80));
+                            Log(LoopLogHelper.FormatTokenExpired("戰鬥"));
                             OnStatusChanged?.Invoke(LoopStatus.Error);
                             return;
                         }
@@ -136,11 +137,7 @@ namespace MyDoujinBot.Services
 
                     Stats.TotalExp += response.ExpGained;
                     
-                    string typeStr = settings.Type == BattleType.Challenge ? "友好切磋" : "我要茶渡你";
-                    string winStr = isWin ? "勝利" : "失敗";
-                    System.Drawing.Color logColor = isWin ? System.Drawing.Color.FromArgb(80, 200, 120) : System.Drawing.Color.FromArgb(220, 160, 80);
-                    
-                    Log($"[{winStr}] {typeStr}：獲得 EXP {response.ExpGained}", logColor);
+                    Log(LoopLogHelper.FormatBattleResult(settings.Type, isWin, response.ExpGained));
                     
                     if (response.Level > 0)
                     {
@@ -153,7 +150,7 @@ namespace MyDoujinBot.Services
                     if (settings.Type == BattleType.Chado && response.IsPlayerChadoSuccess())
                     {
                         Stats.ChadoSuccessCount++;
-                        Log("茶渡潑屎成功！", System.Drawing.Color.FromArgb(200, 155, 106));
+                        Log(LoopLogHelper.FormatChadoSuccess());
                     }
 
                     var battleResult = new BattleResult
@@ -174,21 +171,15 @@ namespace MyDoujinBot.Services
 
                         if (AutoStrategy.HasValue)
                         {
-                            chosenOptionId = AutoSelectOption(pe, AutoStrategy.Value);
-                            var chosenOption = pe.Options.Find(o => o.Id == chosenOptionId);
-                            var chanceTxt = chosenOption?.SuccessChance.HasValue == true
-                                ? $"（成功率 {chosenOption.SuccessChance}%）"
-                                : "（無判定）";
-                            Log($"[事件] {pe.Name} → 自動選擇「{chosenOption?.Name}」{chanceTxt}",
-                                System.Drawing.Color.FromArgb(200, 160, 255));
+                            chosenOptionId = LoopLogHelper.AutoSelectOption(pe, AutoStrategy.Value);
+                            Log(LoopLogHelper.FormatEventSelection(pe, chosenOptionId));
                         }
                         else
                         {
                             if (OnManualEventSelect == null)
                             {
-                                Log($"[事件] {pe.Name} — 人工選擇未配置，自動切換為自動選擇（最高成功率）。",
-                                    System.Drawing.Color.FromArgb(200, 160, 255));
-                                chosenOptionId = AutoSelectOption(pe, AutoEventStrategy.HighestSuccessRate);
+                                Log(LoopLogHelper.FormatManualEventFallback(pe));
+                                chosenOptionId = LoopLogHelper.AutoSelectOption(pe, AutoEventStrategy.HighestSuccessRate);
                             }
                             else
                             {
@@ -226,9 +217,9 @@ namespace MyDoujinBot.Services
                     }
 
                     var cooldownMs = response.CooldownMs;
-                    var actualDelay = CalculateActualDelay(cooldownMs, settings.ExtraDelaySeconds);
+                    var actualDelay = LoopLogHelper.CalculateActualDelay(cooldownMs, settings.ExtraDelaySeconds);
 
-                    Log($"冷卻等待：{actualDelay / 1000.0:F1} 秒", System.Drawing.Color.FromArgb(140, 140, 160));
+                    Log(LoopLogHelper.FormatCooldown(cooldownMs, actualDelay));
 
                     OnStatusChanged?.Invoke(LoopStatus.WaitingCooldown);
                     await WaitWithCountdownAsync(actualDelay, cancellationToken);
@@ -247,38 +238,11 @@ namespace MyDoujinBot.Services
             }
         }
 
-        private int CalculateActualDelay(int cooldownMs, double extraDelaySeconds)
-        {
-            if (extraDelaySeconds <= 0) return cooldownMs;
-            var maxExtraMs = (int)(extraDelaySeconds * 1000);
-            var randomDelay = Random.Shared.Next(1, maxExtraMs + 1);
-            return cooldownMs + randomDelay;
-        }
+        private static int CalculateActualDelay(int cooldownMs, double extraDelaySeconds)
+            => LoopLogHelper.CalculateActualDelay(cooldownMs, extraDelaySeconds);
 
         private static string? AutoSelectOption(PendingEvent pe, AutoEventStrategy strategy)
-        {
-            if (pe.Options == null || pe.Options.Count == 0)
-                return null;
-
-            if (strategy == AutoEventStrategy.Random)
-            {
-                var idx = Random.Shared.Next(pe.Options.Count);
-                return pe.Options[idx].Id;
-            }
-
-            var optionsWithChance = pe.Options
-                .Where(o => o.SuccessChance.HasValue)
-                .ToList();
-
-            if (optionsWithChance.Count > 0)
-            {
-                var best = optionsWithChance.MaxBy(o => o.SuccessChance!.Value);
-                return best?.Id;
-            }
-
-            var randomIndex = Random.Shared.Next(pe.Options.Count);
-            return pe.Options[randomIndex].Id;
-        }
+            => LoopLogHelper.AutoSelectOption(pe, strategy);
 
         private async Task<(bool ok, EventResult? result)> ProcessEventAsync(
             string token, string eventId, string optionId, CancellationToken cancellationToken)
@@ -290,15 +254,13 @@ namespace MyDoujinBot.Services
 
             if (!eventActionResult.IsSuccess)
             {
-                Log($"[事件失敗] API 錯誤：{eventActionResult.ErrorMessage}",
-                    System.Drawing.Color.FromArgb(220, 80, 80));
+                Log(LoopLogHelper.FormatEventApiError(eventActionResult.ErrorMessage));
                 Stats.EventFailCount++;
                 NotifyStats();
 
                 if (eventActionResult.IsUnauthorized)
                 {
-                    Log("[錯誤] Token 無效或已過期，戰鬥終止。",
-                        System.Drawing.Color.FromArgb(220, 80, 80));
+                    Log(LoopLogHelper.FormatTokenExpired("戰鬥"));
                     OnStatusChanged?.Invoke(LoopStatus.Error);
                     return (false, null);
                 }
@@ -314,27 +276,11 @@ namespace MyDoujinBot.Services
         private void ProcessEventResult(EventResult er)
         {
             if (er.IsSuccess)
-            {
                 Stats.EventSuccessCount++;
-                var msg = "[事件成功]";
-
-                var bonusParts = BuildBonusStatsParts(er.Rewards?.BonusStats);
-                if (bonusParts.Count > 0)
-                    msg += $" 獲得 {string.Join("、", bonusParts)}";
-
-                Log(msg, System.Drawing.Color.FromArgb(80, 200, 120));
-            }
             else
-            {
                 Stats.EventFailCount++;
-                var msg = "[事件失敗]";
 
-                var bonusParts = BuildBonusStatsParts(er.Rewards?.BonusStats);
-                if (bonusParts.Count > 0)
-                    msg += $" 獲得 {string.Join("、", bonusParts)}";
-
-                Log(msg, System.Drawing.Color.FromArgb(220, 80, 80));
-            }
+            Log(LoopLogHelper.FormatEventResult(er));
 
             if (er.GainCharacters != null && er.GainCharacters.Count > 0)
             {
@@ -342,8 +288,9 @@ namespace MyDoujinBot.Services
                 {
                     if (!string.IsNullOrEmpty(character.Name))
                     {
-                        Stats.GainedCharacters.Add(character.Name);
-                        Log($"[事件] 獲得角色：{character.Name}", System.Drawing.Color.Gold);
+                        if (!Stats.GainedCharacters.Contains(character.Name))
+                            Stats.GainedCharacters.Add(character.Name);
+                        Log(LoopLogHelper.FormatGainCharacter(character.Name));
                     }
                 }
             }
@@ -351,20 +298,7 @@ namespace MyDoujinBot.Services
 
         private static System.Collections.Generic.List<string> BuildBonusStatsParts(
             System.Collections.Generic.Dictionary<string, int>? bonusStats)
-        {
-            var parts = new System.Collections.Generic.List<string>();
-            if (bonusStats == null || bonusStats.Count == 0) return parts;
-
-            foreach (var kv in bonusStats)
-            {
-                if (kv.Value != 0)
-                {
-                    var statName = Utilities.StatHelper.GetDisplayName(kv.Key);
-                    parts.Add($"{statName} +{kv.Value}");
-                }
-            }
-            return parts;
-        }
+            => LoopLogHelper.BuildBonusStatsParts(bonusStats);
 
         private async Task WaitWithCountdownAsync(int totalMs, CancellationToken cancellationToken)
         {
@@ -403,5 +337,6 @@ namespace MyDoujinBot.Services
 
         private void NotifyStats() => OnStatsUpdated?.Invoke(Stats);
         private void Log(string message, System.Drawing.Color color) => OnLog?.Invoke(message, color);
+        private void Log((string Message, System.Drawing.Color Color) entry) => OnLog?.Invoke(entry.Message, entry.Color);
     }
 }

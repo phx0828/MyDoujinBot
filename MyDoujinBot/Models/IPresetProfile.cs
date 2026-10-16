@@ -5,7 +5,7 @@ namespace MyDoujinBot.Models
 {
     /// <summary>
     /// 定義可儲存、命名、匯入匯出之方案 (Preset Profile) 的通用介面。
-    /// 適用於：階梯行動排程 (Pipeline)、遭遇事件應對規則 (Event Rules) 等。
+    /// 適用於：行動排程 (Pipeline)、遭遇事件應對規則 (Event Rules) 等。
     /// </summary>
     public interface IPresetProfile
     {

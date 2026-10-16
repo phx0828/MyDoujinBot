@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
 using MyDoujinBot.Models;
+using MyDoujinBot.Utilities;
 
 namespace MyDoujinBot.Services
 {
@@ -15,7 +16,7 @@ namespace MyDoujinBot.Services
     }
 
     /// <summary>
-    /// 階梯行動排程迴圈控制器。
+    /// 行動排程迴圈控制器。
     /// 依序執行階段隊列，達成指定條件後自動平滑切換至下一階段，直到全部完成。
     /// </summary>
     public class PipelineLoop
@@ -28,6 +29,7 @@ namespace MyDoujinBot.Services
         public Action<LoopStatus>? OnStatusChanged { get; set; }
         public Action<LoopStats>? OnStatsUpdated { get; set; }
         public Action<int, int, PipelineStage>? OnStageChanged { get; set; }
+        public Action<BattleResult>? OnLastBattleResultUpdated { get; set; }
 
         public Func<PendingEvent, CancellationToken, Task<string?>>? OnManualEventSelect { get; set; }
         public Func<EventResult, CancellationToken, Task>? OnManualEventResult { get; set; }
@@ -47,12 +49,22 @@ namespace MyDoujinBot.Services
         {
             if (settings.Stages == null || settings.Stages.Count == 0)
             {
-                Log("[排程錯誤] 排程清單為空，請先於「階梯排程」頁籤新增階段。", Color.FromArgb(220, 80, 80));
+                Log("[排程錯誤] 排程清單為空，請先於「行動排程」頁籤新增階段。", LoopLogHelper.ErrorRed);
                 OnStatusChanged?.Invoke(LoopStatus.Error);
                 return;
             }
 
             Stats.RunCount = 0;
+            Stats.TrainingRunCount = 0;
+            Stats.TrainingSuccessCount = 0;
+            Stats.TrainingFailCount = 0;
+            Stats.BattleRunCount = 0;
+            Stats.BattleWinCount = 0;
+            Stats.BattleLossCount = 0;
+            Stats.CurrentStageIndex = 1;
+            Stats.TotalStages = settings.Stages.Count;
+            Stats.CurrentStage = settings.Stages[0];
+            Stats.CurrentStageRunCount = 0;
             Stats.SuccessCount = 0;
             Stats.FailCount = 0;
             Stats.EventCount = 0;
@@ -75,9 +87,14 @@ namespace MyDoujinBot.Services
                     int stageRunCount = 0;
                     DateTime stageStartTime = DateTime.Now;
 
+                    Stats.CurrentStageIndex = stageIndex + 1;
+                    Stats.TotalStages = settings.Stages.Count;
+                    Stats.CurrentStage = stage;
+                    Stats.CurrentStageRunCount = stageRunCount;
+
                     OnStageChanged?.Invoke(stageIndex + 1, settings.Stages.Count, stage);
-                    Log($"[排程] 進入第 {stageIndex + 1}/{settings.Stages.Count} 階段「{stage.Name}」：{stage.GetActionSummary()}，目標：{stage.GetConditionSummary()}",
-                        Color.FromArgb(140, 200, 255));
+                    NotifyStats();
+                    Log(LoopLogHelper.FormatStageStart(stageIndex + 1, settings.Stages.Count, stage));
 
                     while (!cancellationToken.IsCancellationRequested)
                     {
@@ -101,9 +118,16 @@ namespace MyDoujinBot.Services
 
                         if (isConditionMet)
                         {
-                            Log($"[排程] ✓ 第 {stageIndex + 1} 階段「{stage.Name}」已達成條件（{stage.GetConditionSummary()}）！",
-                                Color.FromArgb(80, 220, 120));
+                            var nextStage = (stageIndex + 1 < settings.Stages.Count) ? settings.Stages[stageIndex + 1] : null;
+                            Log(LoopLogHelper.FormatStageConditionMet(stageIndex + 1, settings.Stages.Count, stage, nextStage));
                             stageIndex++;
+                            if (stageIndex < settings.Stages.Count)
+                            {
+                                Stats.CurrentStageIndex = stageIndex + 1;
+                                Stats.CurrentStage = settings.Stages[stageIndex];
+                                Stats.CurrentStageRunCount = 0;
+                            }
+                            NotifyStats();
                             break; // 跳出當前階段，進入下一階段
                         }
 
@@ -123,12 +147,13 @@ namespace MyDoujinBot.Services
                             if (!result.IsSuccess)
                             {
                                 Stats.FailCount++;
-                                Log($"[失敗] {result.ErrorMessage}", Color.FromArgb(220, 80, 80));
+                                Stats.TrainingFailCount++;
+                                Log(LoopLogHelper.FormatError(result.ErrorMessage));
                                 NotifyStats();
 
                                 if (result.IsUnauthorized)
                                 {
-                                    Log("[錯誤] Token 無效或已過期，排程終止。", Color.FromArgb(220, 80, 80));
+                                    Log(LoopLogHelper.FormatTokenExpired("排程"));
                                     OnStatusChanged?.Invoke(LoopStatus.Error);
                                     return;
                                 }
@@ -139,6 +164,9 @@ namespace MyDoujinBot.Services
 
                             Stats.RunCount++;
                             stageRunCount++;
+                            Stats.TrainingRunCount++;
+                            Stats.TrainingSuccessCount++;
+                            Stats.CurrentStageRunCount = stageRunCount;
                             Stats.SuccessCount++;
 
                             var resp = result.Response!;
@@ -154,8 +182,7 @@ namespace MyDoujinBot.Services
                                     Stats.CurrentLevel = ar.Level;
                                     UserContext.UpdateLevel(ar.Level);
                                 }
-                                Log($"[訓練] {ar.ActionName}：獲得 EXP {ar.Exp}，目前 Lv.{ar.Level}",
-                                    Color.FromArgb(90, 215, 110));
+                                Log(LoopLogHelper.FormatTrainingResult(ar));
                             }
                             if (resp.ActiveCharacter != null && resp.ActiveCharacter.Level > 0)
                             {
@@ -167,7 +194,7 @@ namespace MyDoujinBot.Services
                         {
                             if (string.IsNullOrWhiteSpace(stage.BattleTargetId))
                             {
-                                Log($"[排程錯誤] 階段「{stage.Name}」未填寫戰鬥目標 ID，跳過此階段。", Color.FromArgb(220, 80, 80));
+                                Log($"[排程錯誤] 階段「{stage.Name}」未填寫戰鬥目標 ID，跳過此階段。", LoopLogHelper.ErrorRed);
                                 stageIndex++;
                                 break;
                             }
@@ -181,12 +208,13 @@ namespace MyDoujinBot.Services
                             if (!result.IsSuccess)
                             {
                                 Stats.FailCount++;
-                                Log($"[失敗] {result.ErrorMessage}", Color.FromArgb(220, 80, 80));
+                                Stats.BattleLossCount++;
+                                Log(LoopLogHelper.FormatError(result.ErrorMessage));
                                 NotifyStats();
 
                                 if (result.IsUnauthorized)
                                 {
-                                    Log("[錯誤] Token 無效或已過期，排程終止。", Color.FromArgb(220, 80, 80));
+                                    Log(LoopLogHelper.FormatTokenExpired("排程"));
                                     OnStatusChanged?.Invoke(LoopStatus.Error);
                                     return;
                                 }
@@ -197,13 +225,23 @@ namespace MyDoujinBot.Services
 
                             Stats.RunCount++;
                             stageRunCount++;
+                            Stats.BattleRunCount++;
+                            Stats.CurrentStageRunCount = stageRunCount;
                             var bResp = result.Data!;
                             cooldownMs = bResp.CooldownMs;
                             pendingEvent = bResp.PendingEvent;
 
                             bool isWin = bResp.Winner == "TEAM_A";
-                            if (isWin) Stats.SuccessCount++;
-                            else Stats.FailCount++;
+                            if (isWin)
+                            {
+                                Stats.SuccessCount++;
+                                Stats.BattleWinCount++;
+                            }
+                            else
+                            {
+                                Stats.FailCount++;
+                                Stats.BattleLossCount++;
+                            }
 
                             Stats.TotalExp += bResp.ExpGained;
                             if (bResp.Level > 0)
@@ -211,16 +249,21 @@ namespace MyDoujinBot.Services
                                 Stats.CurrentLevel = bResp.Level;
                                 UserContext.UpdateLevel(bResp.Level);
                             }
-                            string bType = stage.BattleType == BattleType.Challenge ? "友好切磋" : "我要茶渡你";
-                            string winStr = isWin ? "勝利" : "失敗";
-                            Color logCol = isWin ? Color.FromArgb(80, 200, 120) : Color.FromArgb(220, 160, 80);
-                            Log($"[{winStr}] {bType}：獲得 EXP {bResp.ExpGained}", logCol);
+
+                            Log(LoopLogHelper.FormatBattleResult(stage.BattleType, isWin, bResp.ExpGained));
 
                             if (stage.BattleType == BattleType.Chado && bResp.IsPlayerChadoSuccess())
                             {
                                 Stats.ChadoSuccessCount++;
-                                Log("茶渡潑屎成功！", Color.FromArgb(200, 155, 106));
+                                Log(LoopLogHelper.FormatChadoSuccess());
                             }
+
+                            var battleResult = new BattleResult
+                            {
+                                Winner = bResp.Winner,
+                                Logs = bResp.Logs
+                            };
+                            OnLastBattleResultUpdated?.Invoke(battleResult);
                         }
 
                         NotifyStats();
@@ -235,16 +278,15 @@ namespace MyDoujinBot.Services
                             string? chosenOptionId = null;
                             if (AutoStrategy.HasValue)
                             {
-                                chosenOptionId = AutoSelectOption(pendingEvent, AutoStrategy.Value);
-                                var chosenOption = pendingEvent.Options.Find(o => o.Id == chosenOptionId);
-                                Log($"[事件] {pendingEvent.Name} → 自動選擇「{chosenOption?.Name}」",
-                                    Color.FromArgb(200, 160, 255));
+                                chosenOptionId = LoopLogHelper.AutoSelectOption(pendingEvent, AutoStrategy.Value);
+                                Log(LoopLogHelper.FormatEventSelection(pendingEvent, chosenOptionId));
                             }
                             else
                             {
                                 if (OnManualEventSelect == null)
                                 {
-                                    chosenOptionId = AutoSelectOption(pendingEvent, AutoEventStrategy.HighestSuccessRate);
+                                    Log(LoopLogHelper.FormatManualEventFallback(pendingEvent));
+                                    chosenOptionId = LoopLogHelper.AutoSelectOption(pendingEvent, AutoEventStrategy.HighestSuccessRate);
                                 }
                                 else
                                 {
@@ -278,8 +320,10 @@ namespace MyDoujinBot.Services
                             OnStatusChanged?.Invoke(LoopStatus.Running);
                         }
 
-                        // ── 冷卻倒數 ──
-                        int actualDelay = CalculateActualDelay(cooldownMs, settings.ExtraDelaySeconds);
+                        // ── 計算並等待 Cooldown ──
+                        int actualDelay = LoopLogHelper.CalculateActualDelay(cooldownMs, settings.ExtraDelaySeconds);
+                        Log(LoopLogHelper.FormatCooldown(cooldownMs, actualDelay));
+
                         OnStatusChanged?.Invoke(LoopStatus.WaitingCooldown);
                         await WaitWithCountdownAsync(actualDelay, cancellationToken);
 
@@ -289,7 +333,7 @@ namespace MyDoujinBot.Services
 
                 if (stageIndex >= settings.Stages.Count)
                 {
-                    Log("🎉 所有階梯排程已全數完成！", Color.FromArgb(140, 200, 255));
+                    Log("已達成所有排程階段條件，行動排程結束。", LoopLogHelper.LoopCompletedBlue);
                     OnStatusChanged?.Invoke(LoopStatus.Completed);
                 }
             }
@@ -313,11 +357,11 @@ namespace MyDoujinBot.Services
             if (!eventResultResp.IsSuccess)
             {
                 Stats.EventFailCount++;
-                Log($"[事件失敗] {eventResultResp.ErrorMessage}", Color.FromArgb(220, 80, 80));
+                Log(LoopLogHelper.FormatEventApiError(eventResultResp.ErrorMessage));
                 NotifyStats();
                 if (eventResultResp.IsUnauthorized)
                 {
-                    Log("[錯誤] Token 無效或已過期，終止運行。", Color.FromArgb(220, 80, 80));
+                    Log(LoopLogHelper.FormatTokenExpired("排程"));
                     OnStatusChanged?.Invoke(LoopStatus.Error);
                     return (false, null);
                 }
@@ -325,83 +369,72 @@ namespace MyDoujinBot.Services
             }
 
             var er = eventResultResp.Result!;
-            if (er.IsSuccess)
-            {
-                Stats.EventSuccessCount++;
-                Log($"[事件結果] 判定成功！{er.Text}", Color.FromArgb(80, 220, 120));
-            }
-            else
-            {
-                Stats.EventFailCount++;
-                Log($"[事件結果] 判定失敗。{er.Text}", Color.FromArgb(220, 100, 100));
-            }
-
-            if (er.GainCharacters != null && er.GainCharacters.Count > 0)
-            {
-                foreach (var gc in er.GainCharacters)
-                {
-                    if (!Stats.GainedCharacters.Contains(gc.Name))
-                    {
-                        Stats.GainedCharacters.Add(gc.Name);
-                        Log($"★ 獲得角色：【{gc.Name}】！", Color.Gold);
-                    }
-                }
-            }
-
+            ProcessEventResult(er);
             NotifyStats();
             return (true, er);
         }
 
-        private static string AutoSelectOption(PendingEvent pe, AutoEventStrategy strategy)
+        private void ProcessEventResult(EventResult er)
         {
-            if (pe.Options.Count == 0) return string.Empty;
-            if (strategy == AutoEventStrategy.Random)
-            {
-                return pe.Options[Random.Shared.Next(pe.Options.Count)].Id;
-            }
+            if (er.IsSuccess)
+                Stats.EventSuccessCount++;
+            else
+                Stats.EventFailCount++;
 
-            EventOption? best = null;
-            foreach (var opt in pe.Options)
-            {
-                if (best == null) { best = opt; continue; }
-                int optChance = opt.SuccessChance ?? 0;
-                int bestChance = best.SuccessChance ?? 0;
-                if (optChance > bestChance) best = opt;
-            }
-            return best?.Id ?? pe.Options[0].Id;
-        }
+            Log(LoopLogHelper.FormatEventResult(er));
 
-        private static int CalculateActualDelay(int cooldownMs, double extraDelaySeconds)
-        {
-            int baseDelay = Math.Max(cooldownMs, 1000);
-            int extraMaxMs = (int)(Math.Max(0, extraDelaySeconds) * 1000);
-            int randomExtra = extraMaxMs > 0 ? Random.Shared.Next(0, extraMaxMs + 1) : 0;
-            return baseDelay + randomExtra;
+            if (er.GainCharacters != null && er.GainCharacters.Count > 0)
+            {
+                foreach (var character in er.GainCharacters)
+                {
+                    if (!string.IsNullOrEmpty(character.Name))
+                    {
+                        if (!Stats.GainedCharacters.Contains(character.Name))
+                            Stats.GainedCharacters.Add(character.Name);
+                        Log(LoopLogHelper.FormatGainCharacter(character.Name));
+                    }
+                }
+            }
         }
 
         private async Task WaitWithCountdownAsync(int totalMs, CancellationToken cancellationToken)
         {
-            int remainingMs = totalMs;
-            const int intervalMs = 100;
-            while (remainingMs > 0)
+            var deadline = DateTime.Now.AddMilliseconds(totalMs);
+            const int tickMs = 200;
+
+            while (!cancellationToken.IsCancellationRequested)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                Stats.NextRunCountdownSeconds = Math.Max(0, remainingMs / 1000.0);
+                var remaining = (deadline - DateTime.Now).TotalSeconds;
+                if (remaining <= 0) break;
+
+                Stats.NextRunCountdownSeconds = remaining;
                 NotifyStats();
-                int delay = Math.Min(remainingMs, intervalMs);
-                await Task.Delay(delay, cancellationToken);
-                remainingMs -= delay;
+
+                var waitMs = Math.Min(tickMs, (int)((deadline - DateTime.Now).TotalMilliseconds));
+                if (waitMs <= 0) break;
+
+                try
+                {
+                    await Task.Delay(waitMs, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
             }
+
             Stats.NextRunCountdownSeconds = 0;
             NotifyStats();
         }
 
         private static async Task WaitAsync(int ms, CancellationToken cancellationToken)
         {
-            await Task.Delay(ms, cancellationToken);
+            try { await Task.Delay(ms, cancellationToken); }
+            catch (OperationCanceledException) { }
         }
 
         private void NotifyStats() => OnStatsUpdated?.Invoke(Stats);
         private void Log(string message, Color color) => OnLog?.Invoke(message, color);
+        private void Log((string Message, Color Color) entry) => OnLog?.Invoke(entry.Message, entry.Color);
     }
 }

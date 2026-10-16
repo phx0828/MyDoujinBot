@@ -18,7 +18,7 @@ namespace MyDoujinBot.Models
     }
 
     /// <summary>
-    /// 階梯行動排程中的單一階段設定。
+    /// 行動排程中的單一階段設定。
     /// 由使用者自訂：執行動作、目標條件、以及完成後切換下一階段。
     /// </summary>
     public class PipelineStage

@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace MyDoujinBot.Models
 {
     /// <summary>
-    /// 階梯行動排程方案 (Pipeline Preset)。
+    /// 行動排程方案 (Pipeline Preset)。
     /// 封裝單套排程的所有階段與中繼資料。
     /// </summary>
     public class PipelinePreset : IPresetProfile

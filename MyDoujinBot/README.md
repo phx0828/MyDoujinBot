@@ -21,7 +21,7 @@
 | 文件路徑 | 主題 | 核心內容摘要 |
 | :--- | :--- | :--- |
 | 📘 **[Architecture.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/Architecture.md)** | **系統架構與技術核心** | 四層架構 (SoC)、非同步與執行緒安全、無鎖事件掛起、持久化策略 |
-| 📗 **[Features.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/Features.md)** | **系統功能與運作模組** | 自動訓練、自動戰鬥與潑屎判定、階梯排程與方案管理、兩階段事件決策、戰報統計、樓層獎勵 |
+| 📗 **[Features.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/Features.md)** | **系統功能與運作模組** | 自動訓練、自動戰鬥與潑屎判定、行動排程與方案管理、兩階段事件決策、戰報統計、樓層獎勵 |
 | 📙 **[ApiCatalog.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/ApiCatalog.md)** | **API 端點與服務手冊** | 目前運作中 API、標頭封裝規範、401 攔截與安全機制 |
 | 📑 **[GameApis_Spec.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/GameApis_Spec.md)** | **遊戲延伸 API 規格** | 4 隻已驗證 GET API（`users/me`、`action/status`、`characters/active`、`characters`）欄位對照 |
 | 📊 **[BattleStats_Spec.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/BattleStats_Spec.md)** | **戰報解析與圖表規格** | 戰報事件逐行統計、全局 100% 長條圖繪製規則、PVP 陣營處理 |
@@ -44,7 +44,7 @@ MyDoujinBot/
 │   ├── UserContext.cs        # 全域使用者個人資料與狀態上下文（快取玩家資料、等級、最高樓層與樓層獎勵冷卻）
 │   ├── TrainingLoop.cs       # 自動訓練背景非同步迴圈
 │   ├── BattleLoop.cs         # 自動戰鬥背景非同步迴圈
-│   ├── PipelineLoop.cs       # 階梯排程多階段排程調度迴圈
+│   ├── PipelineLoop.cs       # 行動排程多階段排程調度迴圈
 │   ├── TrainingService.cs    # 訓練 API (POST /api/action/explore) 服務
 │   ├── EventService.cs       # 事件選項 API (POST /api/action/resolve) 服務
 │   ├── BattleService.cs      # 戰鬥與驗證 API 服務
@@ -63,6 +63,7 @@ MyDoujinBot/
 │   ├── PipelinePreset.cs     # 排程完整方案模型
 │   └── BattleReportResponse.cs# 完整戰報結構模型
 ├── Utilities/                # 輔助工具類
+│   ├── LoopLogHelper.cs      # 自動訓練、自動戰鬥、行動排程統一 LOG 格式化與色彩標準
 │   ├── StatHelper.cs         # 遊戲屬性中英對照轉換
 │   ├── EventUiHelper.cs      # 事件按鈕色彩與字級輔助
 │   ├── PromptDialog.cs       # 方案命名與輸入對話框

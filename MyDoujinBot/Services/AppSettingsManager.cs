@@ -138,6 +138,12 @@ namespace MyDoujinBot.Services
         public string BattleMode { get; set; } = "Challenge";
 
         /// <summary>
+        /// 使用者自訂選擇的應用程式圖示（.ico 檔名或路徑）。預設為 "app.ico"。
+        /// </summary>
+        [JsonPropertyName("selectedAppIcon")]
+        public string SelectedAppIcon { get; set; } = "app.ico";
+
+        /// <summary>
         /// 訓練項目的輪流清單
         /// </summary>
         [JsonPropertyName("trainingSequence")]
@@ -198,7 +204,7 @@ namespace MyDoujinBot.Services
         public int BattleExtraDelay { get; set; } = 1;
 
         /// <summary>
-        /// 階梯排程額外冷卻延遲（秒）。預設：1。
+        /// 行動排程額外冷卻延遲（秒）。預設：1。
         /// </summary>
         [JsonPropertyName("pipelineExtraDelay")]
         public int PipelineExtraDelay { get; set; } = 1;
@@ -210,13 +216,13 @@ namespace MyDoujinBot.Services
         public string LastSelectedActionId { get; set; } = string.Empty;
 
         /// <summary>
-        /// 階梯行動排程清單
+        /// 行動排程清單
         /// </summary>
         [JsonPropertyName("pipelineStages")]
         public System.Collections.Generic.List<MyDoujinBot.Models.PipelineStage> PipelineStages { get; set; } = new();
 
         /// <summary>
-        /// 當前啟用的階梯排程方案 ID。
+        /// 當前啟用的行動排程方案 ID。
         /// </summary>
         [JsonPropertyName("activePipelinePresetId")]
         public string ActivePipelinePresetId { get; set; } = string.Empty;

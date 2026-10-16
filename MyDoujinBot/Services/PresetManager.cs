@@ -10,7 +10,7 @@ namespace MyDoujinBot.Services
     /// <summary>
     /// 通用方案管理服務。
     /// 提供獨立資料夾儲存、列舉、讀寫、刪除以及跨機器匯入/匯出功能。
-    /// 適用於階梯排程 (Pipeline) 及未來之自訂事件規則 (Event Rules)。
+    /// 適用於行動排程 (Pipeline) 及未來之自訂事件規則 (Event Rules)。
     /// </summary>
     /// <typeparam name="T">實作 IPresetProfile 之方案類別</typeparam>
     public class PresetManager<T> where T : class, IPresetProfile, new()

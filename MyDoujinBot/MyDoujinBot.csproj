@@ -13,7 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Resources\app.ico">
+    <Content Include="Resources\*.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
