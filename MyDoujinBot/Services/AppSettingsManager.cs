@@ -113,6 +113,12 @@ namespace MyDoujinBot.Services
         public bool EnableSystemNotify { get; set; } = false;
 
         /// <summary>
+        /// 是否自動領取樓層獎勵。預設：關閉 (false)。
+        /// </summary>
+        [JsonPropertyName("autoClaimFloorReward")]
+        public bool AutoClaimFloorReward { get; set; } = false;
+
+        /// <summary>
         /// 是否啟用 Windows 系統通知的音效。
         /// 預設：關閉。
         /// </summary>

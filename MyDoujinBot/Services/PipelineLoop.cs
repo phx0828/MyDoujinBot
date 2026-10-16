@@ -149,9 +149,18 @@ namespace MyDoujinBot.Services
                             {
                                 var ar = resp.ActionResult;
                                 Stats.TotalExp += ar.Exp;
-                                if (ar.Level > 0) Stats.CurrentLevel = ar.Level;
+                                if (ar.Level > 0)
+                                {
+                                    Stats.CurrentLevel = ar.Level;
+                                    UserContext.UpdateLevel(ar.Level);
+                                }
                                 Log($"[訓練] {ar.ActionName}：獲得 EXP {ar.Exp}，目前 Lv.{ar.Level}",
                                     Color.FromArgb(90, 215, 110));
+                            }
+                            if (resp.ActiveCharacter != null && resp.ActiveCharacter.Level > 0)
+                            {
+                                Stats.CurrentLevel = resp.ActiveCharacter.Level;
+                                UserContext.UpdateLevel(resp.ActiveCharacter.Level);
                             }
                         }
                         else
@@ -197,6 +206,11 @@ namespace MyDoujinBot.Services
                             else Stats.FailCount++;
 
                             Stats.TotalExp += bResp.ExpGained;
+                            if (bResp.Level > 0)
+                            {
+                                Stats.CurrentLevel = bResp.Level;
+                                UserContext.UpdateLevel(bResp.Level);
+                            }
                             string bType = stage.BattleType == BattleType.Challenge ? "友好切磋" : "我要茶渡你";
                             string winStr = isWin ? "勝利" : "失敗";
                             Color logCol = isWin ? Color.FromArgb(80, 200, 120) : Color.FromArgb(220, 160, 80);

@@ -7,7 +7,7 @@
 
 ## 1. 自動訓練模組 (Training Loop)
 
-- **核心程式碼**：[TrainingLoop.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/TrainingLoop.cs)、[TrainingService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/TrainingService.cs)
+- **核心程式碼**：[TrainingLoop.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/TrainingLoop.cs)、[TrainingService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/TrainingService.cs)
 - **API 端點**：`POST /api/action/explore`，酬載為 `{"actionId": "動作ID"}`
 - **功能特性**：
   1. **動作項目與序列輪替**：
@@ -25,7 +25,7 @@
 
 ## 2. 自動戰鬥模組 (Battle Loop)
 
-- **核心程式碼**：[BattleLoop.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/BattleLoop.cs)、[BattleService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/BattleService.cs)
+- **核心程式碼**：[BattleLoop.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/BattleLoop.cs)、[BattleService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/BattleService.cs)
 - **API 端點**：
   - 切磋：`POST /api/players/{id}/challenge`
   - 茶渡：`POST /api/players/{id}/chado`
@@ -37,13 +37,13 @@
      - 透過 `response.IsPlayerChadoSuccess()` 擴充方法檢驗最後 10 筆戰鬥 LOG。
      - 提取 API 回傳之 `participants.players` 與 `participants.enemies`，精準確認文字訊息為「**我方角色對敵方角色丟了小零食**」，徹底杜絕敵方反殺潑屎造成的計數誤差。
   3. **戰鬥報告即時檢視**：
-     - 單場戰鬥結束後，主畫面日誌欄上方會顯示「📊 查看上次戰報」按鈕，點擊彈出 [BattleReportForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/BattleReportForm.cs)，以深色主題與彩色文字檢視完整戰鬥逐行日誌。
+     - 單場戰鬥結束後，主畫面日誌欄上方會顯示「📊 查看上次戰報」按鈕，點擊彈出 [BattleReportForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/BattleReportForm.cs)，以深色主題與彩色文字檢視完整戰鬥逐行日誌。
 
 ---
 
 ## 3. 階梯排程模組 (Pipeline Loop & Presets)
 
-- **核心程式碼**：[PipelineLoop.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/PipelineLoop.cs)、[PresetManager.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/PresetManager.cs)、[PipelineStage.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Models/PipelineStage.cs)
+- **核心程式碼**：[PipelineLoop.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/PipelineLoop.cs)、[PresetManager.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/PresetManager.cs)、[PipelineStage.cs](file:///d:/MyDoujinBot/MyDoujinBot/Models/PipelineStage.cs)
 - **功能特性**：
   1. **多階段循序執行**：
      - 每個階段可獨立設定為【訓練】或【戰鬥（友好切磋 / 我要茶渡你）】。
@@ -66,7 +66,7 @@
 
 ## 4. 遭遇事件應對決策系統 (Event Response)
 
-- **核心程式碼**：[EventService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/EventService.cs)、[EventSelectionForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/EventSelectionForm.cs)、[EventUiHelper.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Utilities/EventUiHelper.cs)
+- **核心程式碼**：[EventService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/EventService.cs)、[EventSelectionForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/EventSelectionForm.cs)、[EventUiHelper.cs](file:///d:/MyDoujinBot/MyDoujinBot/Utilities/EventUiHelper.cs)
 - **API 端點**：`POST /api/action/resolve`，酬載為 `{"optionId": "選項ID"}`
 - **功能特性**：
   1. **兩階段階層式選取架構**：
@@ -88,7 +88,7 @@
 
 ## 5. 戰報分析與視覺化圖表 (Battle Analytics)
 
-- **核心程式碼**：[BattleStatsForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/BattleStatsForm.cs)、[BattleStatsCalculator.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/BattleStatsCalculator.cs)、[BattleStatsChartBuilder.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Utilities/BattleStatsChartBuilder.cs)
+- **核心程式碼**：[BattleStatsForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/BattleStatsForm.cs)、[BattleStatsCalculator.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/BattleStatsCalculator.cs)、[BattleStatsChartBuilder.cs](file:///d:/MyDoujinBot/MyDoujinBot/Utilities/BattleStatsChartBuilder.cs)
 - **API 端點**：`GET /api/battle-reports/{reportId}`
 - **功能特性**：
   1. **雙入口體驗**：可於主視窗「📊 戰報分析」分頁直接輸入編號查詢，亦可點擊獨立戰鬥數據視窗操作。
@@ -110,10 +110,33 @@
   - 獨立冷卻秒數倒數標籤（文字不再跳動跳格）。
   - 運行總時間計時器 (`HH:mm:ss`)。
   - Token 就緒標記與即時等級展示 (`Lv.X`)。
+- **底部狀態列與 Tooltip**：
+  - 左側：Token 狀態燈號（● Token: 已驗證 / 未設定 / 失效）。
+  - 右側：
+    - 樓層獎勵狀態（`樓層獎勵：自動領取` / `樓層獎勵：可領取` / `樓層獎勵：冷卻中`），具備 Tooltip 顯示下次可領取時間（`下次領取時間：yyyy/MM/dd HH:mm:ss`）。
+    - 角色資料摘要標籤（黃色呈現：`玩家名 ｜ Lv.X ｜ 目前樓層：XXF`）。
 - **中間指標統計**：
   - 戰鬥勝敗：勝利（綠色）/ 失敗（紅色），兩字嚴格對齊。
   - 茶渡成功次數：`丟下小零食並螺旋下指: X 次`。
   - 觸發事件計數。
 - **彩色日誌面板 (RichTextBox)**：
-  - 成功為綠色、失敗/錯誤為紅色、冷卻/狀態為藍色、事件為紫色。
+  - 成功為綠色、失敗/錯誤為紅色、冷卻/狀態為藍色、事件為紫色、樓層獎勵為黃色。
   - 行數保護機制：上限 1000 行，超過自動精簡最舊的 500 行，唯讀鎖定避免 Windows 系統錯誤音效。
+
+---
+
+## 7. 樓層獎勵與使用者資料同步模組 (Floor Reward & User Context)
+
+- **核心程式碼**：[UserService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/UserService.cs)、[UserContext.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/UserContext.cs)、[MainForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/MainForm.cs)
+- **API 端點**：
+  - 使用者資料與狀態同步：`GET /api/users/me`、`GET /api/characters/active`、`GET /api/action/status`
+  - 領取樓層獎勵：`POST /api/action/floor-reward`
+- **功能特性**：
+  1. **全域使用者快取 (UserContext)**：
+     - 快取玩家名稱、出戰角色等級、最高樓層及樓層獎勵下次可領取時間戳記 (`NextFloorRewardClaimTime`)。
+     - 各行動迴圈（訓練、戰鬥、排程）與領取獎勵回傳新等級時，即時寫入快取並通知 UI 更新。
+  2. **自動領取樓層獎勵機制**：
+     - 於「設定」頁面提供「自動領取樓層獎勵」開關，並持久化儲存於 `settings.json`。
+     - 系統每 60 秒比對本地時間與冷卻時間戳記；已達領取時間且開啟自動時自動呼叫領取 API。
+     - 切換勾選或 Token 驗證完成時，若已達領取條件即時觸發領取。
+     - 領取成功時記錄黃色 LOG：`[樓層獎勵] 已領取 {floor}F 樓層獎勵：獲得經驗值 +{exp}`（若升級則接續：`，升級 +{levelUps}，目前等級 {level}`）。

@@ -27,6 +27,7 @@ namespace MyDoujinBot.Forms
         private readonly TrainingService _trainingService = new();
         private readonly EventService _eventService = new();
         private readonly BattleService _battleService = new();
+        private readonly UserService _userService = new();
 
         private TrainingLoop? _trainingLoop;
         private BattleLoop? _battleLoop;
@@ -35,6 +36,7 @@ namespace MyDoujinBot.Forms
 
         private CancellationTokenSource? _cts;
         private readonly System.Windows.Forms.Timer _elapsedTimer = new() { Interval = 1000 };
+        private readonly System.Windows.Forms.Timer _statusUpdateTimer = new() { Interval = 60000 };
         private DateTime _loopStartTime;
 
         // 當前運作中的模式 ("training", "battle", "pipeline")
@@ -81,6 +83,7 @@ namespace MyDoujinBot.Forms
         // --- 底部精簡狀態列 ---
         private Panel pnlStatusBar = null!;
         private Label lblStatusToken = null!;
+        private Label lblStatusFloorReward = null!;
         private Label lblStatusLevel = null!;
         private ToolTip statusToolTip = null!;
 
@@ -177,6 +180,7 @@ namespace MyDoujinBot.Forms
         private TextBox txtSettingsToken = null!;
         private Button btnSaveSettingsToken = null!;
         private Label lblTokenStatusDetail = null!;
+        private CheckBox chkSettingsAutoClaimFloorReward = null!;
 
         // 統計暫存
         private LoopStats _currentStats = new();
@@ -217,6 +221,38 @@ namespace MyDoujinBot.Forms
             {
                 _isRestoringSettings = false;
             }
+
+            // 監聽全域 UserContext 個人資料更新事件，即時更新右下角顯示
+            UserContext.OnProfileUpdated += () =>
+            {
+                if (this.IsDisposed || !this.IsHandleCreated) return;
+                try
+                {
+                    this.BeginInvoke(() =>
+                    {
+                        if (lblStatusLevel != null)
+                        {
+                            lblStatusLevel.Text = UserContext.Current.SummaryText;
+                        }
+                        UpdateFloorRewardStatusVisual();
+                    });
+                }
+                catch { }
+            };
+
+            // 每 60 秒輪詢更新樓層獎勵冷卻與可領取動態狀態，若開啟自動領取且達到條件則自動領取
+            _statusUpdateTimer.Tick += async (s, e) =>
+            {
+                UpdateFloorRewardStatusVisual();
+
+                if (AppSettingsManager.Current.AutoClaimFloorReward &&
+                    UserContext.Current.IsAuthenticated &&
+                    UserContext.Current.CanClaimFloorReward)
+                {
+                    await TryClaimFloorRewardAsync();
+                }
+            };
+            _statusUpdateTimer.Start();
         }
 
         private void InitializeNotifyIcon()
@@ -244,6 +280,12 @@ namespace MyDoujinBot.Forms
         {
             base.OnLoad(e);
             EnsureFormFitsScreen();
+        }
+
+        protected override async void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            await HandleStartupTokenCheckAsync();
         }
 
         protected override void OnResize(EventArgs e)
@@ -416,12 +458,13 @@ namespace MyDoujinBot.Forms
             var tblStatus = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 1,
+                ColumnCount = 2,
                 RowCount = 1,
                 BackColor = Color.Transparent,
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
+            tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             tblStatus.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             tblStatus.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             pnlStatusBar.Controls.Add(tblStatus);
@@ -441,8 +484,8 @@ namespace MyDoujinBot.Forms
 
             lblStatusToken = new Label
             {
-                Text = "● Token: 已就緒",
-                ForeColor = Color.FromArgb(80, 220, 120),
+                Text = "● Token: 檢查中...",
+                ForeColor = Color.FromArgb(160, 160, 180),
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
                 Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
@@ -452,16 +495,44 @@ namespace MyDoujinBot.Forms
             lblStatusToken.Click += (s, e) => SwitchNavTab("settings");
             pnlStatusLeft.Controls.Add(lblStatusToken);
 
+            // 右下角容器：樓層獎勵狀態 + 玩家摘要（等級、樓層）
+            var pnlStatusRight = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                Anchor = AnchorStyles.Right
+            };
+            tblStatus.Controls.Add(pnlStatusRight, 1, 0);
+
+            lblStatusFloorReward = new Label
+            {
+                Text = "樓層獎勵：—",
+                ForeColor = Color.FromArgb(200, 200, 220), // 一般顏色
+                AutoSize = true,
+                Anchor = AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleRight,
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                Margin = new Padding(0, ScaleDpi(2), ScaleDpi(16), ScaleDpi(2))
+            };
+            pnlStatusRight.Controls.Add(lblStatusFloorReward);
+
+            // 右下角：玩家名 ｜ 等級 ｜ 目前樓層：41F（使用黃色呈現）
             lblStatusLevel = new Label
             {
-                Text = "等級: Lv.—",
-                ForeColor = Color.FromArgb(200, 200, 220),
+                Text = UserContext.Current.SummaryText,
+                ForeColor = Color.FromArgb(245, 210, 60), // 黃色
                 AutoSize = true,
-                Anchor = AnchorStyles.Left,
+                Anchor = AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleRight,
                 Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
                 Margin = new Padding(0, ScaleDpi(2), 0, ScaleDpi(2))
             };
-            pnlStatusLeft.Controls.Add(lblStatusLevel);
+            pnlStatusRight.Controls.Add(lblStatusLevel);
         }
 
         // =====================================================================
@@ -3362,7 +3433,8 @@ namespace MyDoujinBot.Forms
             var outer = CreateScrollableTabPanel();
             var tbl = CreateContentTable(outer);
 
-            AddSectionHeader(tbl, "⚙️  設定");
+            // ── 區段 1: 連線設定 ──
+            AddSectionHeader(tbl, "連線設定");
 
             AddRowLabel(tbl, "Bearer Token：");
 
@@ -3373,7 +3445,7 @@ namespace MyDoujinBot.Forms
                 ColumnCount = 2,
                 RowCount = 1,
                 BackColor = Color.Transparent,
-                Margin = new Padding(0, 2, 0, 8),
+                Margin = new Padding(0, 2, 0, 6),
                 Padding = Padding.Empty
             };
             tblTokenRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -3402,13 +3474,32 @@ namespace MyDoujinBot.Forms
                 Margin = new Padding(ScaleDpi(8), 0, 0, 0)
             };
             btnSaveSettingsToken.FlatAppearance.BorderSize = 0;
-            btnSaveSettingsToken.Click += (s, e) =>
+            btnSaveSettingsToken.Click += async (s, e) =>
             {
-                _currentToken = txtSettingsToken.Text.Trim();
-                AppSettingsManager.Current.Token = _currentToken;
-                AppSettingsManager.Save();
-                UpdateTokenStatusVisual();
-                MessageBox.Show("Token 設定已成功儲存！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                var input = txtSettingsToken.Text.Trim();
+                if (string.IsNullOrWhiteSpace(input))
+                {
+                    _currentToken = string.Empty;
+                    AppSettingsManager.Current.Token = string.Empty;
+                    AppSettingsManager.Save();
+                    UserContext.Clear();
+                    UpdateTokenStatusVisual();
+                    AppendLog("[系統] Token 設定已清除。", Color.FromArgb(200, 200, 210));
+                    MessageBox.Show(this, "Token 已清除。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                btnSaveSettingsToken.Enabled = false;
+                btnSaveSettingsToken.Text = "驗證中...";
+                try
+                {
+                    await ValidateAndApplyTokenAsync(input, isFirstTime: false);
+                }
+                finally
+                {
+                    btnSaveSettingsToken.Enabled = true;
+                    btnSaveSettingsToken.Text = "💾 儲存 Token 設定";
+                }
             };
 
             tblTokenRow.Controls.Add(txtSettingsToken, 0, 0);
@@ -3420,9 +3511,65 @@ namespace MyDoujinBot.Forms
                 Text = string.IsNullOrWhiteSpace(_currentToken) ? "⚠ 尚未設定 Token" : "✓ Token 已設定",
                 ForeColor = string.IsNullOrWhiteSpace(_currentToken) ? Color.FromArgb(220, 90, 90) : Color.FromArgb(80, 220, 120),
                 AutoSize = true,
-                Margin = new Padding(0, 0, 0, 12)
+                Margin = new Padding(0, 0, 0, ScaleDpi(10))
             };
             TblAdd(tbl, lblTokenStatusDetail);
+
+            // ── 區段 2: 樓層獎勵設定 ──
+            AddSectionHeader(tbl, "樓層獎勵設定");
+
+            var pnlFloorRewardGroup = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, ScaleDpi(2), 0, ScaleDpi(12)),
+                Padding = Padding.Empty
+            };
+
+            chkSettingsAutoClaimFloorReward = new CheckBox
+            {
+                Text = "自動領取樓層獎勵",
+                ForeColor = Color.FromArgb(220, 220, 230),
+                BackColor = Color.Transparent,
+                AutoSize = true,
+                Checked = AppSettingsManager.Current.AutoClaimFloorReward,
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                Margin = new Padding(ScaleDpi(16), 0, 0, ScaleDpi(4)),
+                Cursor = Cursors.Hand
+            };
+            chkSettingsAutoClaimFloorReward.CheckedChanged += async (s, e) =>
+            {
+                if (!_isRestoringSettings)
+                {
+                    AppSettingsManager.Current.AutoClaimFloorReward = chkSettingsAutoClaimFloorReward.Checked;
+                    AppSettingsManager.Save();
+                    UpdateFloorRewardStatusVisual();
+
+                    if (chkSettingsAutoClaimFloorReward.Checked &&
+                        UserContext.Current.IsAuthenticated &&
+                        UserContext.Current.CanClaimFloorReward)
+                    {
+                        await TryClaimFloorRewardAsync();
+                    }
+                }
+            };
+            pnlFloorRewardGroup.Controls.Add(chkSettingsAutoClaimFloorReward);
+
+            var lblFloorRewardNote = new Label
+            {
+                Text = "💡 系統每 60 秒計算一次剩餘冷卻時間，領取時程可能存在約 60 秒以內的誤差。",
+                ForeColor = Color.FromArgb(140, 140, 160),
+                Font = new Font("Microsoft JhengHei UI", 8.5f),
+                AutoSize = true,
+                Margin = new Padding(ScaleDpi(36), 0, 0, 0)
+            };
+            pnlFloorRewardGroup.Controls.Add(lblFloorRewardNote);
+
+            TblAdd(tbl, pnlFloorRewardGroup);
 
             return outer;
         }
@@ -3441,7 +3588,8 @@ namespace MyDoujinBot.Forms
                 }
                 if (lblStatusLevel != null)
                 {
-                    lblStatusLevel.Text = "等級: Lv.—";
+                    lblStatusLevel.Text = UserContext.Current.SummaryText;
+                    lblStatusLevel.ForeColor = Color.FromArgb(245, 210, 60);
                 }
                 if (lblTokenStatusDetail != null)
                 {
@@ -3449,20 +3597,279 @@ namespace MyDoujinBot.Forms
                     lblTokenStatusDetail.ForeColor = Color.FromArgb(220, 90, 90);
                 }
             }
-            else
+            else if (UserContext.Current.IsAuthenticated)
             {
                 lblSidebarToken.Text = string.Empty;
                 lblSidebarToken.Visible = false;
                 if (lblStatusToken != null)
                 {
-                    lblStatusToken.Text = "● Token: 已就緒";
+                    lblStatusToken.Text = "● Token: 已驗證";
                     lblStatusToken.ForeColor = Color.FromArgb(80, 220, 120);
+                }
+                if (lblStatusLevel != null)
+                {
+                    lblStatusLevel.Text = UserContext.Current.SummaryText;
+                    lblStatusLevel.ForeColor = Color.FromArgb(245, 210, 60);
                 }
                 if (lblTokenStatusDetail != null)
                 {
-                    lblTokenStatusDetail.Text = "✓ Token 已設定";
+                    lblTokenStatusDetail.Text = $"✓ Token 已驗證（{UserContext.Current.PlayerName}）";
                     lblTokenStatusDetail.ForeColor = Color.FromArgb(80, 220, 120);
                 }
+            }
+            else
+            {
+                lblSidebarToken.Text = "⚠ Token 未驗證";
+                lblSidebarToken.ForeColor = Color.FromArgb(220, 160, 60);
+                lblSidebarToken.Visible = true;
+                if (lblStatusToken != null)
+                {
+                    lblStatusToken.Text = "● Token: 未驗證";
+                    lblStatusToken.ForeColor = Color.FromArgb(220, 160, 60);
+                }
+                if (lblStatusLevel != null)
+                {
+                    lblStatusLevel.Text = UserContext.Current.SummaryText;
+                    lblStatusLevel.ForeColor = Color.FromArgb(245, 210, 60);
+                }
+                if (lblTokenStatusDetail != null)
+                {
+                    lblTokenStatusDetail.Text = "⚠ Token 尚未通過驗證或正在連線。";
+                    lblTokenStatusDetail.ForeColor = Color.FromArgb(220, 160, 60);
+                }
+            }
+
+            UpdateFloorRewardStatusVisual();
+        }
+
+        /// <summary>
+        /// 更新右下角樓層獎勵狀態指示。
+        /// 若已啟用自動領取，顯示「樓層獎勵：自動領取」；
+        /// 否則依 cooldownRemainingMs 判定顯示「樓層獎勵：冷卻中」或「樓層獎勵：可領取」。
+        /// 採用一般色彩（非黃色）。
+        /// </summary>
+        private void UpdateFloorRewardStatusVisual()
+        {
+            if (lblStatusFloorReward == null) return;
+
+            if (AppSettingsManager.Current.AutoClaimFloorReward)
+            {
+                lblStatusFloorReward.Text = "樓層獎勵：自動領取";
+            }
+            else
+            {
+                if (!UserContext.Current.IsAuthenticated)
+                {
+                    lblStatusFloorReward.Text = "樓層獎勵：—";
+                }
+                else if (UserContext.Current.CanClaimFloorReward)
+                {
+                    lblStatusFloorReward.Text = "樓層獎勵：可領取";
+                }
+                else
+                {
+                    lblStatusFloorReward.Text = "樓層獎勵：冷卻中";
+                }
+            }
+
+            // 更新 ToolTip 顯示下次領取時間
+            if (statusToolTip != null)
+            {
+                if (!UserContext.Current.IsAuthenticated || !UserContext.Current.NextFloorRewardClaimTime.HasValue)
+                {
+                    statusToolTip.SetToolTip(lblStatusFloorReward, "尚未取得樓層獎勵資料");
+                }
+                else if (UserContext.Current.CanClaimFloorReward)
+                {
+                    statusToolTip.SetToolTip(lblStatusFloorReward, "下次領取時間：目前已可領取");
+                }
+                else
+                {
+                    var nextTimeLocal = UserContext.Current.NextFloorRewardClaimTime.Value.ToLocalTime();
+                    statusToolTip.SetToolTip(lblStatusFloorReward, $"下次領取時間：{nextTimeLocal:yyyy/MM/dd HH:mm:ss}");
+                }
+            }
+        }
+
+        private bool _isClaimingFloorReward;
+
+        /// <summary>
+        /// 嘗試領取樓層獎勵。若成功以黃色字體記錄日誌，並即時更新 UI。
+        /// </summary>
+        private async Task<bool> TryClaimFloorRewardAsync()
+        {
+            if (_isClaimingFloorReward) return false;
+            if (string.IsNullOrWhiteSpace(_currentToken) || !UserContext.Current.IsAuthenticated) return false;
+            if (!UserContext.Current.CanClaimFloorReward) return false;
+
+            _isClaimingFloorReward = true;
+            try
+            {
+                var result = await _userService.ClaimFloorRewardAsync(_currentToken);
+                if (result.IsSuccess && result.Data != null)
+                {
+                    var data = result.Data;
+                    var msg = $"[樓層獎勵] 已領取 {data.Floor}F 樓層獎勵：獲得經驗值 +{data.Exp}";
+                    if (data.RewardResult != null && data.RewardResult.LevelUps > 0)
+                    {
+                        msg += $"，升級 +{data.RewardResult.LevelUps}，目前等級 {data.RewardResult.Level}";
+                    }
+                    AppendLog(msg, Color.FromArgb(245, 210, 60));
+
+                    UpdateFloorRewardStatusVisual();
+                    if (lblStatusLevel != null)
+                    {
+                        lblStatusLevel.Text = UserContext.Current.SummaryText;
+                    }
+                    return true;
+                }
+                else if (!result.IsCancelled)
+                {
+                    AppendLog($"[警告] 領取樓層獎勵失敗：{result.ErrorMessage}", Color.FromArgb(220, 90, 90));
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[錯誤] 領取樓層獎勵異常：{ex.Message}", Color.FromArgb(220, 80, 80));
+            }
+            finally
+            {
+                _isClaimingFloorReward = false;
+                UpdateFloorRewardStatusVisual();
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 應用程式啟動時之 Token 檢查與個人資料同步。
+        /// 若初次使用（Token 為空），主動彈窗提示使用者輸入；
+        /// 若已有 Token，則呼叫 users/me, characters/active, action/status 同步使用者資料。
+        /// </summary>
+        private async Task HandleStartupTokenCheckAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_currentToken))
+            {
+                string? input = PromptDialog.Show(
+                    this,
+                    "初次設定 Token",
+                    "歡迎使用 MyDoujin Bot！請輸入您的 Bearer Token 進行驗證：",
+                    "");
+
+                if (string.IsNullOrWhiteSpace(input))
+                {
+                    AppendLog("[提示] 尚未設定 Token。請至「連線設定」填入 Token 後點擊儲存。", Color.FromArgb(220, 160, 60));
+                    SwitchNavTab("settings");
+                    UpdateTokenStatusVisual();
+                    return;
+                }
+
+                await ValidateAndApplyTokenAsync(input, isFirstTime: true);
+            }
+            else
+            {
+                AppendLog("[系統] 正在同步使用者個人資料...", Color.FromArgb(130, 170, 255));
+                if (lblStatusToken != null)
+                {
+                    lblStatusToken.Text = "● Token: 同步中...";
+                    lblStatusToken.ForeColor = Color.FromArgb(130, 170, 255);
+                }
+
+                var result = await _userService.ValidateAndFetchProfileAsync(_currentToken);
+                if (result.IsSuccess)
+                {
+                    UpdateTokenStatusVisual();
+                    AppendLog("[系統] ✓ 使用者資料同步成功！", Color.FromArgb(80, 220, 120));
+
+                    if (AppSettingsManager.Current.AutoClaimFloorReward && UserContext.Current.CanClaimFloorReward)
+                    {
+                        _ = TryClaimFloorRewardAsync();
+                    }
+                }
+                else
+                {
+                    UpdateTokenStatusVisual();
+                    AppendLog($"[警告] 使用者資料同步失敗：{result.ErrorMessage}", Color.FromArgb(220, 90, 90));
+                    if (lblStatusToken != null)
+                    {
+                        lblStatusToken.Text = result.IsUnauthorized ? "● Token: 已失效" : "● Token: 同步失敗";
+                        lblStatusToken.ForeColor = Color.FromArgb(220, 90, 90);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 驗證並套用 Token。依序呼叫 users/me, characters/active, action/status，
+        /// 必須三隻 API 皆成功回傳才視為有效已驗證。
+        /// </summary>
+        private async Task<bool> ValidateAndApplyTokenAsync(string rawToken, bool isFirstTime)
+        {
+            var cleanToken = rawToken.Trim();
+            if (cleanToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                cleanToken = cleanToken[7..].Trim();
+
+            if (string.IsNullOrWhiteSpace(cleanToken))
+            {
+                MessageBox.Show(this, "請輸入有效的 Bearer Token。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            AppendLog("[系統] 正在驗證 Token...", Color.FromArgb(130, 170, 255));
+            if (lblStatusToken != null)
+            {
+                lblStatusToken.Text = "● Token: 驗證中...";
+                lblStatusToken.ForeColor = Color.FromArgb(130, 170, 255);
+            }
+
+            var result = await _userService.ValidateAndFetchProfileAsync(cleanToken);
+            if (result.IsSuccess)
+            {
+                _currentToken = cleanToken;
+                AppSettingsManager.Current.Token = _currentToken;
+                AppSettingsManager.Save();
+
+                if (txtSettingsToken != null)
+                    txtSettingsToken.Text = _currentToken;
+
+                UpdateTokenStatusVisual();
+                AppendLog("[系統] ✓ Token 驗證成功！", Color.FromArgb(80, 220, 120));
+
+                if (AppSettingsManager.Current.AutoClaimFloorReward && UserContext.Current.CanClaimFloorReward)
+                {
+                    _ = TryClaimFloorRewardAsync();
+                }
+
+                MessageBox.Show(
+                    this,
+                    $"Token 驗證成功並已儲存！\n\n玩家名稱：{UserContext.Current.PlayerName}\n出戰等級：Lv.{UserContext.Current.Level}\n目前樓層：{UserContext.Current.CurrentFloor}F",
+                    "驗證成功",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                return true;
+            }
+            else
+            {
+                AppendLog($"[錯誤] Token 驗證失敗：{result.ErrorMessage}", Color.FromArgb(220, 80, 80));
+                UpdateTokenStatusVisual();
+                if (lblStatusToken != null)
+                {
+                    lblStatusToken.Text = result.IsUnauthorized ? "● Token: 無效/過期" : "● Token: 驗證失敗";
+                    lblStatusToken.ForeColor = Color.FromArgb(220, 90, 90);
+                }
+
+                MessageBox.Show(
+                    this,
+                    $"Token 驗證失敗！\n\n原因：{result.ErrorMessage}\n\n必須成功通過驗證才算有效，請確認 Token 是否正確。",
+                    "驗證失敗",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+
+                if (isFirstTime)
+                {
+                    SwitchNavTab("settings");
+                }
+                return false;
             }
         }
 
@@ -3476,6 +3883,17 @@ namespace MyDoujinBot.Forms
                 AppendLog("[錯誤] 請先至「連線設定」填入 Bearer Token。", Color.FromArgb(220, 80, 80));
                 SwitchNavTab("settings");
                 return;
+            }
+
+            if (!UserContext.Current.IsAuthenticated)
+            {
+                AppendLog("[提示] 正在進行 Token 驗證...", Color.FromArgb(130, 170, 255));
+                var valid = await ValidateAndApplyTokenAsync(_currentToken, isFirstTime: false);
+                if (!valid)
+                {
+                    AppendLog("[錯誤] Token 尚未通過驗證，無法啟動排程。", Color.FromArgb(220, 80, 80));
+                    return;
+                }
             }
 
             // 依目前所處分頁決定執行模式
@@ -3794,9 +4212,11 @@ namespace MyDoujinBot.Forms
 
             if (lblStatusLevel != null)
             {
-                lblStatusLevel.Text = stats.CurrentLevel > 0 
-                    ? $"等級: Lv.{stats.CurrentLevel}" 
-                    : "等級: Lv.—";
+                if (stats.CurrentLevel > 0)
+                {
+                    UserContext.UpdateLevel(stats.CurrentLevel);
+                }
+                lblStatusLevel.Text = UserContext.Current.SummaryText;
             }
         }
 
@@ -4281,6 +4701,12 @@ namespace MyDoujinBot.Forms
                     rbEventAutoHighest.Checked = true;
                 }
                 OnEventModeGroupChanged();
+
+                if (chkSettingsAutoClaimFloorReward != null)
+                {
+                    chkSettingsAutoClaimFloorReward.Checked = AppSettingsManager.Current.AutoClaimFloorReward;
+                }
+                UpdateFloorRewardStatusVisual();
             }
             finally
             {
@@ -4310,6 +4736,8 @@ namespace MyDoujinBot.Forms
 
             if (txtTargetPlayerId != null) AppSettingsManager.Current.LastBattleTargetId = txtTargetPlayerId.Text.Trim();
             if (rbBattleChallenge != null) AppSettingsManager.Current.BattleMode = rbBattleChallenge.Checked ? "Challenge" : "Chado";
+            if (chkSettingsAutoClaimFloorReward != null)
+                AppSettingsManager.Current.AutoClaimFloorReward = chkSettingsAutoClaimFloorReward.Checked;
             AppSettingsManager.Save();
         }
 

@@ -2,7 +2,7 @@
 
 > **基礎伺服器網址**：`https://mydoujin-backend.onrender.com/api`  
 > **目標遊戲主機**：`https://mydoujin.online`  
-> **通用標頭 (Headers)**：由 [HttpService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/HttpService.cs) 統一封裝，所有呼叫自動帶入：
+> **通用標頭 (Headers)**：由 [HttpService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/HttpService.cs) 統一封裝，所有呼叫自動帶入：
 > - `Authorization: Bearer <Token>`
 > - `Content-Type: application/json`
 > - `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ...`
@@ -16,27 +16,27 @@
 以下為專案內部已具備服務封裝與商業邏輯之 API 清單：
 
 | 服務類別 (Service) | HTTP 方法 | 端點路徑 (Endpoint) | 傳入參數 (Payload / Param) | 回傳模型 (Model) | 作用說明 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **TrainingService** | **POST** | `/action/explore` | `{"actionId": "hunt"}` | `TrainingResponse` | 執行指定訓練探險行動 |
+| **TrainingService** | **POST** | `/action/explore` | `{"actionId": "hunt"}` | `TrainingResponse` | 執行指定訓練探險行動（回傳結構詳見 [GameApis_Spec.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/GameApis_Spec.md#5-訓練與探險行動-actionexplore)） |
 | **EventService** | **POST** | `/action/resolve` | `{"optionId": "選項ID"}` | `ApiResponse<EventResult>` | 提交遭遇事件之選擇結果 |
 | **BattleService** | **GET** | `/players/{id}` | URL 路徑帶入玩家 ID | `PlayerProfileResponse` | 查詢並驗證對手玩家名稱、角色與等級 |
 | **BattleService** | **POST** | `/players/{id}/challenge` | 空物件 Payload | `BattleActionResponse` | 對指定玩家發起友好切磋 |
 | **BattleService** | **POST** | `/players/{id}/chado` | 空物件 Payload | `BattleActionResponse` | 對指定玩家發起「我要茶渡你」挑戰 |
 | **BattleService** | **GET** | `/battle-reports/{id}` | URL 路徑帶入戰報編號 | `BattleReportResponse` | 取得單場戰鬥完整戰報與逐行 LOG |
+| **UserService** | **POST** | `/action/floor-reward` | 空物件 Payload | `FloorRewardClaimResponse` | 領取樓層獎勵並取得經驗值與冷卻重設資訊 |
 
 ---
 
 ## 2. 已驗證之延伸 GET API (Verified Extension APIs)
 
-以下為由 `MyDoujinBot/LOG/` 擷取、已驗證正確 URL 與回傳結構之唯讀 API。  
-詳細 JSON 欄位與遊戲頁面名詞對照請參閱專屬文件：[GameApis_Spec.md](file:///d:/Side/MyDoujinBot/MyDoujinBot/docs/GameApis_Spec.md)。
+以下為已驗證正確 URL 與回傳結構之唯讀 API。  
+詳細 JSON 欄位與遊戲頁面名詞對照請參閱專屬文件：[GameApis_Spec.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/GameApis_Spec.md)。
 
-| HTTP 方法 | 端點路徑 (Endpoint) | 測試資料檔 | 對應功用 | 預期回傳核心資訊 |
+| HTTP 方法 | 端點路徑 (Endpoint) | 對應 C# Model | 對應功用 | 預期回傳核心資訊 |
 | :--- | :--- | :--- | :--- | :--- |
-| **GET** | `/users/me` | `LOG/me.txt` | 帳號基本資料 | 暱稱、個人狀態簽名、當前出戰角色 ID、最高樓層 |
-| **GET** | `/action/status` | `LOG/status.txt` | 行動與冷卻狀態 | 剩餘冷卻毫秒數、未決策事件 (`pendingEvent`)、樓層掛機獎勵冷卻 |
-| **GET** | `/characters/active` | `LOG/active.txt` | 出戰角色詳情 | 角色名稱、稱號、九圍數值、扔屎與沾屎戰績統計、轉生次數 |
-| **GET** | `/characters` | `LOG/characters.txt` | 全角色與轉生庫 | 擁有的全角色清單、事件偏好名單、轉生配點分配狀態 |
+| **GET** | `/users/me` | `UserMeResponse` | 帳號基本資料 | 暱稱、個人狀態簽名、當前出戰角色 ID、最高樓層 |
+| **GET** | `/action/status` | `ActionStatusResponse` | 行動與冷卻狀態 | 剩餘冷卻毫秒數、未決策事件 (`pendingEvent`)、樓層獎勵冷卻 |
+| **GET** | `/characters/active` | `ActiveCharacterResponse` | 出戰角色詳情 | 角色名稱、稱號、九圍數值、扔屎與沾屎戰績統計、轉生次數、外觀紙娃娃 |
+| **GET** | `/characters` | `CharactersResponse` | 全角色與轉生庫 | 擁有的全角色清單、事件偏好名單、轉生配點分配狀態與層數解鎖 |
 
 ---
 

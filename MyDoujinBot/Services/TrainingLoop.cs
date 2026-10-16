@@ -199,6 +199,11 @@ namespace MyDoujinBot.Services
                         Stats.SuccessCount++;
                         ProcessActionResult(response.ActionResult);
                     }
+                    if (response.ActiveCharacter != null && response.ActiveCharacter.Level > 0)
+                    {
+                        Stats.CurrentLevel = response.ActiveCharacter.Level;
+                        UserContext.UpdateLevel(response.ActiveCharacter.Level);
+                    }
 
                     NotifyStats();
 
@@ -388,6 +393,10 @@ namespace MyDoujinBot.Services
             // 更新等級與 EXP
             Stats.CurrentLevel = ar.Level;
             Stats.TotalExp += ar.Exp;
+            if (ar.Level > 0)
+            {
+                UserContext.UpdateLevel(ar.Level);
+            }
 
             // 組合 LOG 訊息
             var msg = $"[成功] 訓練 {ar.ActionName}：獲得 EXP {ar.Exp}";

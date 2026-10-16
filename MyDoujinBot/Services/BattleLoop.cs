@@ -142,6 +142,12 @@ namespace MyDoujinBot.Services
                     
                     Log($"[{winStr}] {typeStr}：獲得 EXP {response.ExpGained}", logColor);
                     
+                    if (response.Level > 0)
+                    {
+                        Stats.CurrentLevel = response.Level;
+                        UserContext.UpdateLevel(response.Level);
+                    }
+
                     NotifyStats();
 
                     if (settings.Type == BattleType.Chado && response.IsPlayerChadoSuccess())

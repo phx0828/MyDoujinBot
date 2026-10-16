@@ -42,34 +42,37 @@
 ```
 
 ### 2.1 UI 介面層 (`Forms/`)
-- **[MainForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/MainForm.cs)**：應用程式主視窗。
+- **[MainForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/MainForm.cs)**：應用程式主視窗。
   - 左側：側邊欄導航（6 大分頁：自動訓練、自動戰鬥、階梯排程、事件應對、戰報分析、設定）。
   - 右側：上方面板呈現即時執行狀態、冷卻倒數與指標儀表板；下方為彩色 `RichTextBox` 日誌區與內嵌事件 Overlay。
-- **[EventSelectionForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/EventSelectionForm.cs)**：手動獨立彈窗模式下的事件決策視窗，具備屬性檢定色階與自適應高度。
-- **[BattleReportForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/BattleReportForm.cs)**：單場戰鬥結果與彩色戰鬥 LOG 檢視彈窗。
-- **[BattleStatsForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/BattleStatsForm.cs)**：獨立戰報數據查詢與 ASCII 長條圖渲染視窗。
-- **[SettingsForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/SettingsForm.cs)**：舊版相容之獨立設定對話框。
+  - 底端：狀態列呈現 Token 狀態、樓層獎勵狀態（含 Tooltip）與角色等級／最高樓層摘要。
+- **[EventSelectionForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/EventSelectionForm.cs)**：手動獨立彈窗模式下的事件決策視窗，具備屬性檢定色階與自適應高度。
+- **[BattleReportForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/BattleReportForm.cs)**：單場戰鬥結果與彩色戰鬥 LOG 檢視彈窗。
+- **[BattleStatsForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/BattleStatsForm.cs)**：獨立戰報數據查詢與 ASCII 長條圖渲染視窗。
+- **[SettingsForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/SettingsForm.cs)**：舊版相容之獨立設定對話框。
 
 ### 2.2 背景控制層 (`Services/*Loop.cs`)
 - 負責迴圈生命週期、冷卻倒數、停止信號攔截、統計數值累計，並透過委派（Action）回傳給 UI 執行緒。
-- **[TrainingLoop.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/TrainingLoop.cs)**：自動訓練探險之無窮迴圈控制。
-- **[BattleLoop.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/BattleLoop.cs)**：自動切磋/茶渡戰鬥迴圈控制。
-- **[PipelineLoop.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/PipelineLoop.cs)**：階梯多階段排程之自動化調度器，負責串接訓練與戰鬥階段。
+- **[TrainingLoop.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/TrainingLoop.cs)**：自動訓練探險之無窮迴圈控制。
+- **[BattleLoop.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/BattleLoop.cs)**：自動切磋/茶渡戰鬥迴圈控制。
+- **[PipelineLoop.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/PipelineLoop.cs)**：階梯多階段排程之自動化調度器，負責串接訓練與戰鬥階段。
 
 ### 2.3 業務與網路層 (`Services/`)
-- **[HttpService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/HttpService.cs)**：全域 HTTP 通訊核心。
+- **[HttpService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/HttpService.cs)**：全域 HTTP 通訊核心。
   - 封裝 `HttpClient`，負責統一寫入偽裝標頭（`User-Agent`, `Origin`, `Referer`, `Content-Type`）。
   - 自動清除 Bearer Token 前綴空格。
   - 統一攔截 HTTP 401（未授權）並通知中斷。
-- **[TrainingService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/TrainingService.cs)**：封裝 `POST /api/action/explore`。
-- **[EventService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/EventService.cs)**：封裝 `POST /api/action/resolve`。
-- **[BattleService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/BattleService.cs)**：封裝玩家驗證、戰鬥發起與戰報取得。
-- **[AppSettingsManager.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/AppSettingsManager.cs)**：全域組態管理（讀寫 `settings.json`）。
-- **[PresetManager.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/PresetManager.cs)**：泛型方案檔案管理器（支援方案列舉、讀寫、複製、刪除、匯入/匯出）。
+- **[TrainingService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/TrainingService.cs)**：封裝 `POST /api/action/explore`。
+- **[EventService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/EventService.cs)**：封裝 `POST /api/action/resolve`。
+- **[BattleService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/BattleService.cs)**：封裝玩家驗證、戰鬥發起與戰報取得。
+- **[UserService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/UserService.cs)**：封裝 Token 驗證與使用者資訊拉取（呼叫 `users/me`, `characters/active`, `action/status`）與樓層獎勵領取（呼叫 `action/floor-reward`）。
+- **[UserContext.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/UserContext.cs)**：全域使用者資料與狀態上下文（提供執行緒安全之玩家資料、等級、最高樓層、樓層獎勵冷卻時間戳記快取與即時更新事件通知）。
+- **[AppSettingsManager.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/AppSettingsManager.cs)**：全域組態管理（讀寫 `settings.json`，含自動領取樓層獎勵等設定）。
+- **[PresetManager.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/PresetManager.cs)**：泛型方案檔案管理器（支援方案列舉、讀寫、複製、刪除、匯入/匯出）。
 - **`BattleStats*` 系列**：純數據解析器與統計引擎，不依賴 UI，負責解析戰報 JSON 並計算傷害、承傷與治療圖表。
 
 ### 2.4 資料模型層 (`Models/`)
-- 包含純資料類別（DTO）、列舉型別與持久化結構，如 `PipelineStage`、`PipelinePreset`、`BattleActionResponse`、`TrainingAction` 等。
+- 包含純資料類別（DTO）、列舉型別與持久化結構，如 `UserMeResponse`、`ActiveCharacterResponse`、`CharactersResponse`、`ActionStatusResponse`、`FloorRewardClaimResponse`、`PipelineStage`、`PipelinePreset`、`BattleActionResponse`、`TrainingAction` 等。
 
 ---
 
