@@ -1,0 +1,100 @@
+# MyDoujin Bot - 系統架構與技術規範 (Architecture Specification)
+
+> **目標讀者**：後續維護之開發者或接手之 AI Agent。  
+> **核心準則**：本文件僅記錄既有已實作之技術架構與設計規則，不包含未經證實之假設。
+
+---
+
+## 1. 專案基本技術棧
+
+- **開發語言**：C# 12 / .NET 8.0
+- **應用程式類型**：Windows Forms (WinForms) 純桌面端應用程式
+- **高 DPI 支援**：`PerMonitorV2`（於 `.csproj` 中啟用，搭配內部 `ScaleDpi()` 進行所有控制項間距與尺寸縮放）
+- **發布模式**：支援單一免安裝可執行檔（Self-contained Single-file `.exe`），完全無第三方運行環境依賴。
+
+---
+
+## 2. 四層架構設計 (Layered Architecture)
+
+專案嚴格遵循關注點分離（Separation of Concerns, SoC），禁止將業務邏輯或網路請求混寫於視窗類別中：
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                     1. UI 介面層 (Forms)                        │
+│   MainForm, EventSelectionForm, BattleReportForm, BattleStatsForm│
+└─────────────────────────────────┬───────────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   2. 背景控制層 (Services Loops)                 │
+│              TrainingLoop, BattleLoop, PipelineLoop             │
+└─────────────────────────────────┬───────────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   3. 業務與網路層 (Services)                    │
+│   HttpService, TrainingService, EventService, BattleService,    │
+│   AppSettingsManager, PresetManager, BattleStatsAnalyzer/Calc   │
+└─────────────────────────────────┬───────────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     4. 資料模型層 (Models)                      │
+│   DTOs, PipelineStage, PipelinePreset, LoopSettings, LoopStats  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 2.1 UI 介面層 (`Forms/`)
+- **[MainForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/MainForm.cs)**：應用程式主視窗。
+  - 左側：側邊欄導航（6 大分頁：自動訓練、自動戰鬥、階梯排程、事件應對、戰報分析、設定）。
+  - 右側：上方面板呈現即時執行狀態、冷卻倒數與指標儀表板；下方為彩色 `RichTextBox` 日誌區與內嵌事件 Overlay。
+- **[EventSelectionForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/EventSelectionForm.cs)**：手動獨立彈窗模式下的事件決策視窗，具備屬性檢定色階與自適應高度。
+- **[BattleReportForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/BattleReportForm.cs)**：單場戰鬥結果與彩色戰鬥 LOG 檢視彈窗。
+- **[BattleStatsForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/BattleStatsForm.cs)**：獨立戰報數據查詢與 ASCII 長條圖渲染視窗。
+- **[SettingsForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/SettingsForm.cs)**：舊版相容之獨立設定對話框。
+
+### 2.2 背景控制層 (`Services/*Loop.cs`)
+- 負責迴圈生命週期、冷卻倒數、停止信號攔截、統計數值累計，並透過委派（Action）回傳給 UI 執行緒。
+- **[TrainingLoop.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/TrainingLoop.cs)**：自動訓練探險之無窮迴圈控制。
+- **[BattleLoop.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/BattleLoop.cs)**：自動切磋/茶渡戰鬥迴圈控制。
+- **[PipelineLoop.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/PipelineLoop.cs)**：階梯多階段排程之自動化調度器，負責串接訓練與戰鬥階段。
+
+### 2.3 業務與網路層 (`Services/`)
+- **[HttpService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/HttpService.cs)**：全域 HTTP 通訊核心。
+  - 封裝 `HttpClient`，負責統一寫入偽裝標頭（`User-Agent`, `Origin`, `Referer`, `Content-Type`）。
+  - 自動清除 Bearer Token 前綴空格。
+  - 統一攔截 HTTP 401（未授權）並通知中斷。
+- **[TrainingService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/TrainingService.cs)**：封裝 `POST /api/action/explore`。
+- **[EventService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/EventService.cs)**：封裝 `POST /api/action/resolve`。
+- **[BattleService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/BattleService.cs)**：封裝玩家驗證、戰鬥發起與戰報取得。
+- **[AppSettingsManager.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/AppSettingsManager.cs)**：全域組態管理（讀寫 `settings.json`）。
+- **[PresetManager.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/PresetManager.cs)**：泛型方案檔案管理器（支援方案列舉、讀寫、複製、刪除、匯入/匯出）。
+- **`BattleStats*` 系列**：純數據解析器與統計引擎，不依賴 UI，負責解析戰報 JSON 並計算傷害、承傷與治療圖表。
+
+### 2.4 資料模型層 (`Models/`)
+- 包含純資料類別（DTO）、列舉型別與持久化結構，如 `PipelineStage`、`PipelinePreset`、`BattleActionResponse`、`TrainingAction` 等。
+
+---
+
+## 3. 執行緒與非同步並行模型 (Threading Model)
+
+專案嚴格遵守 Windows Forms 執行緒安全原則：
+
+1. **禁止阻塞 UI 執行緒**：
+   - 所有的計時等待一律使用 `await Task.Delay(ms, cancellationToken)`。
+   - **嚴格禁止使用 `Thread.Sleep`**。
+2. **跨執行緒呼叫 UI**：
+   - 背景工作透過委派通知 UI 時，一律在接收端檢查 `InvokeRequired` 並透過 `Control.Invoke` 或 `Control.BeginInvoke` 調度回主執行緒。
+3. **無鎖非同步事件掛起 (`TaskCompletionSource`)**：
+   - 當訓練或戰鬥觸發「手動事件選擇」時，背景執行緒會建立 `TaskCompletionSource<string?>` 並 `await tcs.Task` 掛起。
+   - UI 呈現對話框或 Overlay，待玩家點選選項後呼叫 `tcs.SetResult(optionId)`，背景迴圈隨即無縫恢復執行，完全不消耗 CPU 也不凍結視窗。
+4. **即時取消信號 (`CancellationTokenSource`)**：
+   - 點擊「停止」時呼叫 `_cts?.Cancel()`，所有等待中的 Delay 與 HTTP 請求皆能立即收到取消信號並乾淨退出。
+
+---
+
+## 4. 資料儲存與持久化策略 (Persistence Strategy)
+
+- **基底路徑**：一律以 `AppDomain.CurrentDomain.BaseDirectory` 為基準，落實**綠色可攜（Portable）**原則。發布後的 `.exe` 搬移至任何資料夾皆能在其同層目錄讀寫設定，不污染註冊表或使用者 AppData。
+- **儲存實體位置**：
+  - `settings.json`：全域設定檔（儲存 Token、模式、冷卻延遲、當前排程階段）。
+  - `data/presets/pipeline/{id}.json`：獨立階梯排程方案檔案。
+- **自動存檔機制**：
+  - 任何介面控制項變更、數值微調、排程卡片編輯完成或順序移動，均會觸發即時儲存至磁碟，無須使用者手動點擊「儲存」按鈕。
