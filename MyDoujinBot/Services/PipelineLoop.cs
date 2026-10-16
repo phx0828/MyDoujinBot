@@ -201,6 +201,12 @@ namespace MyDoujinBot.Services
                             string winStr = isWin ? "勝利" : "失敗";
                             Color logCol = isWin ? Color.FromArgb(80, 200, 120) : Color.FromArgb(220, 160, 80);
                             Log($"[{winStr}] {bType}：獲得 EXP {bResp.ExpGained}", logCol);
+
+                            if (stage.BattleType == BattleType.Chado && bResp.IsPlayerChadoSuccess())
+                            {
+                                Stats.ChadoSuccessCount++;
+                                Log("茶渡潑屎成功！", Color.FromArgb(200, 155, 106));
+                            }
                         }
 
                         NotifyStats();

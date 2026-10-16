@@ -43,6 +43,9 @@ namespace MyDoujinBot.Models
         [JsonPropertyName("battleTargetName")]
         public string BattleTargetName { get; set; } = string.Empty;
 
+        [JsonPropertyName("battleTargetDetail")]
+        public string BattleTargetDetail { get; set; } = string.Empty;
+
         [JsonPropertyName("battleType")]
         public BattleType BattleType { get; set; } = BattleType.Challenge;
 

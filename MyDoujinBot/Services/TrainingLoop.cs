@@ -47,6 +47,7 @@ namespace MyDoujinBot.Services
         public int TotalExp { get; set; }
         public double NextRunCountdownSeconds { get; set; }  // 倒數秒數，供 UI 顯示
         public DateTime StartTime { get; set; }
+        public int ChadoSuccessCount { get; set; }
         public System.Collections.Generic.List<string> GainedCharacters { get; set; } = new();
     }
 

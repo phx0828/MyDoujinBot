@@ -144,29 +144,10 @@ namespace MyDoujinBot.Services
                     
                     NotifyStats();
 
-                    if (settings.Type == BattleType.Chado && response.Logs != null && response.Logs.Count > 0)
+                    if (settings.Type == BattleType.Chado && response.IsPlayerChadoSuccess())
                     {
-                        int checkCount = Math.Min(10, response.Logs.Count);
-                        bool isChadoSuccess = false;
-                        for (int i = 1; i <= checkCount; i++)
-                        {
-                            var logEntry = response.Logs[response.Logs.Count - i];
-                            if (logEntry.Type == "CHADO")
-                            {
-                                isChadoSuccess = true;
-                                break;
-                            }
-                            if (logEntry.Type == "CHADO_MISS")
-                            {
-                                break;
-                            }
-                        }
-
-                        if (isChadoSuccess)
-                        {
-                            Stats.ChadoSuccessCount++;
-                            Log("茶渡潑屎成功！", System.Drawing.Color.FromArgb(200, 155, 106));
-                        }
+                        Stats.ChadoSuccessCount++;
+                        Log("茶渡潑屎成功！", System.Drawing.Color.FromArgb(200, 155, 106));
                     }
 
                     var battleResult = new BattleResult

@@ -82,10 +82,23 @@ namespace MyDoujinBot.Forms
             var pnlLogs = new Panel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(0, 8, 0, 0)
+                Padding = new Padding(0, 8, 0, 8)
             };
             pnlLogs.Controls.Add(rtbLogs);
             pnlMain.Controls.Add(pnlLogs);
+
+            var lblNotice = new Label
+            {
+                Dock = DockStyle.Bottom,
+                Text = "💡 提示：戰鬥 LOG 種類繁多，部分特殊技能或效果可能存在無法精確辨識歸屬的誤差，戰報僅供參考。",
+                AutoSize = false,
+                Height = 24,
+                ForeColor = Color.FromArgb(200, 160, 90),
+                Font = new Font("Microsoft JhengHei UI", 8.8f),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(2, 4, 0, 0)
+            };
+            pnlMain.Controls.Add(lblNotice);
             pnlLogs.BringToFront();
 
             if (battleResult.Logs != null)

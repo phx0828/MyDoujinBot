@@ -47,6 +47,6 @@ namespace MyDoujinBot.Models
             return cloned;
         }
 
-        public override string ToString() => $"{Name} ({Stages.Count} 階段)";
+        public override string ToString() => Name;
     }
 }
