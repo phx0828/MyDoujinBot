@@ -340,7 +340,11 @@ namespace MyDoujinBot.Forms
             }
         }
 
+        // 側邊欄底色：子容器與導航按鈕統一使用實色，避免 Color.Transparent 造成的層層父背景重繪
+        private static readonly Color SidebarBackColor = Color.FromArgb(16, 16, 22);
+
         private bool _isSizeMoveActive;
+        private Size _clientSizeAtSizeMoveStart;
         private const int WM_ENTERSIZEMOVE = 0x0231;
         private const int WM_EXITSIZEMOVE = 0x0232;
         private const int WM_ERASEBKGND = 0x0014;
@@ -350,18 +354,30 @@ namespace MyDoujinBot.Forms
             if (m.Msg == WM_ENTERSIZEMOVE)
             {
                 _isSizeMoveActive = true;
+                _clientSizeAtSizeMoveStart = this.ClientSize;
                 this.SuspendLayout();
                 tblRoot?.SuspendLayout();
             }
             else if (m.Msg == WM_EXITSIZEMOVE)
             {
                 _isSizeMoveActive = false;
-                tblRoot?.ResumeLayout(true);
-                this.ResumeLayout(true);
-                base.OnResize(EventArgs.Empty);
-                UpdateRightPanelWidth();
-                this.PerformLayout();
-                this.Invalidate(true);
+                bool sizeChanged = this.ClientSize != _clientSizeAtSizeMoveStart;
+
+                if (!sizeChanged)
+                {
+                    // 純移動視窗：尺寸未變，不需要任何排版與重繪（原本每次放開滑鼠都會重排 3~4 輪並全面重畫）
+                    tblRoot?.ResumeLayout(false);
+                    this.ResumeLayout(false);
+                }
+                else
+                {
+                    // 有縮放：先在暫停狀態下更新右側欄寬，再恢復並只執行「一次」排版（由 base.OnResize 觸發）
+                    UpdateRightPanelWidth();
+                    tblRoot?.ResumeLayout(false);
+                    this.ResumeLayout(false);
+                    base.OnResize(EventArgs.Empty);
+                    this.Invalidate(true);
+                }
             }
             else if (m.Msg == WM_ERASEBKGND)
             {
@@ -1068,7 +1084,7 @@ namespace MyDoujinBot.Forms
             pnlSidebar = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(16, 16, 22),
+                BackColor = SidebarBackColor,
                 Padding = new Padding(ScaleDpi(6), ScaleDpi(10), ScaleDpi(6), ScaleDpi(8)),
                 Margin = Padding.Empty
             };
@@ -1079,7 +1095,7 @@ namespace MyDoujinBot.Forms
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
                 RowCount = 3,
-                BackColor = Color.Transparent,
+                BackColor = SidebarBackColor,
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
@@ -1096,7 +1112,7 @@ namespace MyDoujinBot.Forms
                 ColumnCount = 1,
                 RowCount = 1,
                 AutoSize = true,
-                BackColor = Color.Transparent,
+                BackColor = SidebarBackColor,
                 Margin = new Padding(ScaleDpi(4), 0, ScaleDpi(4), ScaleDpi(12)),
                 Padding = Padding.Empty
             };
@@ -1117,7 +1133,7 @@ namespace MyDoujinBot.Forms
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
                 RowCount = 7,
-                BackColor = Color.Transparent,
+                BackColor = SidebarBackColor,
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
@@ -1168,7 +1184,7 @@ namespace MyDoujinBot.Forms
                 Tag = tabKey,
                 Dock = DockStyle.Fill,
                 Height = ScaleDpi(38),
-                BackColor = Color.Transparent,
+                BackColor = SidebarBackColor,
                 ForeColor = Color.FromArgb(170, 170, 190),
                 IconChar = icon,
                 IconColor = Color.FromArgb(170, 170, 190),
@@ -1199,7 +1215,7 @@ namespace MyDoujinBot.Forms
             {
                 if ((string)btn.Tag! != _selectedNavTab)
                 {
-                    btn.BackColor = Color.Transparent;
+                    btn.BackColor = SidebarBackColor;
                     btn.IconColor = Color.FromArgb(170, 170, 190);
                 }
             };
@@ -1222,7 +1238,7 @@ namespace MyDoujinBot.Forms
             foreach (var btn in _navButtons)
             {
                 bool isActive = (string)btn.Tag! == tabKey;
-                btn.BackColor = isActive ? Color.FromArgb(42, 48, 70) : Color.Transparent;
+                btn.BackColor = isActive ? Color.FromArgb(42, 48, 70) : SidebarBackColor;
                 btn.ForeColor = isActive ? Color.FromArgb(250, 250, 255) : Color.FromArgb(170, 170, 190);
                 if (btn is IconButton ib)
                 {
@@ -1730,7 +1746,7 @@ namespace MyDoujinBot.Forms
             var pnlPresetSection = BuildPipelinePresetPanel();
 
             // 頂部大標題：右側放置全域備份/分享按鈕 [📤 匯出] [📥 匯入]
-            AddSectionHeader(tbl, "🔄  行動排程 (Pipeline)", btnExportPreset, btnImportPreset);
+            AddSectionHeader(tbl, "行動排程 (Pipeline)", btnExportPreset, btnImportPreset);
 
             var lblDesc = new Label
             {

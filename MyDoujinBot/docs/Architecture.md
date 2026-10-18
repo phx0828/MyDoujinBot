@@ -115,5 +115,6 @@
 - **儲存實體位置**：
   - `settings.json`：全域設定檔（儲存 Token、模式、冷卻延遲、當前排程階段）。
   - `data/presets/pipeline/{id}.json`：獨立行動排程方案檔案。
+  - `data/presets/event/{id}.json`：獨立事件應對方案檔案（詳見 [EventCustomChoice_Spec.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/EventCustomChoice_Spec.md)）。
 - **自動存檔機制**：
   - 任何介面控制項變更、數值微調、排程卡片編輯完成或順序移動，均會觸發即時儲存至磁碟，無須使用者手動點擊「儲存」按鈕。
