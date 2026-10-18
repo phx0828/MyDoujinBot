@@ -75,10 +75,12 @@
 - **[UserContext.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/UserContext.cs)**：全域使用者資料與狀態上下文（提供執行緒安全之玩家資料、等級、最高樓層、樓層獎勵冷卻時間戳記快取與即時更新事件通知）。
 - **[AppSettingsManager.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/AppSettingsManager.cs)**：全域組態管理（讀寫 `settings.json`，含自動領取樓層獎勵等設定）。
 - **[PresetManager.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/PresetManager.cs)**：泛型方案檔案管理器（支援方案列舉、讀寫、複製、刪除、匯入/匯出）。
+- **[EventArchiveService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/EventArchiveService.cs)**：第三方事件檔案庫管理服務（負責本機 `data/events/` 初始化防呆複製、透過 Jint 動態自第三方網頁線上解析與原子覆寫更新）。
 - **`BattleStats*` 系列**：純數據解析器與統計引擎，不依賴 UI，負責解析戰報 JSON 並計算傷害、承傷與治療圖表。
 
 ### 2.4 資料模型層 (`Models/`)
 - 包含純資料類別（DTO）、列舉型別與持久化結構，如 `UserMeResponse`、`ActiveCharacterResponse`、`CharactersResponse`、`ActionStatusResponse`、`FloorRewardClaimResponse`、`PipelineStage`、`PipelinePreset`、`BattleActionResponse`、`TrainingAction` 等。
+- **第三方事件檔案庫模型 (`Models/ExternalEvents/`)**：獨立收錄自第三方攻略網站之資料規格（`ExternalEventBriefFile`、`ExternalRouteFile` 等），與遊戲即時 API 嚴格物理隔離，詳見 [ExternalEventArchive_Spec.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/ExternalEventArchive_Spec.md)。
 
 ### 2.5 工具與輔助層 (`Utilities/`)
 - **[LoopLogHelper.cs](file:///d:/MyDoujinBot/MyDoujinBot/Utilities/LoopLogHelper.cs)**：統一自動訓練、自動戰鬥與行動排程之日誌輸出格式化、色彩定義、隨機冷卻計算與事件自動選擇策略。

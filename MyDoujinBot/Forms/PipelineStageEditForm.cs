@@ -4,6 +4,8 @@ using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using FontAwesome.Sharp;
+using Icon = System.Drawing.Icon;
 using MyDoujinBot.Models;
 using MyDoujinBot.Services;
 using MyDoujinBot.Utilities;
@@ -323,15 +325,20 @@ namespace MyDoujinBot.Forms
             }
             if (_cmbTrainAction.Items.Count > 0) _cmbTrainAction.SelectedIndex = selectedTrainIdx;
 
-            _btnAddTrainAction = new Button
+            _btnAddTrainAction = new IconButton
             {
-                Text = "➕ 加入循環清單",
+                Text = " 加入循環清單",
                 AutoSize = true,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(42, 85, 140),
                 ForeColor = Color.White,
                 Font = new Font("Microsoft JhengHei UI", 9f),
                 Cursor = Cursors.Hand,
+                IconChar = IconChar.Plus,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(16),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(0, 0, ScaleDpi(6), 0)
             };
             _btnAddTrainAction.FlatAppearance.BorderSize = 0;
@@ -345,15 +352,20 @@ namespace MyDoujinBot.Forms
                 }
             };
 
-            _btnClearTrainSequence = new Button
+            _btnClearTrainSequence = new IconButton
             {
-                Text = "🗑️ 清空清單",
+                Text = " 清空清單",
                 AutoSize = true,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(85, 45, 45),
                 ForeColor = Color.White,
                 Font = new Font("Microsoft JhengHei UI", 9f),
                 Cursor = Cursors.Hand,
+                IconChar = IconChar.TrashCan,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(16),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 Margin = Padding.Empty
             };
             _btnClearTrainSequence.FlatAppearance.BorderSize = 0;
@@ -468,17 +480,22 @@ namespace MyDoujinBot.Forms
                 Margin = new Padding(0, ScaleDpi(1), ScaleDpi(8), 0)
             };
 
-            _btnVerify = new Button
+            _btnVerify = new IconButton
             {
-                Text = "🔍 驗證玩家",
+                Text = " 驗證玩家",
                 AutoSize = false,
-                Width = ScaleDpi(90),
+                Width = ScaleDpi(100),
                 Height = _txtBattleTarget.PreferredHeight,
                 BackColor = Color.FromArgb(50, 75, 120),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand,
                 Font = new Font("Microsoft JhengHei UI", 9f),
+                IconChar = IconChar.MagnifyingGlass,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(16),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(0, ScaleDpi(1), 0, 0)
             };
             _btnVerify.FlatAppearance.BorderSize = 0;

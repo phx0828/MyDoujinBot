@@ -6,6 +6,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using FontAwesome.Sharp;
+using Icon = System.Drawing.Icon;
 using Microsoft.Toolkit.Uwp.Notifications;
 using MyDoujinBot.Models;
 using MyDoujinBot.Services;
@@ -28,6 +30,7 @@ namespace MyDoujinBot.Forms
         private readonly EventService _eventService = new();
         private readonly BattleService _battleService = new();
         private readonly UserService _userService = new();
+        private readonly EventArchiveService _eventArchiveService = new();
 
         private TrainingLoop? _trainingLoop;
         private BattleLoop? _battleLoop;
@@ -176,6 +179,8 @@ namespace MyDoujinBot.Forms
         private Panel pnlEventManualSub = null!;
         private CheckBox chkEventNotify = null!;
         private CheckBox chkEventNotifySound = null!;
+        private Label lblEventArchiveStatus = null!;
+        private Button btnUpdateEventArchive = null!;
 
         // --- 分頁 5: 戰報分析控制項 ---
         private TextBox txtStatsReportId = null!;
@@ -230,6 +235,7 @@ namespace MyDoujinBot.Forms
             _isRestoringSettings = true;
             try
             {
+                _eventArchiveService.EnsureInitialized();
                 InitializeUI();
                 InitializeNotifyIcon();
                 RestoreSavedSettings();
@@ -971,9 +977,9 @@ namespace MyDoujinBot.Forms
             };
             pnlLogActions.Controls.Add(chkLogAutoScroll);
 
-            btnShowLastReport = new Button
+            btnShowLastReport = new IconButton
             {
-                Text = "📄 最後戰報",
+                Text = " 最後戰報",
                 AutoSize = true,
                 BackColor = Color.FromArgb(45, 50, 70),
                 ForeColor = Color.White,
@@ -981,6 +987,11 @@ namespace MyDoujinBot.Forms
                 Cursor = Cursors.Hand,
                 Visible = false,
                 Font = new Font("Microsoft JhengHei UI", 8.5f),
+                IconChar = IconChar.FileLines,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(16),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(0, ScaleDpi(2), ScaleDpi(6), 0)
             };
             btnShowLastReport.FlatAppearance.BorderSize = 0;
@@ -994,15 +1005,20 @@ namespace MyDoujinBot.Forms
             };
             pnlLogActions.Controls.Add(btnShowLastReport);
 
-            var btnClearLog = new Button
+            var btnClearLog = new IconButton
             {
-                Text = "🗑 清空",
+                Text = " 清空",
                 AutoSize = true,
                 BackColor = Color.FromArgb(50, 40, 40),
                 ForeColor = Color.FromArgb(220, 200, 200),
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand,
                 Font = new Font("Microsoft JhengHei UI", 8.5f),
+                IconChar = IconChar.TrashCan,
+                IconColor = Color.FromArgb(220, 200, 200),
+                IconSize = ScaleDpi(16),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(0, ScaleDpi(2), 0, 0)
             };
             btnClearLog.FlatAppearance.BorderSize = 0;
@@ -1113,12 +1129,12 @@ namespace MyDoujinBot.Forms
             pnlNav.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // 剩餘空間填充
             tblSidebarLayout.Controls.Add(pnlNav, 0, 1);
 
-            btnNavTraining  = CreateNavButton("🎯  自動訓練", "training");
-            btnNavBattle    = CreateNavButton("⚔️  自動戰鬥", "battle");
-            btnNavPipeline  = CreateNavButton("🔄  行動排程", "pipeline");
-            btnNavEvents    = CreateNavButton("📜  事件應對", "events");
-            btnNavStats     = CreateNavButton("📊  戰報分析", "stats");
-            btnNavSettings  = CreateNavButton("⚙️  設定", "settings");
+            btnNavTraining  = CreateNavButton("自動訓練", "training", IconChar.Bullseye);
+            btnNavBattle    = CreateNavButton("自動戰鬥", "battle", IconChar.ShieldHalved);
+            btnNavPipeline  = CreateNavButton("行動排程", "pipeline", IconChar.Rotate);
+            btnNavEvents    = CreateNavButton("事件應對", "events", IconChar.Scroll);
+            btnNavStats     = CreateNavButton("戰報分析", "stats", IconChar.ChartBar);
+            btnNavSettings  = CreateNavButton("設定", "settings", IconChar.Gear);
 
             pnlNav.Controls.Add(btnNavTraining, 0, 0);
             pnlNav.Controls.Add(btnNavBattle, 0, 1);
@@ -1144,18 +1160,23 @@ namespace MyDoujinBot.Forms
             tblSidebarLayout.Controls.Add(lblSidebarToken, 0, 2);
         }
 
-        private Button CreateNavButton(string text, string tabKey)
+        private IconButton CreateNavButton(string text, string tabKey, IconChar icon)
         {
-            var btn = new Button
+            var btn = new IconButton
             {
-                Text = text,
+                Text = "  " + text,
                 Tag = tabKey,
                 Dock = DockStyle.Fill,
                 Height = ScaleDpi(38),
                 BackColor = Color.Transparent,
                 ForeColor = Color.FromArgb(170, 170, 190),
-                FlatStyle = FlatStyle.Flat,
+                IconChar = icon,
+                IconColor = Color.FromArgb(170, 170, 190),
+                IconSize = ScaleDpi(20),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 TextAlign = ContentAlignment.MiddleLeft,
+                FlatStyle = FlatStyle.Flat,
                 Padding = new Padding(ScaleDpi(12), 0, 0, 0),
                 Font = new Font("Microsoft JhengHei UI", 9.5f),
                 Cursor = Cursors.Hand,
@@ -1169,12 +1190,18 @@ namespace MyDoujinBot.Forms
             btn.MouseEnter += (s, e) =>
             {
                 if ((string)btn.Tag! != _selectedNavTab)
+                {
                     btn.BackColor = Color.FromArgb(28, 30, 42);
+                    btn.IconColor = Color.FromArgb(220, 220, 240);
+                }
             };
             btn.MouseLeave += (s, e) =>
             {
                 if ((string)btn.Tag! != _selectedNavTab)
+                {
                     btn.BackColor = Color.Transparent;
+                    btn.IconColor = Color.FromArgb(170, 170, 190);
+                }
             };
             _navButtons.Add(btn);
             return btn;
@@ -1197,6 +1224,10 @@ namespace MyDoujinBot.Forms
                 bool isActive = (string)btn.Tag! == tabKey;
                 btn.BackColor = isActive ? Color.FromArgb(42, 48, 70) : Color.Transparent;
                 btn.ForeColor = isActive ? Color.FromArgb(250, 250, 255) : Color.FromArgb(170, 170, 190);
+                if (btn is IconButton ib)
+                {
+                    ib.IconColor = isActive ? Color.FromArgb(250, 250, 255) : Color.FromArgb(170, 170, 190);
+                }
             }
 
             // 2. 右側面板依分頁顯示/隱藏：訓練、戰鬥、排程顯示；事件、統計、設定隱藏
@@ -1283,7 +1314,7 @@ namespace MyDoujinBot.Forms
             var outer = CreateScrollableTabPanel();
             var tbl = CreateContentTable(outer);
 
-            AddSectionHeader(tbl, "🎯  自動訓練設定");
+            AddSectionHeader(tbl, "自動訓練設定");
 
             AddRowLabel(tbl, "選擇訓練項目：");
             cmbAction = new ComboBox
@@ -1301,15 +1332,20 @@ namespace MyDoujinBot.Forms
             TblAdd(tbl, cmbAction);
 
             // 加入/清除清單按鈕
-            btnAddAction = new Button
+            btnAddAction = new IconButton
             {
-                Text = "➕ 加入循環清單",
+                Text = " 加入循環清單",
                 AutoSize = true,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(42, 85, 140),
                 ForeColor = Color.White,
                 Font = new Font("Microsoft JhengHei UI", 9f),
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                IconChar = IconChar.Plus,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(16),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft
             };
             btnAddAction.FlatAppearance.BorderSize = 0;
             btnAddAction.Click += (s, e) =>
@@ -1322,15 +1358,20 @@ namespace MyDoujinBot.Forms
                 }
             };
 
-            btnClearSequence = new Button
+            btnClearSequence = new IconButton
             {
-                Text = "🗑️ 清空清單",
+                Text = " 清空清單",
                 AutoSize = true,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(85, 45, 45),
                 ForeColor = Color.White,
                 Font = new Font("Microsoft JhengHei UI", 9f),
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                IconChar = IconChar.TrashCan,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(16),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft
             };
             btnClearSequence.FlatAppearance.BorderSize = 0;
             btnClearSequence.Click += (s, e) =>
@@ -1483,7 +1524,7 @@ namespace MyDoujinBot.Forms
             var outer = CreateScrollableTabPanel();
             var tbl = CreateContentTable(outer);
 
-            AddSectionHeader(tbl, "⚔️  自動戰鬥設定");
+            AddSectionHeader(tbl, "自動戰鬥設定");
 
             AddRowLabel(tbl, "戰鬥目標玩家 ID：");
             txtTargetPlayerId = new TextBox
@@ -1495,14 +1536,19 @@ namespace MyDoujinBot.Forms
                 Text = AppSettingsManager.Current.LastBattleTargetId
             };
             txtTargetPlayerId.TextChanged += (s, e) => { if (!_isRestoringSettings) SaveCurrentUiSettings(); };
-            btnGetPlayerInfo = new Button
+            btnGetPlayerInfo = new IconButton
             {
-                Text = "🔍 驗證 ID",
+                Text = " 驗證 ID",
                 AutoSize = true,
                 BackColor = Color.FromArgb(50, 65, 100),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand,
+                IconChar = IconChar.MagnifyingGlass,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(16),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(6, 0, 0, 0)
             };
             btnGetPlayerInfo.FlatAppearance.BorderSize = 0;
@@ -1538,15 +1584,21 @@ namespace MyDoujinBot.Forms
             rbBattleChado.CheckedChanged     += (s, e) => { if (!_isRestoringSettings) { SaveCurrentUiSettings(); if (_cts == null && lblStatusRuns != null) UpdateTelemetryStats(_currentStats); } };
             TblAdd(tbl, MakeHRow(rbBattleChallenge, rbBattleChado));
 
-            btnShowLastReport = new Button
+            btnShowLastReport = new IconButton
             {
-                Text = "📄 查看最後戰報",
+                Text = " 查看最後戰報",
                 AutoSize = true,
                 BackColor = Color.FromArgb(45, 50, 70),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand,
                 Visible = false,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                IconChar = IconChar.FileLines,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(16),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(0, 4, 0, 10)
             };
             btnShowLastReport.FlatAppearance.BorderSize = 0;
@@ -1705,7 +1757,7 @@ namespace MyDoujinBot.Forms
             };
             statusToolTip.SetToolTip(lblAutoSaveHint, "排程所有卡片修改、增刪與順序異動均即時自動儲存至方案與設定檔");
 
-            AddSectionHeader(tbl, "📋  排程階段清單", lblAutoSaveHint);
+            AddSectionHeader(tbl, "排程階段清單", lblAutoSaveHint);
 
             // 階段列表容器 (卡片式)
             tblStageList = new TableLayoutPanel
@@ -1731,30 +1783,40 @@ namespace MyDoujinBot.Forms
                 Margin = new Padding(0, 0, 0, ScaleDpi(14))
             };
 
-            btnAddStage = new Button
+            btnAddStage = new IconButton
             {
-                Text = "➕ 新增階段",
+                Text = " 新增階段",
                 AutoSize = true,
                 BackColor = Color.FromArgb(48, 68, 98), // 沉穩藍灰，區隔於開始按鈕的鮮明綠色
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Microsoft JhengHei UI", 9f),
                 Cursor = Cursors.Hand,
+                IconChar = IconChar.Plus,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(16),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(ScaleDpi(10), ScaleDpi(4), ScaleDpi(10), ScaleDpi(4)),
                 Margin = new Padding(0, 0, ScaleDpi(8), 0)
             };
             btnAddStage.FlatAppearance.BorderSize = 0;
             btnAddStage.Click += OnAddNewStageClicked;
 
-            btnClearStages = new Button
+            btnClearStages = new IconButton
             {
-                Text = "🗑 清空所有階段",
+                Text = " 清空所有階段",
                 AutoSize = true,
                 BackColor = Color.FromArgb(58, 54, 62), // 中性低調炭灰，區隔於停止按鈕的鮮明紅色
                 ForeColor = Color.FromArgb(220, 220, 220),
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Microsoft JhengHei UI", 9f),
                 Cursor = Cursors.Hand,
+                IconChar = IconChar.TrashCan,
+                IconColor = Color.FromArgb(220, 220, 220),
+                IconSize = ScaleDpi(16),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(ScaleDpi(8), ScaleDpi(4), ScaleDpi(8), ScaleDpi(4)),
                 Margin = Padding.Empty
             };
@@ -2264,29 +2326,28 @@ namespace MyDoujinBot.Forms
             cmbPipelinePresets.SelectedIndexChanged += OnPresetSelectionChanged;
 
             // 另存、重新命名、刪除（全面自動儲存，移除多餘的手動儲存按鈕）
-            btnNewPreset = CreateCompactButton("➕ 另存", Color.FromArgb(42, 120, 75));
+            btnNewPreset = CreateCompactButton("另存", Color.FromArgb(42, 120, 75), IconChar.Plus);
             btnNewPreset.Margin = new Padding(0, ScaleDpi(2), ScaleDpi(4), ScaleDpi(2));
             btnNewPreset.Click += (s, e) => CreateNewPreset();
             statusToolTip.SetToolTip(btnNewPreset, "以目前排程階段清單另存為新方案");
 
-            btnRenamePreset = CreateCompactButton("✏ 重新命名", Color.FromArgb(55, 60, 75));
+            btnRenamePreset = CreateCompactButton("重新命名", Color.FromArgb(55, 60, 75), IconChar.PenToSquare);
             btnRenamePreset.Margin = new Padding(0, ScaleDpi(2), ScaleDpi(4), ScaleDpi(2));
             btnRenamePreset.Click += (s, e) => RenameActivePreset();
             statusToolTip.SetToolTip(btnRenamePreset, "變更當前方案名稱");
 
-            btnDeletePreset = CreateCompactButton("🗑 刪除", Color.FromArgb(85, 45, 45));
+            btnDeletePreset = CreateCompactButton("刪除", Color.FromArgb(85, 45, 45), IconChar.TrashCan);
             btnDeletePreset.Margin = new Padding(0, ScaleDpi(2), ScaleDpi(6), ScaleDpi(2));
             btnDeletePreset.Click += (s, e) => DeleteActivePreset();
             statusToolTip.SetToolTip(btnDeletePreset, "刪除當前方案");
 
-
             // 匯出與匯入按鈕（將掛載於頁面最頂部標題列右側，不佔用方案列寬度）
-            btnExportPreset = CreateCompactButton("📤 匯出", Color.FromArgb(50, 65, 88));
+            btnExportPreset = CreateCompactButton("匯出", Color.FromArgb(50, 65, 88), IconChar.FileExport);
             btnExportPreset.Margin = new Padding(0, ScaleDpi(2), ScaleDpi(4), ScaleDpi(2));
             btnExportPreset.Click += (s, e) => ExportActivePreset();
             statusToolTip.SetToolTip(btnExportPreset, "將當前方案匯出成 JSON 檔案以供備份或分享");
 
-            btnImportPreset = CreateCompactButton("📥 匯入", Color.FromArgb(50, 65, 88));
+            btnImportPreset = CreateCompactButton("匯入", Color.FromArgb(50, 65, 88), IconChar.FileImport);
             btnImportPreset.Margin = new Padding(ScaleDpi(2), ScaleDpi(2), 0, ScaleDpi(2));
             btnImportPreset.Click += (s, e) => ImportPresetFromFile();
             statusToolTip.SetToolTip(btnImportPreset, "從 JSON 檔案匯入方案");
@@ -2301,20 +2362,28 @@ namespace MyDoujinBot.Forms
             return pnlPresetBar;
         }
 
-        private Button CreateCompactButton(string text, Color backColor)
+        private IconButton CreateCompactButton(string text, Color backColor, IconChar icon = IconChar.None)
         {
-            var btn = new Button
+            var btn = new IconButton
             {
-                Text = text,
+                Text = " " + text,
                 AutoSize = true,
                 BackColor = backColor,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Microsoft JhengHei UI", 9f),
                 Cursor = Cursors.Hand,
-                Padding = new Padding(ScaleDpi(6), ScaleDpi(2), ScaleDpi(6), ScaleDpi(2)),
+                Padding = new Padding(ScaleDpi(8), ScaleDpi(3), ScaleDpi(8), ScaleDpi(3)),
                 Margin = new Padding(0, ScaleDpi(2), ScaleDpi(6), ScaleDpi(2))
             };
+            if (icon != IconChar.None)
+            {
+                btn.IconChar = icon;
+                btn.IconColor = Color.White;
+                btn.IconSize = ScaleDpi(16);
+                btn.TextImageRelation = TextImageRelation.ImageBeforeText;
+                btn.ImageAlign = ContentAlignment.MiddleLeft;
+            }
             btn.FlatAppearance.BorderSize = 0;
             return btn;
         }
@@ -2640,18 +2709,165 @@ namespace MyDoujinBot.Forms
             chkEventNotifySound.CheckedChanged += (_, _) => SaveEventPreferences();
             TblAdd(tbl, chkEventNotifySound);
 
-            AddSectionHeader(tbl, "策略記憶庫 (規劃中)");
-            var lblFeatureNote = new Label
+            AddSectionHeader(tbl, "第三方事件檔案庫");
+
+            var pnlArchiveRow = new TableLayoutPanel
             {
-                Text = "預留空間供未來擴充「事件記憶庫」與「自訂選項組合」。\n目前可使用上方自動或手動模式進行操作。",
-                ForeColor = Color.FromArgb(150, 150, 175),
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
                 AutoSize = true,
-                Padding = new Padding(8),
-                BackColor = Color.FromArgb(28, 28, 36)
+                Margin = new Padding(0, 4, 0, 6)
             };
-            TblAdd(tbl, lblFeatureNote);
+            pnlArchiveRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            pnlArchiveRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+            lblEventArchiveStatus = new Label
+            {
+                Dock = DockStyle.Fill,
+                ForeColor = Color.FromArgb(170, 175, 200),
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                AutoSize = true,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Margin = new Padding(0, ScaleDpi(4), 0, 0)
+            };
+
+            btnUpdateEventArchive = new IconButton
+            {
+                Text = " 更新事件庫",
+                AutoSize = true,
+                BackColor = Color.FromArgb(48, 68, 98),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                Cursor = Cursors.Hand,
+                IconChar = IconChar.Rotate,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(18),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(ScaleDpi(10), ScaleDpi(4), ScaleDpi(10), ScaleDpi(4)),
+                Margin = new Padding(ScaleDpi(8), 0, 0, 0)
+            };
+            btnUpdateEventArchive.FlatAppearance.BorderSize = 0;
+            btnUpdateEventArchive.Click += OnUpdateEventArchiveClicked;
+
+            pnlArchiveRow.Controls.Add(lblEventArchiveStatus, 0, 0);
+            pnlArchiveRow.Controls.Add(btnUpdateEventArchive, 1, 0);
+            TblAdd(tbl, pnlArchiveRow);
+
+            var lblArchiveHint = new Label
+            {
+                Text = "資料來源：我的同人攻略圖鑑網。資料將保存至本機 data/events/ (EventBrief.json 與 EventRoute.json)。",
+                ForeColor = Color.FromArgb(130, 130, 150),
+                Font = new Font("Microsoft JhengHei UI", 8.5f),
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 12)
+            };
+            TblAdd(tbl, lblArchiveHint);
+
+            UpdateEventArchiveStatusText();
 
             return outer;
+        }
+
+        private void UpdateEventArchiveStatusText()
+        {
+            if (lblEventArchiveStatus == null) return;
+            var meta = _eventArchiveService.GetMetadata();
+            string timeText = meta.LastUpdatedAt.HasValue
+                ? meta.LastUpdatedAt.Value.ToString("yyyy/MM/dd HH:mm")
+                : "尚未更新";
+            lblEventArchiveStatus.Text = $"本機事件庫：{meta.BriefEventCount} 個事件、{meta.RouteChainCount} 條路線 ｜ 上次更新: {timeText}";
+            lblEventArchiveStatus.ForeColor = Color.FromArgb(140, 200, 160);
+        }
+
+        private async void OnUpdateEventArchiveClicked(object? sender, EventArgs e)
+        {
+            if (btnUpdateEventArchive == null) return;
+
+            // 鎖定畫面，避免尚未更新完成使用者搶著操作
+            btnUpdateEventArchive.Enabled = false;
+            var prevCursor = this.Cursor;
+            this.Cursor = Cursors.WaitCursor;
+
+            bool prevAuto = rbEventAuto.Enabled;
+            bool prevManual = rbEventManual.Enabled;
+            bool prevNotify = chkEventNotify.Enabled;
+            bool prevNotifySound = chkEventNotifySound.Enabled;
+
+            rbEventAuto.Enabled = false;
+            rbEventManual.Enabled = false;
+            chkEventNotify.Enabled = false;
+            chkEventNotifySound.Enabled = false;
+            foreach (var navBtn in _navButtons) navBtn.Enabled = false;
+
+            lblEventArchiveStatus.Text = "⏳ 正在連線至【我的同仁攻略圖鑑網】取得最新資料...";
+            lblEventArchiveStatus.ForeColor = Color.FromArgb(235, 185, 80);
+            statusToolTip.SetToolTip(btnUpdateEventArchive, "事件庫更新中，畫面已鎖定");
+
+            try
+            {
+                var result = await Task.Run(async () =>
+                {
+                    return await _eventArchiveService.UpdateFromRemoteAsync(
+                        onProgress: msg =>
+                        {
+                            if (!this.IsDisposed && this.IsHandleCreated)
+                            {
+                                try
+                                {
+                                    this.BeginInvoke(() =>
+                                    {
+                                        lblEventArchiveStatus.Text = $"⏳ {msg}";
+                                    });
+                                }
+                                catch { }
+                            }
+                        });
+                });
+
+                if (result.Success)
+                {
+                    static string FormatDelta(int diff) => diff switch
+                    {
+                        > 0 => $"+{diff}",
+                        < 0 => $"{diff}",
+                        _ => "無增減"
+                    };
+
+                    string briefDelta = FormatDelta(result.BriefEventDiff);
+                    string chainDelta = FormatDelta(result.RouteChainDiff);
+
+                    UpdateEventArchiveStatusText();
+                    AppendLog($"[事件庫] {result.Message}", Color.FromArgb(100, 220, 140));
+
+                    string detail = "事件庫已更新完成！\n\n" +
+                                    $"• 事件總數：{result.BriefEventCount} 個（{briefDelta}）\n" +
+                                    $"• 路線總數：{result.RouteChainCount} 條（{chainDelta}）\n" +
+                                    $"• 路線節點：{result.RouteEventCount} 個（{FormatDelta(result.RouteEventDiff)}）\n\n";
+
+                    MessageBox.Show(this, detail, "事件庫更新成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                lblEventArchiveStatus.Text = $"❌ 更新失敗：{ex.Message}";
+                lblEventArchiveStatus.ForeColor = Color.FromArgb(235, 90, 90);
+                AppendLog($"[事件庫] 更新失敗：{ex.Message}", Color.FromArgb(235, 90, 90));
+                MessageBox.Show(this, $"更新事件庫時發生錯誤：\n{ex.Message}", "更新失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                btnUpdateEventArchive.Enabled = true;
+                rbEventAuto.Enabled = prevAuto;
+                rbEventManual.Enabled = prevManual;
+                chkEventNotify.Enabled = prevNotify;
+                chkEventNotifySound.Enabled = prevNotifySound;
+                foreach (var navBtn in _navButtons) navBtn.Enabled = true;
+                this.Cursor = prevCursor;
+                statusToolTip.SetToolTip(btnUpdateEventArchive, "點擊連線第三方網站線上更新本機事件庫");
+            }
         }
 
         private void OnEventModeGroupChanged()
@@ -2743,15 +2959,20 @@ namespace MyDoujinBot.Forms
             };
             pnlTop.Controls.Add(txtStatsReportId, 1, 0);
 
-            btnStatsQuery = new Button
+            btnStatsQuery = new IconButton
             {
-                Text = "🔍 取得數據",
+                Text = " 取得數據",
                 AutoSize = true,
                 BackColor = Color.FromArgb(50, 65, 100),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand,
                 Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                IconChar = IconChar.MagnifyingGlass,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(18),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(8, 0, 0, 0)
             };
             btnStatsQuery.FlatAppearance.BorderSize = 0;
@@ -2917,15 +3138,20 @@ namespace MyDoujinBot.Forms
                 Text = _currentToken
             };
 
-            btnSaveSettingsToken = new Button
+            btnSaveSettingsToken = new IconButton
             {
-                Text = "💾 儲存 Token 設定",
+                Text = " 儲存 Token 設定",
                 AutoSize = true,
                 BackColor = Color.FromArgb(40, 140, 80),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
                 Cursor = Cursors.Hand,
+                IconChar = IconChar.FloppyDisk,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(18),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(ScaleDpi(8), 0, 0, 0)
             };
             btnSaveSettingsToken.FlatAppearance.BorderSize = 0;
@@ -2945,7 +3171,7 @@ namespace MyDoujinBot.Forms
                 }
 
                 btnSaveSettingsToken.Enabled = false;
-                btnSaveSettingsToken.Text = "驗證中...";
+                btnSaveSettingsToken.Text = " 驗證中...";
                 try
                 {
                     await ValidateAndApplyTokenAsync(input, isFirstTime: false);
@@ -2953,7 +3179,7 @@ namespace MyDoujinBot.Forms
                 finally
                 {
                     btnSaveSettingsToken.Enabled = true;
-                    btnSaveSettingsToken.Text = "💾 儲存 Token 設定";
+                    btnSaveSettingsToken.Text = " 儲存 Token 設定";
                 }
             };
 
