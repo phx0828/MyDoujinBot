@@ -37,6 +37,8 @@ MyDoujinBot/
 │   ├── EventSelectionForm.cs # 獨立彈窗模式下之事件選項決策視窗
 │   ├── BattleReportForm.cs   # 單場戰報彩色日誌彈出視窗
 │   ├── BattleStatsForm.cs    # 獨立戰報數據查詢與圖表視窗
+│   ├── IconSelectionForm.cs  # 獨立應用程式圖示挑選視窗
+│   ├── PipelineStageEditForm.cs # 獨立排程階段新增與編輯對話框
 │   └── SettingsForm.cs       # 舊版獨立設定彈窗
 ├── Services/                 # 核心業務、背景工作迴圈與通訊層
 │   ├── HttpService.cs        # 統一 HttpClient 封裝（Token 去前綴、偽裝標頭、401 中斷）
@@ -67,6 +69,7 @@ MyDoujinBot/
 │   ├── StatHelper.cs         # 遊戲屬性中英對照轉換
 │   ├── EventUiHelper.cs      # 事件按鈕色彩與字級輔助
 │   ├── PromptDialog.cs       # 方案命名與輸入對話框
+│   ├── PillBadgeControl.cs   # 膠囊風格標籤與清單項目控制項
 │   └── BattleStatsChartBuilder.cs # ASCII 戰報長條圖生成器
 └── docs/                     # 系統與 API 詳細規格文件庫
 ```

@@ -43,7 +43,7 @@
 
 ## 3. 行動排程模組 (Pipeline Loop & Presets)
 
-- **核心程式碼**：[PipelineLoop.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/PipelineLoop.cs)、[PresetManager.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/PresetManager.cs)、[PipelineStage.cs](file:///d:/MyDoujinBot/MyDoujinBot/Models/PipelineStage.cs)
+- **核心程式碼**：[PipelineLoop.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/PipelineLoop.cs)、[PipelineStageEditForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/PipelineStageEditForm.cs)、[PresetManager.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/PresetManager.cs)、[PipelineStage.cs](file:///d:/MyDoujinBot/MyDoujinBot/Models/PipelineStage.cs)
 - **功能特性**：
   1. **多階段循序執行**：
      - 每個階段可獨立設定為【訓練】或【戰鬥（友好切磋 / 我要茶渡你）】。
@@ -51,12 +51,13 @@
        - `LevelReach`：角色達到指定等級（例如升至 Lv.80 即切換）。
        - `RunCountReach`：執行達到指定次數。
        - `MinutesReach`：執行達到指定分鐘數。
-  2. **原地編輯卡片 (In-Place Edit)**：
-     - 點擊卡片旁的「✎ 編輯」按鈕，卡片直接於原地展開編輯表單。
-     - 戰鬥模式配置適度間距與寬度自適應佈局，驗證成功後完整保留對手角色詳細資訊 (`BattleTargetDetail`)，離開編輯後依然完整展示。
-     - 編輯防呆：卡片若有修改未完成或對象 ID 未通過驗證，全域開始按鈕禁止啟動。
+  2. **獨立對話框設定與自訂循環清單 (PipelineStageEditForm)**：
+     - 點擊「➕ 新增階段」或卡片「✏ 編輯」按鈕時，跳出專屬獨立對話框進行階段調整。
+     - **自訂訓練清單**：訓練行動支援自訂循環清單，可隨意加入多個訓練動作（如狩獵、自主訓練），執行時依序循環執行；排程卡片同步動態呈現循環順位 Pill Badge。
+     - 提供行動模式（純中文切換：自動訓練／自動戰鬥）、對手 ID 驗證回饋，以及達成切換條件數值配置。
+     - 卡片統一標示固定順序編號（`#1 階段`、`#2 階段`），編輯更直觀。
   3. **全面即時自動存檔**：
-     - 階段內容修改、上下移動排序、新增與刪除均會在記憶體與磁碟檔案同步儲存，徹底移除舊式手動儲存按鈕。
+     - 階段內容新增、修改儲存、上下移動排序與刪除均會在記憶體與磁碟檔案同步儲存，無須手動儲存按鈕。
   4. **方案管理器 (Preset Manager)**：
      - 支援多套排程方案切換，檔案以獨立 JSON 儲存於 `data/presets/pipeline/`。
      - 具備「另存新方案」、「重新命名」、「刪除方案」功能。

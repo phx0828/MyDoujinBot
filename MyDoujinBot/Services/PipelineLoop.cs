@@ -139,8 +139,12 @@ namespace MyDoujinBot.Services
                         // ── 執行動作（訓練 or 戰鬥）──
                         if (stage.ActionType == StageActionType.Training)
                         {
+                            string currentActionId = (stage.TrainingActionSequence != null && stage.TrainingActionSequence.Count > 0)
+                                ? stage.TrainingActionSequence[stageRunCount % stage.TrainingActionSequence.Count]
+                                : stage.TrainingActionId;
+
                             var result = await _trainingService.ExecuteTrainingAsync(
-                                settings.Token, stage.TrainingActionId, cancellationToken);
+                                settings.Token, currentActionId, cancellationToken);
 
                             if (result.IsCancelled) return;
 

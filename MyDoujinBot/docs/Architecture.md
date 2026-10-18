@@ -49,6 +49,7 @@
 - **[EventSelectionForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/EventSelectionForm.cs)**：手動獨立彈窗模式下的事件決策視窗，具備屬性檢定色階與自適應高度。
 - **[BattleReportForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/BattleReportForm.cs)**：單場戰鬥結果與彩色戰鬥 LOG 檢視彈窗。
 - **[BattleStatsForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/BattleStatsForm.cs)**：獨立戰報數據查詢與 ASCII 長條圖渲染視窗。
+- **[PipelineStageEditForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/PipelineStageEditForm.cs)**：排程階段獨立新增與編輯對話框，提供充裕設定版面、即時排程卡片預覽與對手驗證機制。
 - **[SettingsForm.cs](file:///d:/MyDoujinBot/MyDoujinBot/Forms/SettingsForm.cs)**：舊版相容之獨立設定對話框。
 - **流暢渲染與視窗拖曳原生零延遲機制**：
   - 表單樣式加入 `WS_CLIPCHILDREN`（`0x02000000`）與 `OptimizedDoubleBuffer`，並關閉衝突的 `UserPaint`，使視窗平移完全交由 Windows DWM GPU 硬體加速合成。
@@ -83,7 +84,8 @@
 - **[LoopLogHelper.cs](file:///d:/MyDoujinBot/MyDoujinBot/Utilities/LoopLogHelper.cs)**：統一自動訓練、自動戰鬥與行動排程之日誌輸出格式化、色彩定義、隨機冷卻計算與事件自動選擇策略。
 - **[StatHelper.cs](file:///d:/MyDoujinBot/MyDoujinBot/Utilities/StatHelper.cs)**：遊戲屬性中英名稱快取與對照。
 - **[EventUiHelper.cs](file:///d:/MyDoujinBot/MyDoujinBot/Utilities/EventUiHelper.cs)**：事件決策介面動態外觀與字型排版輔助。
-- **[PromptDialog.cs](file:///d:/MyDoujinBot/MyDoujinBot/Utilities/PromptDialog.cs)**：方案管理對話框。
+- **[PromptDialog.cs](file:///d:/MyDoujinBot/MyDoujinBot/Utilities/PromptDialog.cs)**：通用文字輸入與方案管理對話框，具備 High-DPI 自適應縮放、輸入提示字元與邊界自動換行保護。
+- **[PillBadgeControl.cs](file:///d:/MyDoujinBot/MyDoujinBot/Utilities/PillBadgeControl.cs)**：平滑膠囊風格標籤元件，支援點擊移除與唯讀清單展示，具備 GDI+ 防鋸齒與 High-DPI 縮放支援。
 - **[BattleStatsChartBuilder.cs](file:///d:/MyDoujinBot/MyDoujinBot/Utilities/BattleStatsChartBuilder.cs)**：戰報 ASCII 圖表生成器。
 
 ---

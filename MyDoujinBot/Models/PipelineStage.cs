@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 using MyDoujinBot.Services;
 
@@ -20,6 +22,7 @@ namespace MyDoujinBot.Models
     /// <summary>
     /// 行動排程中的單一階段設定。
     /// 由使用者自訂：執行動作、目標條件、以及完成後切換下一階段。
+    /// 訓練行動支援自訂訓練清單（依序循環執行）。
     /// </summary>
     public class PipelineStage
     {
@@ -35,6 +38,10 @@ namespace MyDoujinBot.Models
         // --- 若為訓練 ---
         [JsonPropertyName("trainingActionId")]
         public string TrainingActionId { get; set; } = "hunt";
+
+        /// <summary>自訂訓練項目循環清單。若有設定項目，執行時將依序循環；若為空則執行 TrainingActionId</summary>
+        [JsonPropertyName("trainingActionSequence")]
+        public List<string> TrainingActionSequence { get; set; } = new();
 
         // --- 若為戰鬥 ---
         [JsonPropertyName("battleTargetId")]
@@ -61,7 +68,14 @@ namespace MyDoujinBot.Models
         {
             if (ActionType == StageActionType.Training)
             {
-                var action = System.Linq.Enumerable.FirstOrDefault(TrainingActions.All, a => a.ActionId == TrainingActionId);
+                if (TrainingActionSequence != null && TrainingActionSequence.Count > 0)
+                {
+                    var names = TrainingActionSequence
+                        .Select(id => TrainingActions.All.FirstOrDefault(a => a.ActionId == id)?.DisplayName ?? id)
+                        .ToList();
+                    return $"訓練：{string.Join(" → ", names)}";
+                }
+                var action = TrainingActions.All.FirstOrDefault(a => a.ActionId == TrainingActionId);
                 return $"訓練：{action?.DisplayName ?? TrainingActionId}";
             }
             else
@@ -81,6 +95,25 @@ namespace MyDoujinBot.Models
                 StageConditionType.RunCountReach => $"執行滿 {ConditionValue} 次",
                 StageConditionType.MinutesReach => $"運行滿 {ConditionValue} 分鐘",
                 _ => $"達標值: {ConditionValue}"
+            };
+        }
+
+        /// <summary>建立一個具備相同數值的獨立階段複本</summary>
+        public PipelineStage Clone()
+        {
+            return new PipelineStage
+            {
+                Id = this.Id,
+                Name = this.Name,
+                ActionType = this.ActionType,
+                TrainingActionId = this.TrainingActionId,
+                TrainingActionSequence = new List<string>(this.TrainingActionSequence ?? Enumerable.Empty<string>()),
+                BattleTargetId = this.BattleTargetId,
+                BattleTargetName = this.BattleTargetName,
+                BattleTargetDetail = this.BattleTargetDetail,
+                BattleType = this.BattleType,
+                ConditionType = this.ConditionType,
+                ConditionValue = this.ConditionValue
             };
         }
     }
