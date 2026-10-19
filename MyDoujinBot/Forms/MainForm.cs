@@ -69,13 +69,13 @@ namespace MyDoujinBot.Forms
         private Panel pnlSidebar = null!;
         private TableLayoutPanel pnlNav = null!;
         private Label lblSidebarToken = null!;
-        private Button btnNavTraining = null!;
-        private Button btnNavBattle = null!;
-        private Button btnNavPipeline = null!;
-        private Button btnNavEvents = null!;
-        private Button btnNavStats = null!;
-        private Button btnNavSettings = null!;
-        private readonly List<Button> _navButtons = new();
+        private NavButton btnNavTraining = null!;
+        private NavButton btnNavBattle = null!;
+        private NavButton btnNavPipeline = null!;
+        private NavButton btnNavEvents = null!;
+        private NavButton btnNavStats = null!;
+        private NavButton btnNavSettings = null!;
+        private readonly List<NavButton> _navButtons = new();
 
         // --- 主畫布與分頁 Panel ---
         private Panel pnlMainCanvas = null!;
@@ -1249,9 +1249,9 @@ namespace MyDoujinBot.Forms
             tblSidebarLayout.Controls.Add(lblSidebarToken, 0, 2);
         }
 
-        private IconButton CreateNavButton(string text, string tabKey, IconChar icon)
+        private NavButton CreateNavButton(string text, string tabKey, IconChar icon)
         {
-            var btn = new IconButton
+            var btn = new NavButton
             {
                 Text = "  " + text,
                 Tag = tabKey,
@@ -1276,24 +1276,59 @@ namespace MyDoujinBot.Forms
             btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(28, 30, 42);
             btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(42, 48, 70);
             btn.Click += (s, e) => { if (_selectedNavTab != tabKey) SwitchNavTab(tabKey); };
-            btn.MouseEnter += (s, e) =>
-            {
-                if ((string)btn.Tag! != _selectedNavTab)
-                {
-                    btn.BackColor = Color.FromArgb(28, 30, 42);
-                    btn.IconColor = Color.FromArgb(220, 220, 240);
-                }
-            };
-            btn.MouseLeave += (s, e) =>
-            {
-                if ((string)btn.Tag! != _selectedNavTab)
-                {
-                    btn.BackColor = SidebarBackColor;
-                    btn.IconColor = Color.FromArgb(170, 170, 190);
-                }
-            };
+            btn.MouseEnter += (s, e) => ApplyNavButtonStyle(btn, hover: true);
+            btn.MouseLeave += (s, e) => ApplyNavButtonStyle(btn, hover: false);
             _navButtons.Add(btn);
             return btn;
+        }
+
+        // ── 導覽按鈕配色（鎖定時改用「變淡」配色，而不是 Enabled = false） ──
+        private static readonly Color NavBackActive      = Color.FromArgb(42, 48, 70);
+        private static readonly Color NavBackHover       = Color.FromArgb(28, 30, 42);
+        private static readonly Color NavFore            = Color.FromArgb(170, 170, 190);
+        private static readonly Color NavForeHoverIcon   = Color.FromArgb(220, 220, 240);
+        private static readonly Color NavForeActive      = Color.FromArgb(250, 250, 255);
+        private static readonly Color NavForeLocked      = Color.FromArgb(88, 88, 108);    // 鎖定（非作用中）：文字 + 圖示
+        private static readonly Color NavForeLockedActive = Color.FromArgb(135, 138, 160); // 鎖定且為目前頁籤：保留底色高亮，但文字變淡
+
+        /// <summary>依「是否作用中 / 是否鎖定 / 是否 hover」統一套用導覽按鈕的底色、文字色與圖示色。</summary>
+        private void ApplyNavButtonStyle(NavButton btn, bool hover = false)
+        {
+            bool active = (string)btn.Tag! == _selectedNavTab;
+
+            Color back, fore, icon;
+            if (btn.Locked)
+            {
+                back = active ? NavBackActive : SidebarBackColor;
+                fore = icon = active ? NavForeLockedActive : NavForeLocked;
+            }
+            else if (active)
+            {
+                back = NavBackActive;
+                fore = icon = NavForeActive;
+            }
+            else if (hover)
+            {
+                back = NavBackHover;
+                fore = NavFore;
+                icon = NavForeHoverIcon;
+            }
+            else
+            {
+                back = SidebarBackColor;
+                fore = icon = NavFore;
+            }
+
+            btn.BackColor = back;
+            btn.ForeColor = fore;
+            btn.IconColor = icon;
+        }
+
+        private void SetNavLocked(NavButton? btn, bool locked)
+        {
+            if (btn == null) return;
+            btn.Locked = locked;
+            ApplyNavButtonStyle(btn);
         }
 
         private void SwitchNavTab(string tabKey)
@@ -1310,13 +1345,7 @@ namespace MyDoujinBot.Forms
             // 1. 更新側邊欄按鈕選中樣式（確保啟動時及每次切換時皆正確高亮）
             foreach (var btn in _navButtons)
             {
-                bool isActive = (string)btn.Tag! == tabKey;
-                btn.BackColor = isActive ? Color.FromArgb(42, 48, 70) : SidebarBackColor;
-                btn.ForeColor = isActive ? Color.FromArgb(250, 250, 255) : Color.FromArgb(170, 170, 190);
-                if (btn is IconButton ib)
-                {
-                    ib.IconColor = isActive ? Color.FromArgb(250, 250, 255) : Color.FromArgb(170, 170, 190);
-                }
+                ApplyNavButtonStyle(btn);
             }
 
             // 2. 右側面板依分頁顯示/隱藏：訓練、戰鬥、排程顯示；事件、統計、設定隱藏
@@ -2859,7 +2888,7 @@ namespace MyDoujinBot.Forms
 
             rbEventAuto.Enabled = false;
             rbEventManual.Enabled = false;
-            foreach (var navBtn in _navButtons) navBtn.Enabled = false;
+            foreach (var navBtn in _navButtons) SetNavLocked(navBtn, true);
 
             lblEventArchiveStatus.Text = "⏳ 正在連線至【我的同仁攻略圖鑑網】取得最新資料...";
             lblEventArchiveStatus.ForeColor = Color.FromArgb(235, 185, 80);
@@ -2922,7 +2951,7 @@ namespace MyDoujinBot.Forms
                 btnUpdateEventArchive.Enabled = true;
                 rbEventAuto.Enabled = prevAuto;
                 rbEventManual.Enabled = prevManual;
-                foreach (var navBtn in _navButtons) navBtn.Enabled = true;
+                foreach (var navBtn in _navButtons) SetNavLocked(navBtn, false);
                 this.Cursor = prevCursor;
                 statusToolTip.SetToolTip(btnUpdateEventArchive, "點擊連線第三方網站線上更新本機事件庫");
             }
@@ -4387,12 +4416,12 @@ namespace MyDoujinBot.Forms
             if (enabled)
             {
                 // 空閒/停止狀態：所有導覽頁籤皆可點擊切換
-                if (btnNavTraining != null) btnNavTraining.Enabled = true;
-                if (btnNavBattle != null)   btnNavBattle.Enabled   = true;
-                if (btnNavPipeline != null) btnNavPipeline.Enabled = true;
-                if (btnNavEvents != null)   btnNavEvents.Enabled   = true;
-                if (btnNavStats != null)    btnNavStats.Enabled    = true;
-                if (btnNavSettings != null) btnNavSettings.Enabled = true;
+                SetNavLocked(btnNavTraining, false);
+                SetNavLocked(btnNavBattle, false);
+                SetNavLocked(btnNavPipeline, false);
+                SetNavLocked(btnNavEvents, false);
+                SetNavLocked(btnNavStats, false);
+                SetNavLocked(btnNavSettings, false);
             }
             else
             {
@@ -4401,12 +4430,12 @@ namespace MyDoujinBot.Forms
                 // - 非當前運行的其他行動頁籤停用，避免同時啟動多個任務衝突
                 // - 戰報分析頁籤保持啟用（純查詢與數據檢視，不影響背景執行）
                 // - 事件應對與連線設定頁籤停用，避免運作中修改關鍵策略或 Token
-                if (btnNavTraining != null) btnNavTraining.Enabled = (_activeRunningMode == "training");
-                if (btnNavBattle != null)   btnNavBattle.Enabled   = (_activeRunningMode == "battle");
-                if (btnNavPipeline != null) btnNavPipeline.Enabled = (_activeRunningMode == "pipeline");
-                if (btnNavEvents != null)   btnNavEvents.Enabled   = false;
-                if (btnNavStats != null)    btnNavStats.Enabled    = true;
-                if (btnNavSettings != null) btnNavSettings.Enabled = false;
+                SetNavLocked(btnNavTraining, _activeRunningMode != "training");
+                SetNavLocked(btnNavBattle, _activeRunningMode != "battle");
+                SetNavLocked(btnNavPipeline, _activeRunningMode != "pipeline");
+                SetNavLocked(btnNavEvents, true);
+                SetNavLocked(btnNavStats, false);
+                SetNavLocked(btnNavSettings, true);
             }
 
             // 2. 自動訓練頁面設定控制項啟用/禁用
