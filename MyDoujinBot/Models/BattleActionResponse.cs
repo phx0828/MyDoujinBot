@@ -32,6 +32,15 @@ namespace MyDoujinBot.Models
         [JsonPropertyName("logs")]
         public List<BattleLog>? Logs { get; set; }
 
+        [JsonPropertyName("levelUps")]
+        public int LevelUps { get; set; }
+
+        [JsonPropertyName("gains")]
+        public Dictionary<string, int>? Gains { get; set; }
+
+        [JsonPropertyName("actionResult")]
+        public ActionResult? ActionResult { get; set; }
+
         /// <summary>
         /// 判斷是否為我方玩家成功對敵方丟下小零食並螺旋下指（嚴格排除敵方對我方潑屎）
         /// 格式範例："{players.characterName} 對 {enemies.characterName} 丟了小零食並螺旋下指"

@@ -158,6 +158,7 @@ namespace MyDoujinBot.Forms
         private Label lblBattleMinutesUnit = null!;
         private NumericUpDown nudBattleExtraDelay = null!;
         private Button btnShowLastReport = null!;
+        private IconButton btnActionDetails = null!;
 
         // --- 分頁 3: 行動排程控制項 ---
         private TableLayoutPanel tblStageList = null!;
@@ -698,14 +699,14 @@ namespace MyDoujinBot.Forms
                 Dock = DockStyle.Fill,
                 AutoSize = true,
                 ColumnCount = 2,
-                RowCount = 5,
+                RowCount = 6,
                 BackColor = Color.Transparent,
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
             tblStatusContent.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             tblStatusContent.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            for (int r = 0; r < 5; r++)
+            for (int r = 0; r < 6; r++)
                 tblStatusContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             pnlStatusCard.Controls.Add(tblStatusContent);
 
@@ -1016,6 +1017,39 @@ namespace MyDoujinBot.Forms
             tblStatusContent.Controls.Add(lblStatusEvents, 0, 4);
             tblStatusContent.Controls.Add(pnlStatusEventOutcome, 1, 4);
 
+            // Row 5: 行動詳情按鈕（靠右不佔滿整行）
+            btnActionDetails = new IconButton
+            {
+                Text = " 行動詳情",
+                AutoSize = true,
+                Anchor = AnchorStyles.Right,
+                BackColor = Color.FromArgb(42, 46, 62),
+                ForeColor = Color.FromArgb(220, 225, 240),
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                IconChar = IconChar.ChartBar,
+                IconColor = Color.FromArgb(140, 200, 255),
+                IconSize = ScaleDpi(15),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
+                TextAlign = ContentAlignment.MiddleRight,
+                Padding = new Padding(ScaleDpi(8), ScaleDpi(3), ScaleDpi(8), ScaleDpi(3)),
+                Margin = new Padding(0, ScaleDpi(6), 0, 0)
+            };
+            btnActionDetails.FlatAppearance.BorderSize = 0;
+            btnActionDetails.FlatAppearance.MouseOverBackColor = Color.FromArgb(55, 62, 85);
+            btnActionDetails.FlatAppearance.MouseDownBackColor = Color.FromArgb(35, 38, 52);
+            btnActionDetails.Click += (s, e) =>
+            {
+                string curMode = string.IsNullOrEmpty(_activeRunningMode) ? _selectedNavTab : _activeRunningMode;
+                string elapsed = lblStatusElapsed != null && !string.IsNullOrWhiteSpace(lblStatusElapsed.Text) ? lblStatusElapsed.Text : "00:00:00";
+                bool isChado = (rbBattleChado != null && rbBattleChado.Checked) || _currentStats.ChadoSuccessCount > 0;
+                using var f = new StatGainsForm(_currentStats, curMode, elapsed, isChado);
+                f.ShowDialog(this);
+            };
+            tblStatusContent.Controls.Add(btnActionDetails, 1, 5);
+
             // ── 下方即時日誌面板 ──
             var pnlLogCard = new Panel
             {
@@ -1029,11 +1063,23 @@ namespace MyDoujinBot.Forms
             var pnlLogTop = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = ScaleDpi(32),
+                Height = ScaleDpi(34),
                 BackColor = Color.FromArgb(28, 28, 38),
-                Padding = new Padding(ScaleDpi(12), ScaleDpi(3), ScaleDpi(12), ScaleDpi(3))
+                Padding = new Padding(ScaleDpi(10), ScaleDpi(2), ScaleDpi(8), ScaleDpi(2))
             };
             pnlLogCard.Controls.Add(pnlLogTop);
+
+            var pnlLogActions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Right,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty
+            };
+            pnlLogTop.Controls.Add(pnlLogActions);
 
             var lblLogHeader = new Label
             {
@@ -1046,23 +1092,13 @@ namespace MyDoujinBot.Forms
             };
             pnlLogTop.Controls.Add(lblLogHeader);
 
-            var pnlLogActions = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Right,
-                FlowDirection = FlowDirection.LeftToRight,
-                AutoSize = true,
-                BackColor = Color.Transparent,
-                Margin = Padding.Empty
-            };
-            pnlLogTop.Controls.Add(pnlLogActions);
-
             chkLogAutoScroll = new CheckBox
             {
                 Text = "自動捲動",
                 Checked = true,
                 ForeColor = Color.FromArgb(170, 170, 190),
                 AutoSize = true,
-                Margin = new Padding(0, ScaleDpi(4), ScaleDpi(6), 0)
+                Margin = new Padding(0, ScaleDpi(4), ScaleDpi(4), 0)
             };
             pnlLogActions.Controls.Add(chkLogAutoScroll);
 
@@ -1081,7 +1117,7 @@ namespace MyDoujinBot.Forms
                 IconSize = ScaleDpi(16),
                 TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleLeft,
-                Margin = new Padding(0, ScaleDpi(2), ScaleDpi(6), 0)
+                Margin = new Padding(0, ScaleDpi(2), 0, 0)
             };
             btnShowLastReport.FlatAppearance.BorderSize = 0;
             btnShowLastReport.Click += (s, e) =>
@@ -1093,26 +1129,6 @@ namespace MyDoujinBot.Forms
                 }
             };
             pnlLogActions.Controls.Add(btnShowLastReport);
-
-            var btnClearLog = new IconButton
-            {
-                Text = " 清空",
-                AutoSize = true,
-                BackColor = Color.FromArgb(50, 40, 40),
-                ForeColor = Color.FromArgb(220, 200, 200),
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("Microsoft JhengHei UI", 8.5f),
-                IconChar = IconChar.TrashCan,
-                IconColor = Color.FromArgb(220, 200, 200),
-                IconSize = ScaleDpi(16),
-                TextImageRelation = TextImageRelation.ImageBeforeText,
-                ImageAlign = ContentAlignment.MiddleLeft,
-                Margin = new Padding(0, ScaleDpi(2), 0, 0)
-            };
-            btnClearLog.FlatAppearance.BorderSize = 0;
-            btnClearLog.Click += (s, e) => { rtbLog.Clear(); _logLineCount = 0; };
-            pnlLogActions.Controls.Add(btnClearLog);
 
             // LOG 內容本體容器（帶有各自專屬 Padding，文字與邊框不緊貼）
             var pnlLogBody = new Panel
@@ -4301,6 +4317,9 @@ namespace MyDoujinBot.Forms
                             _currentStats.NextRunCountdownSeconds = bs.NextRunCountdownSeconds;
                             _currentStats.GainedCharacters = bs.GainedCharacters;
                             _currentStats.ChadoSuccessCount = bs.ChadoSuccessCount;
+                            _currentStats.StatGains.Clear();
+                            _currentStats.StatGains.LevelUp.AddRange(bs.StatGains.LevelUp.Stats);
+                            _currentStats.StatGains.Event.AddRange(bs.StatGains.Event.Stats);
                             UpdateTelemetryStats(_currentStats);
                         },
                         OnManualEventSelect = isAutoEvent ? null : (isInline ? HandleInlineEventAsync : HandleManualEventAsync),

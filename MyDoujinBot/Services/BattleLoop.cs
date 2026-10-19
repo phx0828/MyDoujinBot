@@ -40,6 +40,9 @@ namespace MyDoujinBot.Services
         public DateTime StartTime { get; set; }
         public int ChadoSuccessCount { get; set; }
         public System.Collections.Generic.List<string> GainedCharacters { get; set; } = new();
+
+        /// <summary>總計與分類能力點數（升級獲得、事件獲得、總計獲得）</summary>
+        public StatPointsRecord StatGains { get; } = new();
     }
 
     public class BattleLoop
@@ -77,6 +80,7 @@ namespace MyDoujinBot.Services
             Stats.TotalExp = 0;
             Stats.StartTime = DateTime.Now;
             Stats.GainedCharacters.Clear();
+            Stats.StatGains.Clear();
 
             OnStatusChanged?.Invoke(LoopStatus.Running);
             NotifyStats();
@@ -143,6 +147,15 @@ namespace MyDoujinBot.Services
                     {
                         Stats.CurrentLevel = response.Level;
                         UserContext.UpdateLevel(response.Level);
+                    }
+
+                    if (response.Gains != null)
+                    {
+                        Stats.StatGains.LevelUp.AddRange(response.Gains);
+                    }
+                    if (response.ActionResult?.Gains != null)
+                    {
+                        Stats.StatGains.LevelUp.AddRange(response.ActionResult.Gains);
                     }
 
                     NotifyStats();
@@ -301,6 +314,11 @@ namespace MyDoujinBot.Services
                 Stats.EventSuccessCount++;
             else
                 Stats.EventFailCount++;
+
+            if (er.Rewards?.BonusStats != null)
+            {
+                Stats.StatGains.Event.AddRange(er.Rewards.BonusStats);
+            }
 
             Log(LoopLogHelper.FormatEventResult(er));
 

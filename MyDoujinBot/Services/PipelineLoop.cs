@@ -73,6 +73,8 @@ namespace MyDoujinBot.Services
             Stats.TotalExp = 0;
             Stats.StartTime = DateTime.Now;
             Stats.GainedCharacters.Clear();
+            Stats.StatGains.Clear();
+            Stats.StageStatGains.Clear();
 
             OnStatusChanged?.Invoke(LoopStatus.Running);
             NotifyStats();
@@ -91,6 +93,8 @@ namespace MyDoujinBot.Services
                     Stats.TotalStages = settings.Stages.Count;
                     Stats.CurrentStage = stage;
                     Stats.CurrentStageRunCount = stageRunCount;
+
+                    GetOrCreateStageRecord(stageIndex + 1, stage);
 
                     OnStageChanged?.Invoke(stageIndex + 1, settings.Stages.Count, stage);
                     NotifyStats();
@@ -186,6 +190,12 @@ namespace MyDoujinBot.Services
                                     Stats.CurrentLevel = ar.Level;
                                     UserContext.UpdateLevel(ar.Level);
                                 }
+                                if (ar.Gains != null)
+                                {
+                                    Stats.StatGains.LevelUp.AddRange(ar.Gains);
+                                    var stageRec = GetOrCreateStageRecord(stageIndex + 1, stage);
+                                    stageRec.Record.LevelUp.AddRange(ar.Gains);
+                                }
                                 Log(LoopLogHelper.FormatTrainingResult(ar));
                             }
                             if (resp.ActiveCharacter != null && resp.ActiveCharacter.Level > 0)
@@ -254,11 +264,26 @@ namespace MyDoujinBot.Services
                                 UserContext.UpdateLevel(bResp.Level);
                             }
 
+                            if (bResp.Gains != null)
+                            {
+                                Stats.StatGains.LevelUp.AddRange(bResp.Gains);
+                                var stageRec = GetOrCreateStageRecord(stageIndex + 1, stage);
+                                stageRec.Record.LevelUp.AddRange(bResp.Gains);
+                            }
+                            if (bResp.ActionResult?.Gains != null)
+                            {
+                                Stats.StatGains.LevelUp.AddRange(bResp.ActionResult.Gains);
+                                var stageRec = GetOrCreateStageRecord(stageIndex + 1, stage);
+                                stageRec.Record.LevelUp.AddRange(bResp.ActionResult.Gains);
+                            }
+
                             Log(LoopLogHelper.FormatBattleResult(stage.BattleType, isWin, bResp.ExpGained));
 
                             if (stage.BattleType == BattleType.Chado && bResp.IsPlayerChadoSuccess())
                             {
                                 Stats.ChadoSuccessCount++;
+                                var stageRec = GetOrCreateStageRecord(stageIndex + 1, stage);
+                                stageRec.ChadoSuccessCount++;
                                 Log(LoopLogHelper.FormatChadoSuccess());
                             }
 
@@ -322,7 +347,7 @@ namespace MyDoujinBot.Services
                             if (!string.IsNullOrEmpty(chosenOptionId))
                             {
                                 var (eventOk, eventResult) = await ProcessEventAsync(
-                                    settings.Token, pendingEvent.EventId, chosenOptionId, cancellationToken);
+                                    settings.Token, pendingEvent.EventId, chosenOptionId, stageIndex + 1, stage, cancellationToken);
                                 if (!eventOk)
                                 {
                                     OnCloseManualUi?.Invoke();
@@ -371,8 +396,25 @@ namespace MyDoujinBot.Services
             }
         }
 
+        private StageStatPointsRecord GetOrCreateStageRecord(int stageIdx, PipelineStage stage)
+        {
+            if (!Stats.StageStatGains.TryGetValue(stageIdx, out var record))
+            {
+                record = new StageStatPointsRecord
+                {
+                    StageIndex = stageIdx,
+                    StageName = stage.Name,
+                    StageSummary = stage.GetActionSummary(),
+                    ActionType = stage.ActionType,
+                    BattleType = stage.BattleType
+                };
+                Stats.StageStatGains[stageIdx] = record;
+            }
+            return record;
+        }
+
         private async Task<(bool Success, EventResult? Result)> ProcessEventAsync(
-            string token, string eventId, string optionId, CancellationToken cancellationToken)
+            string token, string eventId, string optionId, int stageIdx, PipelineStage stage, CancellationToken cancellationToken)
         {
             var eventResultResp = await _eventService.SelectOptionAsync(token, optionId, cancellationToken);
             if (eventResultResp.IsCancelled) return (false, null);
@@ -392,17 +434,24 @@ namespace MyDoujinBot.Services
             }
 
             var er = eventResultResp.Result!;
-            ProcessEventResult(er);
+            ProcessEventResult(er, stageIdx, stage);
             NotifyStats();
             return (true, er);
         }
 
-        private void ProcessEventResult(EventResult er)
+        private void ProcessEventResult(EventResult er, int stageIdx, PipelineStage stage)
         {
             if (er.IsSuccess)
                 Stats.EventSuccessCount++;
             else
                 Stats.EventFailCount++;
+
+            if (er.Rewards?.BonusStats != null)
+            {
+                Stats.StatGains.Event.AddRange(er.Rewards.BonusStats);
+                var stageRec = GetOrCreateStageRecord(stageIdx, stage);
+                stageRec.Record.Event.AddRange(er.Rewards.BonusStats);
+            }
 
             Log(LoopLogHelper.FormatEventResult(er));
 
