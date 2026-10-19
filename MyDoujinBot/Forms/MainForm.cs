@@ -3438,7 +3438,8 @@ namespace MyDoujinBot.Forms
                 IconSize = ScaleDpi(18),
                 TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(ScaleDpi(12), ScaleDpi(4), ScaleDpi(14), ScaleDpi(4)),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(ScaleDpi(11), ScaleDpi(4), ScaleDpi(4), ScaleDpi(4)),
                 Margin = new Padding(0, 0, ScaleDpi(12), 0)
             };
             btnExportAll.FlatAppearance.BorderSize = 0;
@@ -3459,7 +3460,8 @@ namespace MyDoujinBot.Forms
                 IconSize = ScaleDpi(18),
                 TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(ScaleDpi(12), ScaleDpi(4), ScaleDpi(14), ScaleDpi(4)),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(ScaleDpi(11), ScaleDpi(4), ScaleDpi(4), ScaleDpi(4)),
                 Margin = Padding.Empty
             };
             btnImportAll.FlatAppearance.BorderSize = 0;
@@ -3663,16 +3665,12 @@ namespace MyDoujinBot.Forms
                         "設定 Token",
                         "請輸入 Bearer Token：",
                         secondaryActionText: "匯入備份資料",
-                        placeholder: "請在此貼上 Bearer Token");
+                        placeholder: "請在此貼上 Bearer Token",
+                        onSecondaryActionAsync: async dialog => await ExecuteStartupBackupImportAsync(dialog));
 
                     if (promptResult.Type == PromptDialogResultType.SecondaryAction)
                     {
-                        bool imported = await TryImportBackupOnStartupAsync();
-                        if (imported)
-                        {
-                            break;
-                        }
-                        continue;
+                        break;
                     }
 
                     if (promptResult.Type == PromptDialogResultType.Cancel || string.IsNullOrWhiteSpace(promptResult.Text))
@@ -3908,9 +3906,10 @@ namespace MyDoujinBot.Forms
 
         /// <summary>
         /// 初次啟動於 Token 輸入視窗點擊「匯入備份資料」時執行。
-        /// 先自備份檔案提取 Token 進行後端驗證，驗證成功後才寫入設定與方案資料。
+        /// 在當前 Token 輸入視窗內顯示 Loading 進度並鎖定輸入框與按鈕，
+        /// 先驗證 Token 有效性，驗證成功後才寫入設定與方案，若發生錯誤則解鎖視窗並恢復操作。
         /// </summary>
-        private async Task<bool> TryImportBackupOnStartupAsync()
+        private async Task<bool> ExecuteStartupBackupImportAsync(PromptDialog dialog)
         {
             using var ofd = new OpenFileDialog
             {
@@ -3918,7 +3917,7 @@ namespace MyDoujinBot.Forms
                 Filter = "JSON 備份檔案 (*.json)|*.json"
             };
 
-            if (ofd.ShowDialog(this) != DialogResult.OK) return false;
+            if (ofd.ShowDialog(dialog) != DialogResult.OK) return false;
 
             FullBackupPackage? package;
             try
@@ -3929,13 +3928,13 @@ namespace MyDoujinBot.Forms
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"讀取備份檔案失敗：\n{ex.Message}", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(dialog, $"讀取備份檔案失敗：\n{ex.Message}", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
 
             if (package == null)
             {
-                MessageBox.Show(this, "備份檔案解析失敗，檔案內容為空或格式不符。", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(dialog, "備份檔案解析失敗，檔案內容為空或格式不符。", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
 
@@ -3943,7 +3942,7 @@ namespace MyDoujinBot.Forms
             if (string.IsNullOrWhiteSpace(backupToken))
             {
                 MessageBox.Show(
-                    this,
+                    dialog,
                     "所選備份檔案中未包含 Token，無法在此處完成驗證。\n請選擇包含有效 Token 的備份檔，或直接在文字框輸入 Token。",
                     "Token 未設定",
                     MessageBoxButtons.OK,
@@ -3956,6 +3955,8 @@ namespace MyDoujinBot.Forms
                 backupToken = backupToken[7..].Trim();
             }
 
+            // 在 Token 輸入視窗內即時顯示 Loading 並鎖定所有操作元件
+            dialog.SetLoading(true, "正在連線伺服器驗證 Token...");
             AppendLog("[系統] 正在驗證備份檔中的 Token...", Color.FromArgb(130, 170, 255));
             if (lblStatusToken != null)
             {
@@ -3966,6 +3967,7 @@ namespace MyDoujinBot.Forms
             var result = await _userService.ValidateAndFetchProfileAsync(backupToken);
             if (!result.IsSuccess)
             {
+                dialog.SetLoading(false);
                 AppendLog($"[錯誤] 備份檔 Token 驗證失敗：{result.ErrorMessage}", Color.FromArgb(220, 80, 80));
                 UpdateTokenStatusVisual();
                 if (lblStatusToken != null)
@@ -3975,7 +3977,7 @@ namespace MyDoujinBot.Forms
                 }
 
                 MessageBox.Show(
-                    this,
+                    dialog,
                     $"備份檔中的 Token 驗證失敗！\n\n原因：{result.ErrorMessage}\n\n必須通過伺服器驗證才能寫入與套用備份資料。",
                     "驗證失敗",
                     MessageBoxButtons.OK,
@@ -3985,6 +3987,7 @@ namespace MyDoujinBot.Forms
 
             try
             {
+                dialog.SetLoading(true, "Token 驗證通過，正在還原設定與方案資料...");
                 ApplyFullBackup(package, preserveCurrentToken: false);
                 _currentToken = backupToken;
                 AppSettingsManager.Current.Token = _currentToken;
@@ -4002,7 +4005,7 @@ namespace MyDoujinBot.Forms
                 }
 
                 MessageBox.Show(
-                    this,
+                    dialog,
                     $"備份資料匯入成功，Token 驗證通過！\n\n玩家名稱：{UserContext.Current.PlayerName}\n出戰角色：{UserContext.Current.CharacterName} (Lv.{UserContext.Current.Level})\n目前樓層：{UserContext.Current.CurrentFloor}F",
                     "匯入與驗證成功",
                     MessageBoxButtons.OK,
@@ -4012,8 +4015,9 @@ namespace MyDoujinBot.Forms
             }
             catch (Exception ex)
             {
+                dialog.SetLoading(false);
                 AppendLog($"[錯誤] 寫入備份資料失敗：{ex.Message}", Color.FromArgb(220, 80, 80));
-                MessageBox.Show(this, $"寫入備份資料失敗：\n{ex.Message}", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(dialog, $"寫入備份資料失敗：\n{ex.Message}", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
         }

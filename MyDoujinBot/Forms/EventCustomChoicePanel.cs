@@ -472,7 +472,8 @@ namespace MyDoujinBot.Forms
                 IconSize = ScaleDpi(16),
                 TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(ScaleDpi(8), ScaleDpi(4), ScaleDpi(8), ScaleDpi(4)),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(ScaleDpi(8), ScaleDpi(4), ScaleDpi(3), ScaleDpi(4)),
                 Margin = new Padding(0, ScaleDpi(1), ScaleDpi(6), ScaleDpi(4))
             };
             btn.FlatAppearance.BorderSize = 0;

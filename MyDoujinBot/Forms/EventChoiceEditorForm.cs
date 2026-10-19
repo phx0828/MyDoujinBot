@@ -392,7 +392,8 @@ namespace MyDoujinBot.Forms
                 IconSize = ScaleDpi(17),
                 TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(ScaleDpi(16), ScaleDpi(5), ScaleDpi(16), ScaleDpi(5)),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(ScaleDpi(12), ScaleDpi(5), ScaleDpi(5), ScaleDpi(5)),
                 Margin = Padding.Empty
             };
             _btnSave.FlatAppearance.BorderSize = 0;
@@ -434,7 +435,8 @@ namespace MyDoujinBot.Forms
                 IconSize = ScaleDpi(17),
                 TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(ScaleDpi(12), ScaleDpi(5), ScaleDpi(12), ScaleDpi(5)),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(ScaleDpi(10), ScaleDpi(5), ScaleDpi(5), ScaleDpi(5)),
                 Margin = new Padding(0, 0, ScaleDpi(8), 0)
             };
             _btnCancel.FlatAppearance.BorderSize = 0;
@@ -728,7 +730,8 @@ namespace MyDoujinBot.Forms
                 IconSize = ScaleDpi(16),
                 TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(ScaleDpi(8), ScaleDpi(4), ScaleDpi(8), ScaleDpi(4)),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(ScaleDpi(8), ScaleDpi(4), ScaleDpi(3), ScaleDpi(4)),
                 Margin = new Padding(0, ScaleDpi(1), ScaleDpi(6), ScaleDpi(4))
             };
             btn.FlatAppearance.BorderSize = 0;
