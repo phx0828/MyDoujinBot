@@ -504,5 +504,72 @@ function runExportRoute() {{
             catch { }
             return 0;
         }
+
+        /// <summary>
+        /// 載入本機 ExternalRouteFile 物件。
+        /// </summary>
+        public ExternalRouteFile? LoadRouteFile()
+        {
+            try
+            {
+                EnsureInitialized();
+                if (File.Exists(_routePath))
+                {
+                    return JsonSerializer.Deserialize<ExternalRouteFile>(File.ReadAllText(_routePath));
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        /// <summary>
+        /// 讀取本機路線檔並轉換為 UI 與查詢專用之 EventRegistryItem 列表。
+        /// </summary>
+        public System.Collections.Generic.List<MyDoujinBot.Models.EventRegistryItem> LoadRegistryItems()
+        {
+            var result = new System.Collections.Generic.List<MyDoujinBot.Models.EventRegistryItem>();
+            var route = LoadRouteFile();
+            if (route == null || route.Chains == null) return result;
+
+            foreach (var kvp in route.Chains)
+            {
+                string chainId = kvp.Key;
+                var chain = kvp.Value;
+                if (chain.Events == null) continue;
+
+                foreach (var ev in chain.Events)
+                {
+                    var regItem = new MyDoujinBot.Models.EventRegistryItem
+                    {
+                        EventId = string.IsNullOrWhiteSpace(ev.Key) ? ev.Title : ev.Key,
+                        Title = ev.Title,
+                        ChainId = chainId,
+                        ChainName = chain.Name,
+                        Order = ev.Order
+                    };
+
+                    if (ev.Options != null)
+                    {
+                        foreach (var opt in ev.Options)
+                        {
+                            regItem.Options.Add(new MyDoujinBot.Models.EventRegistryOption
+                            {
+                                OptionId = string.IsNullOrWhiteSpace(opt.Key) ? opt.Label : opt.Key,
+                                Label = opt.Label,
+                                GuideKind = opt.Flags?.Guide?.Kind ?? string.Empty,
+                                GuideWhy = opt.Flags?.Guide?.Why ?? string.Empty,
+                                HasEncounter = opt.Encounter?.HasEncounter ?? false,
+                                OnSuccess = opt.OnSuccess ?? new(),
+                                StatsSummary = MyDoujinBot.Models.EventRegistryOption.FormatStatsSummary(opt.OnSuccess)
+                            });
+                        }
+                    }
+
+                    result.Add(regItem);
+                }
+            }
+
+            return result;
+        }
     }
 }

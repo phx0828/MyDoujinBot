@@ -225,25 +225,43 @@ namespace MyDoujinBot.Services
                         OnStatusChanged?.Invoke(LoopStatus.WaitingEvent);
 
                         var pe = response.PendingEvent;
-                        string? chosenOptionId;
+                        string? chosenOptionId = null;
+                        bool isCustomSelected = false;
 
-                        if (AutoStrategy.HasValue)
+                        // 優先級 1：比對使用者自選方案 (依 eventId 查詢 optionId)
+                        if (CustomEventChoiceResolver != null)
                         {
-                            // 自動模式：根據策略選擇
-                            chosenOptionId = LoopLogHelper.AutoSelectOption(pe, AutoStrategy.Value);
-                            Log(LoopLogHelper.FormatEventSelection(pe, chosenOptionId));
-                        }
-                        else
-                        {
-                            // 人工模式：等待 Form 的使用者選擇
-                            if (OnManualEventSelect == null)
+                            var targetOptionId = CustomEventChoiceResolver(pe.EventId);
+                            if (!string.IsNullOrEmpty(targetOptionId) && pe.Options.Any(o => o.Id == targetOptionId))
                             {
-                                Log(LoopLogHelper.FormatManualEventFallback(pe));
-                                chosenOptionId = LoopLogHelper.AutoSelectOption(pe, AutoEventStrategy.HighestSuccessRate);
+                                chosenOptionId = targetOptionId;
+                                isCustomSelected = true;
+                                var targetOpt = pe.Options.FirstOrDefault(o => o.Id == targetOptionId);
+                                Log($"[事件自選] 依方案選擇：{pe.Name} ➜ {targetOpt?.Name ?? targetOptionId}", System.Drawing.Color.FromArgb(140, 210, 255));
+                            }
+                        }
+
+                        // 優先級 2：未命中自選方案，退回既有自動/手動流程
+                        if (string.IsNullOrEmpty(chosenOptionId))
+                        {
+                            if (AutoStrategy.HasValue)
+                            {
+                                // 自動模式：根據策略選擇
+                                chosenOptionId = LoopLogHelper.AutoSelectOption(pe, AutoStrategy.Value);
+                                Log(LoopLogHelper.FormatEventSelection(pe, chosenOptionId));
                             }
                             else
                             {
-                                chosenOptionId = await OnManualEventSelect(pe, cancellationToken);
+                                // 人工模式：等待 Form 的使用者選擇
+                                if (OnManualEventSelect == null)
+                                {
+                                    Log(LoopLogHelper.FormatManualEventFallback(pe));
+                                    chosenOptionId = LoopLogHelper.AutoSelectOption(pe, AutoEventStrategy.HighestSuccessRate);
+                                }
+                                else
+                                {
+                                    chosenOptionId = await OnManualEventSelect(pe, cancellationToken);
+                                }
                             }
                         }
 
@@ -260,8 +278,8 @@ namespace MyDoujinBot.Services
                                 return; // 若 401 授權失敗或已取消，終止循環
                             }
 
-                            // 手動選擇模式下，若有結果且有配置 OnManualEventResult，則 await 結果展示（等待使用者按下關閉）
-                            if (!AutoStrategy.HasValue)
+                            // 手動選擇模式下且非自選命中，若有結果且有配置 OnManualEventResult，則 await 結果展示（等待使用者按下關閉）
+                            if (!AutoStrategy.HasValue && !isCustomSelected)
                             {
                                 if (eventResult != null && OnManualEventResult != null)
                                 {
@@ -271,6 +289,10 @@ namespace MyDoujinBot.Services
                                 {
                                     OnCloseManualUi?.Invoke();
                                 }
+                            }
+                            else
+                            {
+                                OnCloseManualUi?.Invoke();
                             }
                         }
 
@@ -500,5 +522,10 @@ namespace MyDoujinBot.Services
             => LoopLogHelper.BuildBonusStatsParts(bonusStats);
 
         public AutoEventStrategy? AutoStrategy { get; set; } = AutoEventStrategy.HighestSuccessRate;
+
+        /// <summary>
+        /// 事件自選方案解析委派：傳入 eventId，回傳目標 optionId。若無設定則回傳 null。
+        /// </summary>
+        public Func<string, string?>? CustomEventChoiceResolver { get; set; }
     }
 }

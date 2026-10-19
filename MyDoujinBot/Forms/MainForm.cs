@@ -109,10 +109,14 @@ namespace MyDoujinBot.Forms
         private Label lblStatusSuccess = null!;
         private Label lblStatusSlash = null!;
         private Label lblStatusFail = null!;
+        private FlowLayoutPanel pnlStatusChado = null!;
+        private IconPictureBox picStatusChado = null!;
         private Label lblStatusChado = null!;
         private Label lblStatusBattleRuns = null!;
         private FlowLayoutPanel pnlStatusBattleSuccessLoss = null!;
         private Label lblStatusBattleSuccess = null!;
+        private FlowLayoutPanel pnlStatusBattleChado = null!;
+        private IconPictureBox picStatusBattleChado = null!;
         private Label lblStatusBattleSlash = null!;
         private Label lblStatusBattleFail = null!;
         private Label lblStatusBattleChado = null!;
@@ -181,6 +185,7 @@ namespace MyDoujinBot.Forms
         private CheckBox chkEventNotifySound = null!;
         private Label lblEventArchiveStatus = null!;
         private Button btnUpdateEventArchive = null!;
+        private EventCustomChoicePanel _eventChoicePanel = null!;
 
         // --- 分頁 5: 戰報分析控制項 ---
         private TextBox txtStatsReportId = null!;
@@ -808,19 +813,51 @@ namespace MyDoujinBot.Forms
                 Font = new Font("Microsoft JhengHei UI", 9f),
                 Margin = Padding.Empty
             };
-            lblStatusChado = new Label
+            pnlStatusChado = new FlowLayoutPanel
             {
-                Text = "",
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent,
+                Margin = new Padding(ScaleDpi(2), 0, 0, 0),
+                Padding = Padding.Empty,
+                Visible = false
+            };
+            var lblChadoOpen = new Label
+            {
+                Text = " (",
                 ForeColor = Color.FromArgb(200, 155, 106),
                 AutoSize = true,
                 Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
-                Visible = false,
-                Margin = new Padding(ScaleDpi(2), 0, 0, 0)
+                Margin = Padding.Empty
             };
+            picStatusChado = new IconPictureBox
+            {
+                IconChar = IconChar.Poo,
+                IconColor = Color.FromArgb(200, 155, 106),
+                IconSize = ScaleDpi(13),
+                Size = new Size(ScaleDpi(15), ScaleDpi(15)),
+                SizeMode = PictureBoxSizeMode.CenterImage,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, ScaleDpi(2), 0, 0)
+            };
+            lblStatusChado = new Label
+            {
+                Text = " 0)",
+                ForeColor = Color.FromArgb(200, 155, 106),
+                AutoSize = true,
+                Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
+                Margin = Padding.Empty
+            };
+            pnlStatusChado.Controls.Add(lblChadoOpen);
+            pnlStatusChado.Controls.Add(picStatusChado);
+            pnlStatusChado.Controls.Add(lblStatusChado);
+
             pnlStatusSuccessLoss.Controls.Add(lblStatusSuccess);
+            pnlStatusSuccessLoss.Controls.Add(pnlStatusChado);
             pnlStatusSuccessLoss.Controls.Add(lblStatusSlash);
             pnlStatusSuccessLoss.Controls.Add(lblStatusFail);
-            pnlStatusSuccessLoss.Controls.Add(lblStatusChado);
 
             tblStatusContent.Controls.Add(lblStatusRuns, 0, 2);
             tblStatusContent.Controls.Add(pnlStatusSuccessLoss, 1, 2);
@@ -857,6 +894,47 @@ namespace MyDoujinBot.Forms
                 Font = new Font("Microsoft JhengHei UI", 9f),
                 Margin = Padding.Empty
             };
+            pnlStatusBattleChado = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent,
+                Margin = new Padding(ScaleDpi(2), 0, 0, 0),
+                Padding = Padding.Empty,
+                Visible = false
+            };
+            var lblBattleChadoOpen = new Label
+            {
+                Text = " (",
+                ForeColor = Color.FromArgb(200, 155, 106),
+                AutoSize = true,
+                Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
+                Margin = Padding.Empty
+            };
+            picStatusBattleChado = new IconPictureBox
+            {
+                IconChar = IconChar.Poo,
+                IconColor = Color.FromArgb(200, 155, 106),
+                IconSize = ScaleDpi(13),
+                Size = new Size(ScaleDpi(15), ScaleDpi(15)),
+                SizeMode = PictureBoxSizeMode.CenterImage,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, ScaleDpi(2), 0, 0)
+            };
+            lblStatusBattleChado = new Label
+            {
+                Text = " 0)",
+                ForeColor = Color.FromArgb(200, 155, 106),
+                AutoSize = true,
+                Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
+                Margin = Padding.Empty
+            };
+            pnlStatusBattleChado.Controls.Add(lblBattleChadoOpen);
+            pnlStatusBattleChado.Controls.Add(picStatusBattleChado);
+            pnlStatusBattleChado.Controls.Add(lblStatusBattleChado);
+
             lblStatusBattleSlash = new Label
             {
                 Text = " / ",
@@ -873,19 +951,10 @@ namespace MyDoujinBot.Forms
                 Font = new Font("Microsoft JhengHei UI", 9f),
                 Margin = Padding.Empty
             };
-            lblStatusBattleChado = new Label
-            {
-                Text = "",
-                ForeColor = Color.FromArgb(200, 155, 106),
-                AutoSize = true,
-                Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
-                Visible = false,
-                Margin = new Padding(ScaleDpi(2), 0, 0, 0)
-            };
             pnlStatusBattleSuccessLoss.Controls.Add(lblStatusBattleSuccess);
+            pnlStatusBattleSuccessLoss.Controls.Add(pnlStatusBattleChado);
             pnlStatusBattleSuccessLoss.Controls.Add(lblStatusBattleSlash);
             pnlStatusBattleSuccessLoss.Controls.Add(lblStatusBattleFail);
-            pnlStatusBattleSuccessLoss.Controls.Add(lblStatusBattleChado);
 
             tblStatusContent.Controls.Add(lblStatusBattleRuns, 0, 3);
             tblStatusContent.Controls.Add(pnlStatusBattleSuccessLoss, 1, 3);
@@ -2603,151 +2672,117 @@ namespace MyDoujinBot.Forms
             var outer = CreateScrollableTabPanel();
             var tbl = CreateContentTable(outer);
 
+            // ── 區段 1: 遭遇事件應對 ──
             AddSectionHeader(tbl, "遭遇事件應對");
 
-            // ── 第一層：自動選擇 ──
+            // 第一層：自動選擇 (縮排 16px)
             rbEventAuto = new RadioButton
             {
                 Text = "自動選擇",
                 Checked = true,
                 ForeColor = Color.FromArgb(210, 210, 225),
-                AutoSize = true
+                Font = new Font("Microsoft JhengHei UI", 10f),
+                AutoSize = true,
+                Margin = new Padding(ScaleDpi(16), 4, 0, 2),
+                Cursor = Cursors.Hand
             };
             rbEventAuto.CheckedChanged += (_, _) => OnEventModeGroupChanged();
             TblAdd(tbl, rbEventAuto);
 
-            // 第二層：自動子選項
-            pnlEventAutoSub = new Panel
-            {
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                BackColor = Color.Transparent,
-                Margin = new Padding(ScaleDpi(24), 2, 0, 8)
-            };
-            var flpAutoSub = new FlowLayoutPanel
+            // 第二層：自動子選項 (縮排 36px)
+            pnlEventAutoSub = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.TopDown,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 WrapContents = false,
-                Margin = Padding.Empty
+                BackColor = Color.Transparent,
+                Margin = new Padding(ScaleDpi(36), 0, 0, ScaleDpi(8)),
+                Padding = Padding.Empty
             };
             rbEventAutoHighest = new RadioButton
             {
                 Text = "優先選最高成功率",
                 Checked = true,
                 ForeColor = Color.FromArgb(210, 210, 225),
-                AutoSize = true
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, ScaleDpi(4)),
+                Cursor = Cursors.Hand
             };
             rbEventAutoRandom = new RadioButton
             {
                 Text = "完全隨機",
                 ForeColor = Color.FromArgb(210, 210, 225),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
                 AutoSize = true,
-                Margin = new Padding(0, 4, 0, 0)
+                Margin = new Padding(0, 0, 0, ScaleDpi(4)),
+                Cursor = Cursors.Hand
             };
             rbEventAutoHighest.CheckedChanged += (_, _) => SaveEventPreferences();
             rbEventAutoRandom.CheckedChanged  += (_, _) => SaveEventPreferences();
-            flpAutoSub.Controls.Add(rbEventAutoHighest);
-            flpAutoSub.Controls.Add(rbEventAutoRandom);
-            pnlEventAutoSub.Controls.Add(flpAutoSub);
+            pnlEventAutoSub.Controls.Add(rbEventAutoHighest);
+            pnlEventAutoSub.Controls.Add(rbEventAutoRandom);
             TblAdd(tbl, pnlEventAutoSub);
 
-            // ── 第一層：手動選擇 ──
+            // 第一層：手動選擇 (縮排 16px)
             rbEventManual = new RadioButton
             {
                 Text = "手動選擇",
                 ForeColor = Color.FromArgb(210, 210, 225),
+                Font = new Font("Microsoft JhengHei UI", 10f),
                 AutoSize = true,
-                Margin = new Padding(0, 4, 0, 0)
+                Margin = new Padding(ScaleDpi(16), ScaleDpi(4), 0, ScaleDpi(2)),
+                Cursor = Cursors.Hand
             };
             rbEventManual.CheckedChanged += (_, _) => OnEventModeGroupChanged();
             TblAdd(tbl, rbEventManual);
 
-            // 第二層：手動子選項
-            pnlEventManualSub = new Panel
-            {
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                BackColor = Color.Transparent,
-                Enabled = false,
-                Margin = new Padding(ScaleDpi(24), 2, 0, 10)
-            };
-            var flpManualSub = new FlowLayoutPanel
+            // 第二層：手動子選項 (縮排 36px)
+            pnlEventManualSub = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.TopDown,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 WrapContents = false,
-                Margin = Padding.Empty
+                BackColor = Color.Transparent,
+                Enabled = false,
+                Margin = new Padding(ScaleDpi(36), 0, 0, ScaleDpi(12)),
+                Padding = Padding.Empty
             };
             rbEventManualInline = new RadioButton
             {
                 Text = "內嵌於主畫面（零干擾）",
                 Checked = true,
                 ForeColor = Color.FromArgb(120, 120, 140),
-                AutoSize = true
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, ScaleDpi(4)),
+                Cursor = Cursors.Hand
             };
             rbEventManualPopup = new RadioButton
             {
                 Text = "獨立彈出視窗（奪取焦點）",
                 ForeColor = Color.FromArgb(120, 120, 140),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
                 AutoSize = true,
-                Margin = new Padding(0, 4, 0, 0)
+                Margin = new Padding(0, 0, 0, ScaleDpi(4)),
+                Cursor = Cursors.Hand
             };
             rbEventManualInline.CheckedChanged += (_, _) => SaveEventPreferences();
             rbEventManualPopup.CheckedChanged  += (_, _) => SaveEventPreferences();
-            flpManualSub.Controls.Add(rbEventManualInline);
-            flpManualSub.Controls.Add(rbEventManualPopup);
-            pnlEventManualSub.Controls.Add(flpManualSub);
+            pnlEventManualSub.Controls.Add(rbEventManualInline);
+            pnlEventManualSub.Controls.Add(rbEventManualPopup);
             TblAdd(tbl, pnlEventManualSub);
 
-            AddSectionHeader(tbl, "系統通知");
-            chkEventNotify = new CheckBox
-            {
-                Text = "啟用 Windows 系統通知（僅內嵌模式有效）",
-                Checked = AppSettingsManager.Current.EnableSystemNotify,
-                ForeColor = Color.FromArgb(210, 210, 225),
-                AutoSize = true,
-                Margin = new Padding(0, 2, 0, 4)
-            };
-            chkEventNotify.CheckedChanged += (_, _) => SaveEventPreferences();
-            TblAdd(tbl, chkEventNotify);
+            // ── 區段 2: 事件指定選項 ──
+            AddSectionHeader(tbl, "事件指定選項");
 
-            chkEventNotifySound = new CheckBox
-            {
-                Text = "開啟通知音效",
-                Checked = AppSettingsManager.Current.EnableSystemNotifySound,
-                ForeColor = Color.FromArgb(210, 210, 225),
-                AutoSize = true,
-                Margin = new Padding(ScaleDpi(24), 0, 0, 12)
-            };
-            chkEventNotifySound.CheckedChanged += (_, _) => SaveEventPreferences();
-            TblAdd(tbl, chkEventNotifySound);
+            // 事件自選面板 (包含啟用核取方塊、方案操作列、方案摘要說明)
+            _eventChoicePanel = new EventCustomChoicePanel(_eventArchiveService);
+            TblAdd(tbl, _eventChoicePanel);
 
-            AddSectionHeader(tbl, "第三方事件檔案庫");
-
-            var pnlArchiveRow = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 2,
-                RowCount = 1,
-                AutoSize = true,
-                Margin = new Padding(0, 4, 0, 6)
-            };
-            pnlArchiveRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            pnlArchiveRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-
-            lblEventArchiveStatus = new Label
-            {
-                Dock = DockStyle.Fill,
-                ForeColor = Color.FromArgb(170, 175, 200),
-                Font = new Font("Microsoft JhengHei UI", 9f),
-                AutoSize = true,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Margin = new Padding(0, ScaleDpi(4), 0, 0)
-            };
-
+            // 第三方事件檔案庫更新按鈕與狀態列 (移至該分類最下面)
             btnUpdateEventArchive = new IconButton
             {
                 Text = " 更新事件庫",
@@ -2755,7 +2790,7 @@ namespace MyDoujinBot.Forms
                 BackColor = Color.FromArgb(48, 68, 98),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 9f),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
                 Cursor = Cursors.Hand,
                 IconChar = IconChar.Rotate,
                 IconColor = Color.White,
@@ -2763,22 +2798,30 @@ namespace MyDoujinBot.Forms
                 TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(ScaleDpi(10), ScaleDpi(4), ScaleDpi(10), ScaleDpi(4)),
-                Margin = new Padding(ScaleDpi(8), 0, 0, 0)
+                Margin = new Padding(ScaleDpi(16), ScaleDpi(6), 0, ScaleDpi(4))
             };
             btnUpdateEventArchive.FlatAppearance.BorderSize = 0;
             btnUpdateEventArchive.Click += OnUpdateEventArchiveClicked;
+            TblAdd(tbl, btnUpdateEventArchive);
 
-            pnlArchiveRow.Controls.Add(lblEventArchiveStatus, 0, 0);
-            pnlArchiveRow.Controls.Add(btnUpdateEventArchive, 1, 0);
-            TblAdd(tbl, pnlArchiveRow);
+            lblEventArchiveStatus = new Label
+            {
+                Dock = DockStyle.Fill,
+                ForeColor = Color.FromArgb(170, 175, 200),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                AutoSize = true,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Margin = new Padding(ScaleDpi(16), ScaleDpi(2), 0, ScaleDpi(2))
+            };
+            TblAdd(tbl, lblEventArchiveStatus);
 
             var lblArchiveHint = new Label
             {
                 Text = "資料來源：我的同人攻略圖鑑網。資料將保存至本機 data/events/ (EventBrief.json 與 EventRoute.json)。",
                 ForeColor = Color.FromArgb(130, 130, 150),
-                Font = new Font("Microsoft JhengHei UI", 8.5f),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
                 AutoSize = true,
-                Margin = new Padding(0, 0, 0, 12)
+                Margin = new Padding(ScaleDpi(16), 0, 0, ScaleDpi(12))
             };
             TblAdd(tbl, lblArchiveHint);
 
@@ -2809,13 +2852,9 @@ namespace MyDoujinBot.Forms
 
             bool prevAuto = rbEventAuto.Enabled;
             bool prevManual = rbEventManual.Enabled;
-            bool prevNotify = chkEventNotify.Enabled;
-            bool prevNotifySound = chkEventNotifySound.Enabled;
 
             rbEventAuto.Enabled = false;
             rbEventManual.Enabled = false;
-            chkEventNotify.Enabled = false;
-            chkEventNotifySound.Enabled = false;
             foreach (var navBtn in _navButtons) navBtn.Enabled = false;
 
             lblEventArchiveStatus.Text = "⏳ 正在連線至【我的同仁攻略圖鑑網】取得最新資料...";
@@ -2856,6 +2895,7 @@ namespace MyDoujinBot.Forms
                     string chainDelta = FormatDelta(result.RouteChainDiff);
 
                     UpdateEventArchiveStatusText();
+                    _eventChoicePanel?.ReloadRegistry();
                     AppendLog($"[事件庫] {result.Message}", Color.FromArgb(100, 220, 140));
 
                     string detail = "事件庫已更新完成！\n\n" +
@@ -2878,8 +2918,6 @@ namespace MyDoujinBot.Forms
                 btnUpdateEventArchive.Enabled = true;
                 rbEventAuto.Enabled = prevAuto;
                 rbEventManual.Enabled = prevManual;
-                chkEventNotify.Enabled = prevNotify;
-                chkEventNotifySound.Enabled = prevNotifySound;
                 foreach (var navBtn in _navButtons) navBtn.Enabled = true;
                 this.Cursor = prevCursor;
                 statusToolTip.SetToolTip(btnUpdateEventArchive, "點擊連線第三方網站線上更新本機事件庫");
@@ -3268,7 +3306,44 @@ namespace MyDoujinBot.Forms
 
             TblAdd(tbl, pnlFloorRewardGroup);
 
-            // ── 區段 3: 應用程式圖示 ──
+            // ── 區段 3: 系統通知設定 ──
+            AddSectionHeader(tbl, "系統通知設定");
+
+            chkEventNotify = new CheckBox
+            {
+                Text = "啟用 Windows 系統通知（遭遇事件等提示）",
+                Checked = AppSettingsManager.Current.EnableSystemNotify,
+                ForeColor = Color.FromArgb(220, 220, 230),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                Cursor = Cursors.Hand,
+                AutoSize = true,
+                Margin = new Padding(ScaleDpi(16), 0, 0, ScaleDpi(4))
+            };
+            chkEventNotify.CheckedChanged += (_, _) =>
+            {
+                SaveEventPreferences();
+                if (chkEventNotifySound != null)
+                {
+                    chkEventNotifySound.Enabled = chkEventNotify.Checked;
+                }
+            };
+            TblAdd(tbl, chkEventNotify);
+
+            chkEventNotifySound = new CheckBox
+            {
+                Text = "開啟通知音效",
+                Checked = AppSettingsManager.Current.EnableSystemNotifySound,
+                Enabled = AppSettingsManager.Current.EnableSystemNotify,
+                ForeColor = Color.FromArgb(220, 220, 230),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                Cursor = Cursors.Hand,
+                AutoSize = true,
+                Margin = new Padding(ScaleDpi(36), 0, 0, ScaleDpi(12))
+            };
+            chkEventNotifySound.CheckedChanged += (_, _) => SaveEventPreferences();
+            TblAdd(tbl, chkEventNotifySound);
+
+            // ── 區段 4: 應用程式圖示設定 ──
             AddSectionHeader(tbl, "應用程式圖示設定");
 
             var pnlIconRow = new FlowLayoutPanel
@@ -3729,6 +3804,7 @@ namespace MyDoujinBot.Forms
                     _trainingLoop = new TrainingLoop(_trainingService, _eventService)
                     {
                         AutoStrategy = autoStrategy,
+                        CustomEventChoiceResolver = id => _eventChoicePanel?.ResolveChoice(id),
                         OnLog = AppendLog,
                         OnStatusChanged = UpdateStatusBadge,
                         OnStatsUpdated = UpdateTelemetryStats,
@@ -3757,6 +3833,7 @@ namespace MyDoujinBot.Forms
                     _battleLoop = new BattleLoop(_battleService, _eventService)
                     {
                         AutoStrategy = autoStrategy,
+                        CustomEventChoiceResolver = id => _eventChoicePanel?.ResolveChoice(id),
                         OnLog = AppendLog,
                         OnStatusChanged = UpdateStatusBadge,
                         OnStatsUpdated = (bs) =>
@@ -3799,6 +3876,7 @@ namespace MyDoujinBot.Forms
                     _pipelineLoop = new PipelineLoop(_trainingService, _battleService, _eventService)
                     {
                         AutoStrategy = autoStrategy,
+                        CustomEventChoiceResolver = id => _eventChoicePanel?.ResolveChoice(id),
                         OnLog = AppendLog,
                         OnStatusChanged = UpdateStatusBadge,
                         OnStatsUpdated = UpdateTelemetryStats,
@@ -4039,7 +4117,7 @@ namespace MyDoujinBot.Forms
                 lblStatusFail.Visible = true;
                 lblStatusFail.ForeColor = Color.FromArgb(240, 95, 95);
                 lblStatusFail.Text = $"{stats.TrainingFailCount} 失敗";
-                if (lblStatusChado != null) lblStatusChado.Visible = false;
+                if (pnlStatusChado != null) pnlStatusChado.Visible = false;
 
                 // Row 3: 總計戰鬥次數與勝利/失敗
                 if (lblStatusBattleRuns != null && pnlStatusBattleSuccessLoss != null)
@@ -4057,18 +4135,21 @@ namespace MyDoujinBot.Forms
                     lblStatusBattleFail.Text = $"{stats.BattleLossCount} 失敗";
                     lblStatusBattleFail.Visible = true;
 
-                    if (lblStatusBattleChado != null)
+                    if (pnlStatusBattleChado != null)
                     {
                         bool hasChadoInPipeline = AppSettingsManager.Current.PipelineStages.Any(s => s.ActionType == StageActionType.Battle && s.BattleType == BattleType.Chado) || stats.ChadoSuccessCount > 0;
                         if (hasChadoInPipeline)
                         {
-                            lblStatusBattleChado.Text = $" (💩 {stats.ChadoSuccessCount})";
-                            statusToolTip.SetToolTip(lblStatusBattleChado, $"丟下小零食並螺旋下指：{stats.ChadoSuccessCount} 次");
-                            lblStatusBattleChado.Visible = true;
+                            lblStatusBattleChado.Text = $" {stats.ChadoSuccessCount})";
+                            string tip = $"丟下小零食並螺旋下指：{stats.ChadoSuccessCount} 次";
+                            statusToolTip.SetToolTip(pnlStatusBattleChado, tip);
+                            statusToolTip.SetToolTip(picStatusBattleChado, tip);
+                            statusToolTip.SetToolTip(lblStatusBattleChado, tip);
+                            pnlStatusBattleChado.Visible = true;
                         }
                         else
                         {
-                            lblStatusBattleChado.Visible = false;
+                            pnlStatusBattleChado.Visible = false;
                         }
                     }
                 }
@@ -4095,18 +4176,21 @@ namespace MyDoujinBot.Forms
                 lblStatusFail.ForeColor = Color.FromArgb(240, 95, 95);
                 lblStatusFail.Text = $"{stats.FailCount} 失敗";
 
-                if (lblStatusChado != null)
+                if (pnlStatusChado != null)
                 {
                     bool isChadoMode = (rbBattleChado != null && rbBattleChado.Checked) || stats.ChadoSuccessCount > 0;
                     if (isChadoMode)
                     {
-                        lblStatusChado.Text = $" (💩 {stats.ChadoSuccessCount})";
-                        statusToolTip.SetToolTip(lblStatusChado, $"丟下小零食並螺旋下指：{stats.ChadoSuccessCount} 次");
-                        lblStatusChado.Visible = true;
+                        lblStatusChado.Text = $" {stats.ChadoSuccessCount})";
+                        string tip = $"丟下小零食並螺旋下指：{stats.ChadoSuccessCount} 次";
+                        statusToolTip.SetToolTip(pnlStatusChado, tip);
+                        statusToolTip.SetToolTip(picStatusChado, tip);
+                        statusToolTip.SetToolTip(lblStatusChado, tip);
+                        pnlStatusChado.Visible = true;
                     }
                     else
                     {
-                        lblStatusChado.Visible = false;
+                        pnlStatusChado.Visible = false;
                     }
                 }
             }
@@ -4132,9 +4216,9 @@ namespace MyDoujinBot.Forms
                 lblStatusFail.ForeColor = Color.FromArgb(240, 95, 95);
                 lblStatusFail.Text = $"{stats.FailCount} 失敗";
 
-                if (lblStatusChado != null)
+                if (pnlStatusChado != null)
                 {
-                    lblStatusChado.Visible = false;
+                    pnlStatusChado.Visible = false;
                 }
             }
 

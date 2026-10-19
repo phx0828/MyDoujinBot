@@ -167,23 +167,41 @@ namespace MyDoujinBot.Services
                         OnStatusChanged?.Invoke(LoopStatus.WaitingEvent);
 
                         var pe = response.PendingEvent;
-                        string? chosenOptionId;
+                        string? chosenOptionId = null;
+                        bool isCustomSelected = false;
 
-                        if (AutoStrategy.HasValue)
+                        // 優先級 1：比對使用者自選方案 (依 eventId 查詢 optionId)
+                        if (CustomEventChoiceResolver != null)
                         {
-                            chosenOptionId = LoopLogHelper.AutoSelectOption(pe, AutoStrategy.Value);
-                            Log(LoopLogHelper.FormatEventSelection(pe, chosenOptionId));
-                        }
-                        else
-                        {
-                            if (OnManualEventSelect == null)
+                            var targetOptionId = CustomEventChoiceResolver(pe.EventId);
+                            if (!string.IsNullOrEmpty(targetOptionId) && pe.Options.Any(o => o.Id == targetOptionId))
                             {
-                                Log(LoopLogHelper.FormatManualEventFallback(pe));
-                                chosenOptionId = LoopLogHelper.AutoSelectOption(pe, AutoEventStrategy.HighestSuccessRate);
+                                chosenOptionId = targetOptionId;
+                                isCustomSelected = true;
+                                var targetOpt = pe.Options.FirstOrDefault(o => o.Id == targetOptionId);
+                                Log($"[事件自選] 依方案選擇：{pe.Name} ➜ {targetOpt?.Name ?? targetOptionId}", System.Drawing.Color.FromArgb(140, 210, 255));
+                            }
+                        }
+
+                        // 優先級 2：未命中自選方案，退回既有自動/手動流程
+                        if (string.IsNullOrEmpty(chosenOptionId))
+                        {
+                            if (AutoStrategy.HasValue)
+                            {
+                                chosenOptionId = LoopLogHelper.AutoSelectOption(pe, AutoStrategy.Value);
+                                Log(LoopLogHelper.FormatEventSelection(pe, chosenOptionId));
                             }
                             else
                             {
-                                chosenOptionId = await OnManualEventSelect(pe, cancellationToken);
+                                if (OnManualEventSelect == null)
+                                {
+                                    Log(LoopLogHelper.FormatManualEventFallback(pe));
+                                    chosenOptionId = LoopLogHelper.AutoSelectOption(pe, AutoEventStrategy.HighestSuccessRate);
+                                }
+                                else
+                                {
+                                    chosenOptionId = await OnManualEventSelect(pe, cancellationToken);
+                                }
                             }
                         }
 
@@ -199,7 +217,7 @@ namespace MyDoujinBot.Services
                                 return;
                             }
 
-                            if (!AutoStrategy.HasValue)
+                            if (!AutoStrategy.HasValue && !isCustomSelected)
                             {
                                 if (eventResult != null && OnManualEventResult != null)
                                 {
@@ -209,6 +227,10 @@ namespace MyDoujinBot.Services
                                 {
                                     OnCloseManualUi?.Invoke();
                                 }
+                            }
+                            else
+                            {
+                                OnCloseManualUi?.Invoke();
                             }
                         }
 
@@ -338,5 +360,10 @@ namespace MyDoujinBot.Services
         private void NotifyStats() => OnStatsUpdated?.Invoke(Stats);
         private void Log(string message, System.Drawing.Color color) => OnLog?.Invoke(message, color);
         private void Log((string Message, System.Drawing.Color Color) entry) => OnLog?.Invoke(entry.Message, entry.Color);
+
+        /// <summary>
+        /// 事件自選方案解析委派：傳入 eventId，回傳目標 optionId。若無設定則回傳 null。
+        /// </summary>
+        public Func<string, string?>? CustomEventChoiceResolver { get; set; }
     }
 }

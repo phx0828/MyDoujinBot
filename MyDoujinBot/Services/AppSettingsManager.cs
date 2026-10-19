@@ -228,6 +228,18 @@ namespace MyDoujinBot.Services
         public string ActivePipelinePresetId { get; set; } = string.Empty;
 
         /// <summary>
+        /// 是否啟用事件指定選項。
+        /// </summary>
+        [JsonPropertyName("enableEventCustomChoice")]
+        public bool EnableEventCustomChoice { get; set; } = true;
+
+        /// <summary>
+        /// 當前啟用的事件自選方案 ID。
+        /// </summary>
+        [JsonPropertyName("activeEventPresetId")]
+        public string ActiveEventPresetId { get; set; } = string.Empty;
+
+        /// <summary>
         /// 當前選取的導航分頁
         /// </summary>
         [JsonPropertyName("activeTab")]
