@@ -114,7 +114,7 @@
 
 ### 5.4 操作功能
 - 方案切換：下拉選單選取。
-- 編輯方案：彈出專用編輯視窗，支援關鍵字搜尋、屬性篩選、角色分組、清空所有選擇與未存檔關閉確認。
+- 編輯方案：彈出專用編輯視窗，支援第一行關鍵字搜尋、第二行屬性篩選與遭遇戰篩選（全部／有遭遇戰／無遭遇戰）、指定狀態篩選、角色分組、清空所有選擇與未存檔關閉確認。
 - 開新方案：建立全新空白方案並開啟編輯視窗，確認儲存後寫入。
 - 複製方案：直接複製當前選定方案並標註「(複製)」，自動設為當前方案。
 - 刪除方案：刪除當前方案（保留至少一個預設方案）。
@@ -125,18 +125,24 @@
 
 ## 6. 介面架構與控制項設計 (WinForms)
 
-### 6.1 控制項清單與數量
-整頁共計 7 個控制項，數量固定，不隨事件與選項數量增長：
+### 6.1 控制項清單與排版架構
+獨立編輯視窗 (`EventChoiceEditorForm`) 控制項配置如下：
 
-1. `tblOuter` (TableLayoutPanel)：頂部列、左側欄、右側欄排版。
-2. `pnlPresetAndTools` (Panel)：整合方案管理與搜尋篩選工具列。
-   - `cmbPresets` (ComboBox)：方案下拉選單。
-   - `btnNewPreset`、`btnRenamePreset`、`btnDeletePreset`、`btnExportPreset`、`btnImportPreset` (IconButton)。
-   - `txtSearch` (TextBox)：關鍵字搜尋輸入框。
-   - `cmbStatFilter` (ComboBox)：屬性篩選下拉選單 (全部、HP、攻擊、防禦、體力、敏捷、反應速度、技巧、智力、幸運)。
-3. `lstCharacters` (ListBox)：左側角色清單。第一項固定為「全部」，後續為 56 位角色名稱。
-4. `lstEvents` (ListBox)：右側事件清單，設定 `DrawMode = DrawMode.OwnerDrawVariable`。
-5. `_debounceTimer` (Timer)：300ms 搜尋防抖計時器。
+1. `pnlMainTable` (TableLayoutPanel)：頂部篩選卡片、中央雙欄列表、底部儲存列。
+2. `pnlTopCard` (TableLayoutPanel)：
+   - **第一行 (Row 0 / pnlLine1)**：
+     - `lblPresetName` / `_txtName` (TextBox)：方案名稱輸入框。
+     - `lblSearch` / `_txtSearch` (TextBox)：關鍵字搜尋輸入框（300ms 防抖即時過濾標題與選項）。
+   - **第二行 (Row 1 / pnlLine2)**：
+     - `pnlFilters` (FlowLayoutPanel)：
+       - `lblStat` / `_cmbStatFilter` (ComboBox)：屬性篩選下拉選單 (全部、HP、攻擊、防禦、體力、敏捷、反應速度、技巧、智力、幸運)。
+       - `lblEncounter` / `_cmbEncounterFilter` (ComboBox)：遭遇戰篩選下拉選單 (全部、有遭遇戰、無遭遇戰)。
+       - `lblStatus` / `_cmbStatusFilter` (ComboBox)：指定狀態下拉選單 (全部、已指定、未指定)。
+     - `_btnClearAll` (IconButton)：重置所有選項按鈕（靠右對齊）。
+3. `lstCharacters` (ListBox)：左側角色清單。第一項固定為「全部」，後續為各角色名稱。
+4. `lstEvents` (DoubleBufferedListBox)：右側事件清單，設定 `DrawMode = DrawMode.OwnerDrawVariable`。
+5. `_searchDebounceTimer` (Timer)：300ms 搜尋防抖計時器。
+6. `_btnSave`、`_btnCancel` (IconButton)：底部儲存與取消按鈕。
 
 ### 6.2 右側 ListBox 自繪項目定義
 清單資料來源攤平成一維項目列表 `List<EventListItem>`，包含兩種類型：

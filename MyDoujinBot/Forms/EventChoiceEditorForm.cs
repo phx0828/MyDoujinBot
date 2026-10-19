@@ -29,6 +29,7 @@ namespace MyDoujinBot.Forms
         private TextBox _txtName = null!;
         private TextBox _txtSearch = null!;
         private ComboBox _cmbStatFilter = null!;
+        private ComboBox _cmbEncounterFilter = null!;
         private ComboBox _cmbStatusFilter = null!;
         private IconButton _btnClearAll = null!;
 
@@ -57,8 +58,8 @@ namespace MyDoujinBot.Forms
             _workingChoices = new Dictionary<string, string>(preset.Choices ?? new Dictionary<string, string>());
 
             this.Text = $"編輯事件指定選項 - {_preset.Name}";
-            this.Size = new Size(ScaleDpi(980), ScaleDpi(740));
-            this.MinimumSize = new Size(ScaleDpi(860), ScaleDpi(580));
+            this.Size = new Size(ScaleDpi(980), ScaleDpi(580));
+            this.MinimumSize = new Size(ScaleDpi(860), ScaleDpi(480));
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(20, 20, 26);
             this.ForeColor = Color.FromArgb(220, 220, 235);
@@ -116,7 +117,7 @@ namespace MyDoujinBot.Forms
             pnlTopCard.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             pnlTopCard.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            // Line 1: 方案名稱
+            // Line 1: 方案名稱與搜尋
             var pnlLine1 = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
@@ -145,14 +146,40 @@ namespace MyDoujinBot.Forms
                 ForeColor = Color.White,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = new Font("Microsoft JhengHei UI", 9.5f),
+                Margin = new Padding(0, ScaleDpi(3), ScaleDpi(16), ScaleDpi(4))
+            };
+
+            var lblSearch = new Label
+            {
+                Text = "搜尋：",
+                ForeColor = Color.FromArgb(180, 180, 200),
+                Font = new Font("Microsoft JhengHei UI", 9.8f),
+                AutoSize = true,
+                Margin = new Padding(ScaleDpi(4), ScaleDpi(6), ScaleDpi(2), 0)
+            };
+
+            _txtSearch = new TextBox
+            {
+                Width = ScaleDpi(200),
+                BackColor = Color.FromArgb(36, 38, 48),
+                ForeColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
                 Margin = new Padding(0, ScaleDpi(3), ScaleDpi(12), ScaleDpi(4))
+            };
+            _txtSearch.TextChanged += (s, e) =>
+            {
+                _searchDebounceTimer.Stop();
+                _searchDebounceTimer.Start();
             };
 
             pnlLine1.Controls.Add(lblPresetName);
             pnlLine1.Controls.Add(_txtName);
+            pnlLine1.Controls.Add(lblSearch);
+            pnlLine1.Controls.Add(_txtSearch);
             pnlTopCard.Controls.Add(pnlLine1, 0, 0);
 
-            // Line 2: 左側搜尋與篩選 (FlowLayoutPanel) + 右側重置按鈕 (靠右對齊)
+            // Line 2: 左側篩選 (FlowLayoutPanel) + 右側重置按鈕 (靠右對齊)
             var pnlLine2 = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
@@ -176,30 +203,6 @@ namespace MyDoujinBot.Forms
                 BackColor = Color.Transparent,
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
-            };
-
-            var lblSearch = new Label
-            {
-                Text = "搜尋：",
-                ForeColor = Color.FromArgb(180, 180, 200),
-                Font = new Font("Microsoft JhengHei UI", 9.8f),
-                AutoSize = true,
-                Margin = new Padding(0, ScaleDpi(6), ScaleDpi(2), 0)
-            };
-
-            _txtSearch = new TextBox
-            {
-                Width = ScaleDpi(175),
-                BackColor = Color.FromArgb(36, 38, 48),
-                ForeColor = Color.White,
-                BorderStyle = BorderStyle.FixedSingle,
-                Font = new Font("Microsoft JhengHei UI", 9.5f),
-                Margin = new Padding(0, ScaleDpi(3), ScaleDpi(12), ScaleDpi(4))
-            };
-            _txtSearch.TextChanged += (s, e) =>
-            {
-                _searchDebounceTimer.Stop();
-                _searchDebounceTimer.Start();
             };
 
             var lblStat = new Label
@@ -227,6 +230,31 @@ namespace MyDoujinBot.Forms
             _cmbStatFilter.SelectedIndex = 0;
             _cmbStatFilter.SelectedIndexChanged += (s, e) => RefreshRenderedRows(preserveScroll: false);
 
+            var lblEncounter = new Label
+            {
+                Text = "遭遇戰：",
+                ForeColor = Color.FromArgb(180, 180, 200),
+                Font = new Font("Microsoft JhengHei UI", 9.8f),
+                AutoSize = true,
+                Margin = new Padding(0, ScaleDpi(6), ScaleDpi(2), 0)
+            };
+
+            _cmbEncounterFilter = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = ScaleDpi(105),
+                BackColor = Color.FromArgb(36, 38, 48),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                Margin = new Padding(0, ScaleDpi(3), ScaleDpi(12), ScaleDpi(4))
+            };
+            _cmbEncounterFilter.Items.AddRange(new object[] {
+                "全部", "有遭遇戰", "無遭遇戰"
+            });
+            _cmbEncounterFilter.SelectedIndex = 0;
+            _cmbEncounterFilter.SelectedIndexChanged += (s, e) => RefreshRenderedRows(preserveScroll: false);
+
             var lblStatus = new Label
             {
                 Text = "指定狀態：",
@@ -252,10 +280,10 @@ namespace MyDoujinBot.Forms
             _cmbStatusFilter.SelectedIndex = 0;
             _cmbStatusFilter.SelectedIndexChanged += (s, e) => RefreshRenderedRows(preserveScroll: false);
 
-            pnlFilters.Controls.Add(lblSearch);
-            pnlFilters.Controls.Add(_txtSearch);
             pnlFilters.Controls.Add(lblStat);
             pnlFilters.Controls.Add(_cmbStatFilter);
+            pnlFilters.Controls.Add(lblEncounter);
+            pnlFilters.Controls.Add(_cmbEncounterFilter);
             pnlFilters.Controls.Add(lblStatus);
             pnlFilters.Controls.Add(_cmbStatusFilter);
 
@@ -469,6 +497,7 @@ namespace MyDoujinBot.Forms
                 _ => null
             };
 
+            string? encounterFilter = _cmbEncounterFilter?.SelectedItem?.ToString();
             string? statusFilter = _cmbStatusFilter?.SelectedItem?.ToString();
 
             int matchedEventsCount = 0;
@@ -491,6 +520,17 @@ namespace MyDoujinBot.Forms
                 {
                     bool hasStat = ev.Options.Any(o => o.OnSuccess.TryGetValue(statFilterKey, out int val) && val > 0);
                     if (!hasStat) continue;
+                }
+
+                if (encounterFilter == "有遭遇戰")
+                {
+                    bool hasEncounter = ev.Options.Any(o => o.HasEncounter);
+                    if (!hasEncounter) continue;
+                }
+                else if (encounterFilter == "無遭遇戰")
+                {
+                    bool hasEncounter = ev.Options.Any(o => o.HasEncounter);
+                    if (hasEncounter) continue;
                 }
 
                 bool isAssigned = _workingChoices.TryGetValue(ev.EventId, out var optId) && !string.IsNullOrEmpty(optId);

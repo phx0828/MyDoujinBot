@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -539,15 +542,16 @@ namespace MyDoujinBot.Forms
             tblRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, ScaleDpi(38F)));
             this.Controls.Add(tblRoot);
 
-            // 建立各面板並加入 tblRoot
+            // 建立各面板並加入 tblRoot（先建立右側面板，使 BuildMainCanvas 執行 SwitchNavTab 時能正確隱藏/顯示）
             BuildSidebar();
-            BuildMainCanvas();
             BuildRightPanel();
+            BuildMainCanvas();
             BuildStatusBar();
 
             // 為關鍵主畫布與根排版啟用雙緩衝，避免子元件排版時閃爍
             EnableDoubleBuffering(tblRoot);
             EnableDoubleBuffering(pnlMainCanvas);
+            EnableDoubleBuffering(pnlRightPanel);
 
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -3406,6 +3410,74 @@ namespace MyDoujinBot.Forms
             TblAdd(tbl, pnlIconRow);
             UpdateCurrentIconPreview();
 
+            // ── 區段 5: 資料備份與還原 ──
+            AddSectionHeader(tbl, "資料備份與還原");
+
+            var pnlBackupRow = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent,
+                Margin = new Padding(ScaleDpi(16), ScaleDpi(2), 0, ScaleDpi(6)),
+                Padding = Padding.Empty
+            };
+
+            var btnExportAll = new IconButton
+            {
+                Text = " 一鍵匯出備份",
+                AutoSize = true,
+                BackColor = Color.FromArgb(40, 140, 80),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                IconChar = IconChar.FileExport,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(18),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(ScaleDpi(12), ScaleDpi(4), ScaleDpi(14), ScaleDpi(4)),
+                Margin = new Padding(0, 0, ScaleDpi(12), 0)
+            };
+            btnExportAll.FlatAppearance.BorderSize = 0;
+            btnExportAll.Click += (s, e) => ExportBackup();
+            pnlBackupRow.Controls.Add(btnExportAll);
+
+            var btnImportAll = new IconButton
+            {
+                Text = " 一鍵匯入備份",
+                AutoSize = true,
+                BackColor = Color.FromArgb(45, 110, 195),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                IconChar = IconChar.FileImport,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(18),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(ScaleDpi(12), ScaleDpi(4), ScaleDpi(14), ScaleDpi(4)),
+                Margin = Padding.Empty
+            };
+            btnImportAll.FlatAppearance.BorderSize = 0;
+            btnImportAll.Click += (s, e) => ImportBackupFromSettings();
+            pnlBackupRow.Controls.Add(btnImportAll);
+
+            TblAdd(tbl, pnlBackupRow);
+
+            var lblBackupNote = new Label
+            {
+                Text = "💡 一鍵匯出包含系統設定、Token、排程方案與事件自選方案；從此處一鍵匯入將完整覆寫現有設定與所有方案（保留目前連線中的 Token）。",
+                ForeColor = Color.FromArgb(140, 140, 160),
+                Font = new Font("Microsoft JhengHei UI", 8.5f),
+                AutoSize = true,
+                Margin = new Padding(ScaleDpi(16), 0, 0, ScaleDpi(16))
+            };
+            TblAdd(tbl, lblBackupNote);
+
             return outer;
         }
 
@@ -3584,22 +3656,39 @@ namespace MyDoujinBot.Forms
         {
             if (string.IsNullOrWhiteSpace(_currentToken))
             {
-                string? input = PromptDialog.Show(
-                    this,
-                    "設定 Token",
-                    "請輸入 Bearer Token：",
-                    "",
-                    "請在此貼上 Bearer Token");
-
-                if (string.IsNullOrWhiteSpace(input))
+                while (string.IsNullOrWhiteSpace(_currentToken))
                 {
-                    AppendLog("[提示] 尚未設定 Token。請至「連線設定」填入 Token 後點擊儲存。", Color.FromArgb(220, 160, 60));
-                    SwitchNavTab("settings");
-                    UpdateTokenStatusVisual();
-                    return;
-                }
+                    var promptResult = PromptDialog.ShowExtended(
+                        this,
+                        "設定 Token",
+                        "請輸入 Bearer Token：",
+                        secondaryActionText: "匯入備份資料",
+                        placeholder: "請在此貼上 Bearer Token");
 
-                await ValidateAndApplyTokenAsync(input, isFirstTime: true);
+                    if (promptResult.Type == PromptDialogResultType.SecondaryAction)
+                    {
+                        bool imported = await TryImportBackupOnStartupAsync();
+                        if (imported)
+                        {
+                            break;
+                        }
+                        continue;
+                    }
+
+                    if (promptResult.Type == PromptDialogResultType.Cancel || string.IsNullOrWhiteSpace(promptResult.Text))
+                    {
+                        AppendLog("[提示] 尚未設定 Token。請至「連線設定」填入 Token 後點擊儲存。", Color.FromArgb(220, 160, 60));
+                        SwitchNavTab("settings");
+                        UpdateTokenStatusVisual();
+                        return;
+                    }
+
+                    bool valid = await ValidateAndApplyTokenAsync(promptResult.Text, isFirstTime: true);
+                    if (valid)
+                    {
+                        break;
+                    }
+                }
             }
             else
             {
@@ -3706,6 +3795,336 @@ namespace MyDoujinBot.Forms
                     SwitchNavTab("settings");
                 }
                 return false;
+            }
+        }
+
+        // =====================================================================
+        // 4.5. 全域資料一鍵匯出與匯入
+        // =====================================================================
+        /// <summary>
+        /// 一鍵匯出所有系統設定、目前 Token、排程方案與事件自選方案為單一 JSON 備份檔。
+        /// </summary>
+        private void ExportBackup()
+        {
+            try
+            {
+                SaveCurrentUiSettings();
+                AutoSavePipeline();
+
+                var package = new FullBackupPackage
+                {
+                    SchemaVersion = 1,
+                    ExportedAt = DateTime.Now,
+                    Settings = AppSettingsManager.Current,
+                    PipelinePresets = _pipelinePresetManager.LoadAll(),
+                    EventPresets = _eventChoicePanel?.GetAllPresets() ?? new List<EventChoicePreset>()
+                };
+
+                using var sfd = new SaveFileDialog
+                {
+                    Title = "匯出全域資料備份",
+                    Filter = "JSON 備份檔案 (*.json)|*.json",
+                    FileName = $"MyDoujinBot_Backup_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+                };
+
+                if (sfd.ShowDialog(this) != DialogResult.OK) return;
+
+                var options = new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                };
+
+                var json = JsonSerializer.Serialize(package, options);
+                File.WriteAllText(sfd.FileName, json, Encoding.UTF8);
+
+                AppendLog($"[系統] ✓ 全域資料備份已成功匯出至：{sfd.FileName}", Color.FromArgb(80, 220, 120));
+                MessageBox.Show(this, $"全域資料備份已成功匯出至：\n{sfd.FileName}", "匯出成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[錯誤] 匯出全域資料備份失敗：{ex.Message}", Color.FromArgb(220, 80, 80));
+                MessageBox.Show(this, $"匯出全域資料備份失敗：\n{ex.Message}", "匯出失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 從「設定」頁面一鍵匯入備份檔。
+        /// 會提示使用者將覆寫現有設定與所有方案（保留目前連線中的 Token）。
+        /// </summary>
+        private void ImportBackupFromSettings()
+        {
+            if (_cts != null)
+            {
+                MessageBox.Show(
+                    this,
+                    "目前有正在執行的工作，無法進行匯入還原。\n請先停止目前執行中的工作。",
+                    "無法匯入",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            var confirmResult = MessageBox.Show(
+                this,
+                "匯入備份資料將會完全覆寫現有的所有系統設定、排程方案與事件自選方案！\n\n（注意：目前連線中的 Token 將予以保留，不會被覆寫）\n\n確定要繼續匯入嗎？",
+                "匯入覆寫確認",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirmResult != DialogResult.Yes) return;
+
+            using var ofd = new OpenFileDialog
+            {
+                Title = "選擇全域資料備份檔案",
+                Filter = "JSON 備份檔案 (*.json)|*.json"
+            };
+
+            if (ofd.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                var json = File.ReadAllText(ofd.FileName, Encoding.UTF8);
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var package = JsonSerializer.Deserialize<FullBackupPackage>(json, options);
+
+                if (package == null)
+                {
+                    MessageBox.Show(this, "備份檔案解析失敗，檔案內容為空或格式不符。", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                ApplyFullBackup(package, preserveCurrentToken: true);
+
+                AppendLog("[系統] ✓ 全域資料備份已成功還原！", Color.FromArgb(80, 220, 120));
+                MessageBox.Show(this, "備份資料已成功匯入並套用！\n（目前使用中的 Token 已保留）", "匯入成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[錯誤] 匯入全域資料備份失敗：{ex.Message}", Color.FromArgb(220, 80, 80));
+                MessageBox.Show(this, $"匯入全域資料備份失敗：\n{ex.Message}", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 初次啟動於 Token 輸入視窗點擊「匯入備份資料」時執行。
+        /// 先自備份檔案提取 Token 進行後端驗證，驗證成功後才寫入設定與方案資料。
+        /// </summary>
+        private async Task<bool> TryImportBackupOnStartupAsync()
+        {
+            using var ofd = new OpenFileDialog
+            {
+                Title = "選擇包含 Token 的全域資料備份檔案",
+                Filter = "JSON 備份檔案 (*.json)|*.json"
+            };
+
+            if (ofd.ShowDialog(this) != DialogResult.OK) return false;
+
+            FullBackupPackage? package;
+            try
+            {
+                var json = File.ReadAllText(ofd.FileName, Encoding.UTF8);
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                package = JsonSerializer.Deserialize<FullBackupPackage>(json, options);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"讀取備份檔案失敗：\n{ex.Message}", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            if (package == null)
+            {
+                MessageBox.Show(this, "備份檔案解析失敗，檔案內容為空或格式不符。", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            var backupToken = package.Settings?.Token?.Trim();
+            if (string.IsNullOrWhiteSpace(backupToken))
+            {
+                MessageBox.Show(
+                    this,
+                    "所選備份檔案中未包含 Token，無法在此處完成驗證。\n請選擇包含有效 Token 的備份檔，或直接在文字框輸入 Token。",
+                    "Token 未設定",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return false;
+            }
+
+            if (backupToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                backupToken = backupToken[7..].Trim();
+            }
+
+            AppendLog("[系統] 正在驗證備份檔中的 Token...", Color.FromArgb(130, 170, 255));
+            if (lblStatusToken != null)
+            {
+                lblStatusToken.Text = "● Token：驗證中...";
+                lblStatusToken.ForeColor = Color.FromArgb(130, 170, 255);
+            }
+
+            var result = await _userService.ValidateAndFetchProfileAsync(backupToken);
+            if (!result.IsSuccess)
+            {
+                AppendLog($"[錯誤] 備份檔 Token 驗證失敗：{result.ErrorMessage}", Color.FromArgb(220, 80, 80));
+                UpdateTokenStatusVisual();
+                if (lblStatusToken != null)
+                {
+                    lblStatusToken.Text = result.IsUnauthorized ? "● Token：無效/過期" : "● Token：驗證失敗";
+                    lblStatusToken.ForeColor = Color.FromArgb(220, 90, 90);
+                }
+
+                MessageBox.Show(
+                    this,
+                    $"備份檔中的 Token 驗證失敗！\n\n原因：{result.ErrorMessage}\n\n必須通過伺服器驗證才能寫入與套用備份資料。",
+                    "驗證失敗",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return false;
+            }
+
+            try
+            {
+                ApplyFullBackup(package, preserveCurrentToken: false);
+                _currentToken = backupToken;
+                AppSettingsManager.Current.Token = _currentToken;
+                AppSettingsManager.Save();
+
+                if (txtSettingsToken != null)
+                    txtSettingsToken.Text = _currentToken;
+
+                UpdateTokenStatusVisual();
+                AppendLog("[系統] ✓ 備份檔匯入並通過 Token 驗證！使用者資料同步成功。", Color.FromArgb(80, 220, 120));
+
+                if (AppSettingsManager.Current.AutoClaimFloorReward && UserContext.Current.CanClaimFloorReward)
+                {
+                    _ = TryClaimFloorRewardAsync();
+                }
+
+                MessageBox.Show(
+                    this,
+                    $"備份資料匯入成功，Token 驗證通過！\n\n玩家名稱：{UserContext.Current.PlayerName}\n出戰角色：{UserContext.Current.CharacterName} (Lv.{UserContext.Current.Level})\n目前樓層：{UserContext.Current.CurrentFloor}F",
+                    "匯入與驗證成功",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[錯誤] 寫入備份資料失敗：{ex.Message}", Color.FromArgb(220, 80, 80));
+                MessageBox.Show(this, $"寫入備份資料失敗：\n{ex.Message}", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 套用全域備份包資料至本機儲存與 UI 控制項。
+        /// </summary>
+        /// <param name="package">備份資料封裝包</param>
+        /// <param name="preserveCurrentToken">是否保留目前使用中的 Token（從設定頁匯入時為 true；初次啟動匯入時為 false）</param>
+        private void ApplyFullBackup(FullBackupPackage package, bool preserveCurrentToken)
+        {
+            if (package == null) throw new ArgumentNullException(nameof(package));
+
+            // 1. 還原排程方案 (pipeline)
+            string pipelineDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "presets", "pipeline");
+            Directory.CreateDirectory(pipelineDir);
+            if (package.PipelinePresets != null && package.PipelinePresets.Count > 0)
+            {
+                foreach (var file in Directory.GetFiles(pipelineDir, "*.json"))
+                {
+                    try { File.Delete(file); } catch { }
+                }
+                foreach (var preset in package.PipelinePresets)
+                {
+                    if (preset != null && !string.IsNullOrWhiteSpace(preset.Id))
+                    {
+                        _pipelinePresetManager.Save(preset);
+                    }
+                }
+            }
+            else
+            {
+                var existing = _pipelinePresetManager.LoadAll();
+                if (existing.Count == 0)
+                {
+                    _pipelinePresetManager.Save(new PipelinePreset { Name = "預設排程" });
+                }
+            }
+
+            // 2. 還原事件自選方案 (event)
+            string eventDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "presets", "event");
+            Directory.CreateDirectory(eventDir);
+            var eventPresetManager = new PresetManager<EventChoicePreset>("event");
+            if (package.EventPresets != null && package.EventPresets.Count > 0)
+            {
+                foreach (var file in Directory.GetFiles(eventDir, "*.json"))
+                {
+                    try { File.Delete(file); } catch { }
+                }
+                foreach (var preset in package.EventPresets)
+                {
+                    if (preset != null && !string.IsNullOrWhiteSpace(preset.Id))
+                    {
+                        eventPresetManager.Save(preset);
+                    }
+                }
+            }
+            else
+            {
+                var existing = eventPresetManager.LoadAll();
+                if (existing.Count == 0)
+                {
+                    eventPresetManager.Save(new EventChoicePreset { Name = "預設方案", Choices = new Dictionary<string, string>() });
+                }
+            }
+
+            // 3. 還原系統設定 (AppSettings)
+            var newSettings = package.Settings ?? new AppSettings();
+            if (preserveCurrentToken)
+            {
+                newSettings.Token = _currentToken;
+            }
+            else
+            {
+                _currentToken = newSettings.Token ?? string.Empty;
+            }
+
+            AppSettingsManager.Replace(newSettings);
+
+            // 4. 同步與更新介面控制項
+            RestoreSavedSettings();
+
+            if (txtSettingsToken != null)
+                txtSettingsToken.Text = _currentToken;
+
+            UpdateTokenStatusVisual();
+
+            // 重新載入排程方案下拉與清單
+            RefreshPresetComboBox(AppSettingsManager.Current.ActivePipelinePresetId);
+            if (_activePipelinePreset != null)
+            {
+                AppSettingsManager.Current.ActivePipelinePresetId = _activePipelinePreset.Id;
+                AppSettingsManager.Current.PipelineStages = _activePipelinePreset.Stages;
+            }
+            RefreshPipelineStageList();
+
+            // 重新載入事件自選面板
+            _eventChoicePanel?.ReloadAllFromStorage(AppSettingsManager.Current.ActiveEventPresetId);
+
+            // 更新通知與圖示
+            if (chkEventNotify != null) chkEventNotify.Checked = AppSettingsManager.Current.EnableSystemNotify;
+            if (chkEventNotifySound != null)
+            {
+                chkEventNotifySound.Checked = AppSettingsManager.Current.EnableSystemNotifySound;
+                chkEventNotifySound.Enabled = AppSettingsManager.Current.EnableSystemNotify;
+            }
+
+            if (!string.IsNullOrWhiteSpace(AppSettingsManager.Current.SelectedAppIcon))
+            {
+                ApplyAppIcon(AppSettingsManager.Current.SelectedAppIcon);
+                UpdateCurrentIconPreview();
             }
         }
 

@@ -7,14 +7,35 @@
     <Compile Update="Forms\BattleReportForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Update="Forms\BattleStatsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Forms\EventChoiceEditorForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Forms\EventCustomChoicePanel.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Update="Forms\EventSelectionForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Forms\IconSelectionForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Update="Forms\MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Update="Forms\PipelineStageEditForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Update="Forms\SettingsForm.cs">
       <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Utilities\PillBadgeControl.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Utilities\PillFlowLayoutPanel.cs">
+      <SubType>Component</SubType>
     </Compile>
   </ItemGroup>
 </Project>

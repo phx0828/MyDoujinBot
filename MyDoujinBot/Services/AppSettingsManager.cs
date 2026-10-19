@@ -27,6 +27,15 @@ namespace MyDoujinBot.Services
         public static AppSettings Current { get; private set; } = new();
 
         /// <summary>
+        /// 替換整份設定實例並儲存至磁碟（用於備份還原）。
+        /// </summary>
+        public static void Replace(AppSettings newSettings)
+        {
+            Current = newSettings ?? new AppSettings();
+            Save();
+        }
+
+        /// <summary>
         /// 從磁碟讀取設定。
         /// 若檔案不存在或格式損壞，靜默使用預設值。
         /// 應在應用程式啟動時呼叫一次。

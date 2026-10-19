@@ -80,6 +80,45 @@ namespace MyDoujinBot.Forms
             UpdateSummaryLabel();
         }
 
+        /// <summary>
+        /// 取得目前本機儲存的所有事件自選方案清單。
+        /// </summary>
+        public List<EventChoicePreset> GetAllPresets()
+        {
+            return _presetManager.LoadAll();
+        }
+
+        /// <summary>
+        /// 當備份還原或設定更新後呼叫，重新載入本機所有事件自選方案並同步 UI。
+        /// </summary>
+        public void ReloadAllFromStorage(string? targetPresetId = null)
+        {
+            if (_chkEnable != null)
+            {
+                _chkEnable.Checked = AppSettingsManager.Current.EnableEventCustomChoice;
+                UpdateEnabledState();
+            }
+
+            var presets = _presetManager.LoadAll();
+            if (presets.Count == 0)
+            {
+                var initial = new EventChoicePreset
+                {
+                    Name = "預設方案",
+                    Choices = new Dictionary<string, string>()
+                };
+                _presetManager.Save(initial);
+                presets.Add(initial);
+            }
+
+            string activeId = targetPresetId ?? AppSettingsManager.Current.ActiveEventPresetId;
+            _activePreset = presets.FirstOrDefault(p => p.Id == activeId) ?? presets[0];
+            AppSettingsManager.Current.ActiveEventPresetId = _activePreset.Id;
+
+            RefreshPresetComboBox(_activePreset.Id);
+            UpdateSummaryLabel();
+        }
+
         private void InitializePresets()
         {
             var presets = _presetManager.LoadAll();

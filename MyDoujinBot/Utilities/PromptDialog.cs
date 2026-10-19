@@ -4,6 +4,19 @@ using System.Windows.Forms;
 
 namespace MyDoujinBot.Utilities
 {
+    public enum PromptDialogResultType
+    {
+        Ok,
+        Cancel,
+        SecondaryAction
+    }
+
+    public class PromptDialogResult
+    {
+        public PromptDialogResultType Type { get; set; }
+        public string Text { get; set; } = string.Empty;
+    }
+
     /// <summary>
     /// 精緻暗黑風格的文字輸入對話框，用於方案命名、重新命名、Token 輸入等即時輸入情境。
     /// 完整支援 High-DPI 縮放與邊界自動換行，杜絕視窗跑版與內容超出邊界。
@@ -13,12 +26,14 @@ namespace MyDoujinBot.Utilities
         private readonly TextBox _txtInput;
         private readonly Button _btnOk;
         private readonly Button _btnCancel;
+        private readonly Button? _btnSecondary;
         private readonly Label _lblPrompt;
         private readonly TableLayoutPanel _pnlMain;
 
         public string InputText => _txtInput.Text.Trim();
+        public PromptDialogResultType ResultType { get; private set; } = PromptDialogResultType.Cancel;
 
-        private PromptDialog(string title, string prompt, string defaultValue, string placeholder = "")
+        private PromptDialog(string title, string prompt, string defaultValue, string placeholder = "", string? secondaryActionText = null)
         {
             this.Text = title;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -27,7 +42,7 @@ namespace MyDoujinBot.Utilities
             this.MinimizeBox = false;
             this.ShowInTaskbar = false;
             this.ShowIcon = false;
-            this.ClientSize = new Size(460, 165);
+            this.ClientSize = new Size(secondaryActionText != null ? 520 : 460, 165);
             this.MinimumSize = new Size(380, 155);
             this.BackColor = Color.FromArgb(24, 24, 32);
             this.ForeColor = Color.FromArgb(230, 230, 240);
@@ -70,13 +85,27 @@ namespace MyDoujinBot.Utilities
                 Margin = new Padding(0, 0, 0, 16)
             };
 
-            var pnlButtons = new FlowLayoutPanel
+            var tblButtonsRow = new TableLayoutPanel
             {
                 Dock = DockStyle.Bottom,
+                ColumnCount = 2,
+                RowCount = 1,
+                AutoSize = true,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            tblButtonsRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            tblButtonsRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+
+            var pnlRightButtons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.RightToLeft,
                 AutoSize = true,
                 BackColor = Color.Transparent,
-                Margin = Padding.Empty
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
             };
 
             _btnCancel = new Button
@@ -92,6 +121,7 @@ namespace MyDoujinBot.Utilities
                 Margin = new Padding(0, 0, 0, 0)
             };
             _btnCancel.FlatAppearance.BorderSize = 0;
+            _btnCancel.Click += (s, e) => { ResultType = PromptDialogResultType.Cancel; };
 
             _btnOk = new Button
             {
@@ -106,13 +136,41 @@ namespace MyDoujinBot.Utilities
                 Margin = new Padding(0, 0, 10, 0)
             };
             _btnOk.FlatAppearance.BorderSize = 0;
+            _btnOk.Click += (s, e) => { ResultType = PromptDialogResultType.Ok; };
 
-            pnlButtons.Controls.Add(_btnCancel);
-            pnlButtons.Controls.Add(_btnOk);
+            pnlRightButtons.Controls.Add(_btnCancel);
+            pnlRightButtons.Controls.Add(_btnOk);
+
+            if (!string.IsNullOrWhiteSpace(secondaryActionText))
+            {
+                _btnSecondary = new Button
+                {
+                    Text = secondaryActionText,
+                    AutoSize = true,
+                    Height = 32,
+                    BackColor = Color.FromArgb(48, 72, 108),
+                    ForeColor = Color.White,
+                    FlatStyle = FlatStyle.Flat,
+                    Cursor = Cursors.Hand,
+                    Padding = new Padding(12, 0, 12, 0),
+                    Margin = new Padding(0, 0, 0, 0),
+                    Anchor = AnchorStyles.Left
+                };
+                _btnSecondary.FlatAppearance.BorderSize = 0;
+                _btnSecondary.Click += (s, e) =>
+                {
+                    ResultType = PromptDialogResultType.SecondaryAction;
+                    this.DialogResult = DialogResult.Yes;
+                    this.Close();
+                };
+                tblButtonsRow.Controls.Add(_btnSecondary, 0, 0);
+            }
+
+            tblButtonsRow.Controls.Add(pnlRightButtons, 1, 0);
 
             _pnlMain.Controls.Add(_lblPrompt, 0, 0);
             _pnlMain.Controls.Add(_txtInput, 0, 1);
-            _pnlMain.Controls.Add(pnlButtons, 0, 2);
+            _pnlMain.Controls.Add(tblButtonsRow, 0, 2);
 
             this.Controls.Add(_pnlMain);
             this.AcceptButton = _btnOk;
@@ -147,6 +205,30 @@ namespace MyDoujinBot.Utilities
         {
             using var dlg = new PromptDialog(title, prompt, defaultValue, placeholder);
             return dlg.ShowDialog(owner) == DialogResult.OK ? dlg.InputText : null;
+        }
+
+        /// <summary>
+        /// 顯示具備次要操作按鈕（如「匯入備份資料」）的擴充輸入視窗。
+        /// </summary>
+        public static PromptDialogResult ShowExtended(
+            IWin32Window? owner,
+            string title,
+            string prompt,
+            string? secondaryActionText = null,
+            string defaultValue = "",
+            string placeholder = "")
+        {
+            using var dlg = new PromptDialog(title, prompt, defaultValue, placeholder, secondaryActionText);
+            var res = dlg.ShowDialog(owner);
+            if (dlg.ResultType == PromptDialogResultType.SecondaryAction || res == DialogResult.Yes)
+            {
+                return new PromptDialogResult { Type = PromptDialogResultType.SecondaryAction, Text = dlg.InputText };
+            }
+            if (res == DialogResult.OK)
+            {
+                return new PromptDialogResult { Type = PromptDialogResultType.Ok, Text = dlg.InputText };
+            }
+            return new PromptDialogResult { Type = PromptDialogResultType.Cancel, Text = dlg.InputText };
         }
     }
 }
