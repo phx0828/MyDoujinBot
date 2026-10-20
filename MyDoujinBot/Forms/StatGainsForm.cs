@@ -40,6 +40,8 @@ namespace MyDoujinBot.Forms
         private Panel _pnlStageContent = null!;
         private Label _lblNoStageData = null!;
         private readonly bool _isChadoBattle;
+        private Label? _lblHeaderLevel;
+        private Label _lblStageLevel = null!;
         private FlowLayoutPanel _pnlStageChado = null!;
         private Label _lblStageChado = null!;
 
@@ -51,8 +53,8 @@ namespace MyDoujinBot.Forms
             _isChadoBattle = isChadoBattle;
 
             this.Text = "行動詳情";
-            this.Size = new Size(800, 680);
-            this.MinimumSize = new Size(700, 570);
+            this.Size = new Size(860, 680);
+            this.MinimumSize = new Size(760, 570);
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(24, 24, 32);
             this.ForeColor = Color.FromArgb(220, 220, 230);
@@ -176,7 +178,8 @@ namespace MyDoujinBot.Forms
             rootTable.Controls.Add(pnlBottom, 0, 3);
 
             // 填入總計資料
-            PopulateGrid(_gridTotal, _stats.StatGains);
+            var totalStats = _stats.CurrentStats ?? UserContext.Current.ActiveCharacter?.Stats;
+            PopulateGrid(_gridTotal, _stats.StatGains, totalStats);
             SwitchTab(0);
         }
 
@@ -198,16 +201,16 @@ namespace MyDoujinBot.Forms
             bool isBattle = string.Equals(_mode, "battle", StringComparison.OrdinalIgnoreCase);
 
             string evtSub = $"{_stats.EventSuccessCount} 成功 / {_stats.EventFailCount} 失敗";
+            int currentLvl = _stats.CurrentLevel > 0 ? _stats.CurrentLevel : UserContext.Current.Level;
+            string currentLvlText = currentLvl > 0 ? $"Lv. {currentLvl}" : "—";
+            var cardLevel = CreateSummaryCard("當前等級", currentLvlText, Color.FromArgb(255, 215, 0), out _lblHeaderLevel);
 
             if (isPipeline)
             {
-                // 行動排程：模式、執行時間、訓練次數、戰鬥次數、觸發事件 (5格)
-                tbl.ColumnCount = 5;
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+                // 行動排程：模式、執行時間、訓練次數、戰鬥次數、觸發事件、當前等級 (6格)
+                tbl.ColumnCount = 6;
+                for (int i = 0; i < 6; i++)
+                    tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / 6F));
 
                 string trainSub = $"{_stats.TrainingSuccessCount} 成功 / {_stats.TrainingFailCount} 失敗";
                 bool hasChadoInPipeline = _stats.ChadoSuccessCount > 0
@@ -223,15 +226,14 @@ namespace MyDoujinBot.Forms
                 tbl.Controls.Add(CreateSummaryCard("訓練次數", $"{_stats.TrainingRunCount} 次", Color.FromArgb(100, 220, 140), CreateTextSubControl(trainSub)), 2, 0);
                 tbl.Controls.Add(CreateSummaryCard("戰鬥次數", $"{_stats.BattleRunCount} 次", Color.FromArgb(255, 185, 110), battleSubControl), 3, 0);
                 tbl.Controls.Add(CreateSummaryCard("觸發事件", $"{_stats.EventCount} 次", Color.FromArgb(195, 160, 255), CreateTextSubControl(evtSub)), 4, 0);
+                tbl.Controls.Add(cardLevel, 5, 0);
             }
             else if (isBattle)
             {
-                // 自動戰鬥：模式、執行時間、戰鬥次數、觸發事件 (4格)
-                tbl.ColumnCount = 4;
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+                // 自動戰鬥：模式、執行時間、戰鬥次數、觸發事件、當前等級 (5格)
+                tbl.ColumnCount = 5;
+                for (int i = 0; i < 5; i++)
+                    tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
 
                 bool isChado = _isChadoBattle || _stats.ChadoSuccessCount > 0 || AppSettingsManager.Current.BattleMode == "Chado";
                 Control battleSubControl = isChado
@@ -245,15 +247,14 @@ namespace MyDoujinBot.Forms
                 tbl.Controls.Add(CreateSummaryCard("執行時間", _elapsedTime, Color.FromArgb(140, 205, 255)), 1, 0);
                 tbl.Controls.Add(CreateSummaryCard("戰鬥次數", $"{_stats.RunCount} 次", Color.FromArgb(100, 220, 140), battleSubControl), 2, 0);
                 tbl.Controls.Add(CreateSummaryCard("觸發事件", $"{_stats.EventCount} 次", Color.FromArgb(195, 160, 255), CreateTextSubControl(evtSub)), 3, 0);
+                tbl.Controls.Add(cardLevel, 4, 0);
             }
             else
             {
-                // 自動訓練：模式、執行時間、訓練次數、觸發事件 (4格)
-                tbl.ColumnCount = 4;
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+                // 自動訓練：模式、執行時間、訓練次數、觸發事件、當前等級 (5格)
+                tbl.ColumnCount = 5;
+                for (int i = 0; i < 5; i++)
+                    tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
 
                 string trainSub = $"{_stats.SuccessCount} 成功 / {_stats.FailCount} 失敗";
 
@@ -261,6 +262,7 @@ namespace MyDoujinBot.Forms
                 tbl.Controls.Add(CreateSummaryCard("執行時間", _elapsedTime, Color.FromArgb(140, 205, 255)), 1, 0);
                 tbl.Controls.Add(CreateSummaryCard("訓練次數", $"{_stats.RunCount} 次", Color.FromArgb(100, 220, 140), CreateTextSubControl(trainSub)), 2, 0);
                 tbl.Controls.Add(CreateSummaryCard("觸發事件", $"{_stats.EventCount} 次", Color.FromArgb(195, 160, 255), CreateTextSubControl(evtSub)), 3, 0);
+                tbl.Controls.Add(cardLevel, 4, 0);
             }
 
             return tbl;
@@ -375,6 +377,11 @@ namespace MyDoujinBot.Forms
 
         private Panel CreateSummaryCard(string title, string mainValue, Color mainColor, Control? subControl = null)
         {
+            return CreateSummaryCard(title, mainValue, mainColor, out _, subControl);
+        }
+
+        private Panel CreateSummaryCard(string title, string mainValue, Color mainColor, out Label valueLabel, Control? subControl = null)
+        {
             var card = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -409,6 +416,7 @@ namespace MyDoujinBot.Forms
                 TextAlign = ContentAlignment.MiddleCenter
             };
             card.Controls.Add(lblVal);
+            valueLabel = lblVal;
 
             return card;
         }
@@ -483,6 +491,12 @@ namespace MyDoujinBot.Forms
                 _pnlTotalView.Visible = true;
                 _pnlStageView.Visible = false;
 
+                if (_lblHeaderLevel != null)
+                {
+                    int curLvl = _stats.CurrentLevel > 0 ? _stats.CurrentLevel : UserContext.Current.Level;
+                    _lblHeaderLevel.Text = curLvl > 0 ? $"Lv. {curLvl}" : "—";
+                }
+
                 _gridTotal.ClearSelection();
                 _gridTotal.CurrentCell = null;
             }
@@ -500,6 +514,7 @@ namespace MyDoujinBot.Forms
                 _pnlStageView.Visible = true;
 
                 RefreshStageTab();
+                UpdateHeaderLevelForStage();
                 _gridStage.ClearSelection();
                 _gridStage.CurrentCell = null;
             }
@@ -557,6 +572,17 @@ namespace MyDoujinBot.Forms
             _cmbStages.SelectedIndexChanged += (s, e) => OnSelectedStageChanged();
             pnlTop.Controls.Add(_cmbStages);
 
+            _lblStageLevel = new Label
+            {
+                Text = "階段等級：Lv. —",
+                AutoSize = true,
+                ForeColor = Color.FromArgb(255, 215, 0),
+                Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
+                Location = new Point(385, 10),
+                Visible = false
+            };
+            pnlTop.Controls.Add(_lblStageLevel);
+
             _pnlStageChado = new FlowLayoutPanel
             {
                 AutoSize = true,
@@ -564,7 +590,7 @@ namespace MyDoujinBot.Forms
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
                 BackColor = Color.Transparent,
-                Location = new Point(380, 8),
+                Location = new Point(540, 8),
                 Visible = false
             };
 
@@ -637,9 +663,25 @@ namespace MyDoujinBot.Forms
             if (idx >= sortedStages.Count) return;
 
             var stageRecord = sortedStages[idx];
-            PopulateGrid(_gridStage, stageRecord.Record);
+            var stageStats = stageRecord.LastStats ?? _stats.CurrentStats ?? UserContext.Current.ActiveCharacter?.Stats;
+            PopulateGrid(_gridStage, stageRecord.Record, stageStats);
             _gridStage.ClearSelection();
             _gridStage.CurrentCell = null;
+
+            int stageLvl = stageRecord.LastLevel > 0 ? stageRecord.LastLevel : (_stats.CurrentLevel > 0 ? _stats.CurrentLevel : UserContext.Current.Level);
+            if (stageLvl > 0)
+            {
+                _lblStageLevel.Text = $"階段等級：Lv. {stageLvl}";
+                _lblStageLevel.Visible = true;
+            }
+            else
+            {
+                _lblStageLevel.Text = "階段等級：—";
+                _lblStageLevel.Visible = true;
+            }
+            _pnlStageChado.Location = new Point(_lblStageLevel.Right + 14, 8);
+
+            UpdateHeaderLevelForStage();
 
             bool isStageChado = (stageRecord.ActionType == StageActionType.Battle && stageRecord.BattleType == BattleType.Chado)
                 || stageRecord.StageSummary.Contains("茶渡")
@@ -653,6 +695,22 @@ namespace MyDoujinBot.Forms
             else
             {
                 _pnlStageChado.Visible = false;
+            }
+        }
+
+        private void UpdateHeaderLevelForStage()
+        {
+            if (_lblHeaderLevel == null || !_pnlStageView.Visible) return;
+            int idx = _cmbStages.SelectedIndex;
+            if (idx >= 0 && _stats.StageStatGains != null)
+            {
+                var sortedStages = _stats.StageStatGains.Values.OrderBy(s => s.StageIndex).ToList();
+                if (idx < sortedStages.Count)
+                {
+                    int stLvl = sortedStages[idx].LastLevel;
+                    if (stLvl <= 0) stLvl = _stats.CurrentLevel > 0 ? _stats.CurrentLevel : UserContext.Current.Level;
+                    _lblHeaderLevel.Text = stLvl > 0 ? $"Lv. {stLvl}" : "—";
+                }
             }
         }
 
@@ -752,7 +810,18 @@ namespace MyDoujinBot.Forms
             colTotal.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
             colTotal.HeaderCell.Style.Padding = new Padding(0, 0, 24, 0);
 
-            grid.Columns.AddRange(colAttr, colLvl, colEvt, colTotal);
+            var colCurrent = new DataGridViewTextBoxColumn
+            {
+                HeaderText = "當前數值",
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+                SortMode = DataGridViewColumnSortMode.NotSortable
+            };
+            colCurrent.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+            colCurrent.DefaultCellStyle.Padding = new Padding(0, 0, 24, 0);
+            colCurrent.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
+            colCurrent.HeaderCell.Style.Padding = new Padding(0, 0, 24, 0);
+
+            grid.Columns.AddRange(colAttr, colLvl, colEvt, colTotal, colCurrent);
 
             // 消除格內虛線焦點框與防止誤點選
             grid.CellPainting += (s, e) =>
@@ -777,18 +846,14 @@ namespace MyDoujinBot.Forms
             void SetRowHoverState(int rowIndex, bool hover)
             {
                 if (rowIndex < 0 || rowIndex >= grid.RowCount) return;
-                bool isSummary = (rowIndex == grid.RowCount - 1);
                 if (hover)
                 {
-                    grid.Rows[rowIndex].DefaultCellStyle.BackColor = isSummary
-                        ? Color.FromArgb(46, 54, 76)
-                        : Color.FromArgb(40, 46, 66);
+                    grid.Rows[rowIndex].DefaultCellStyle.BackColor = Color.FromArgb(40, 46, 66);
                 }
                 else
                 {
-                    grid.Rows[rowIndex].DefaultCellStyle.BackColor = isSummary
-                        ? Color.FromArgb(32, 35, 48)
-                        : (rowIndex % 2 == 0 ? Color.FromArgb(24, 25, 34) : Color.FromArgb(28, 29, 40));
+                    grid.Rows[rowIndex].DefaultCellStyle.BackColor =
+                        (rowIndex % 2 == 0 ? Color.FromArgb(24, 25, 34) : Color.FromArgb(28, 29, 40));
                 }
             }
 
@@ -823,7 +888,7 @@ namespace MyDoujinBot.Forms
             return grid;
         }
 
-        private void PopulateGrid(DataGridView grid, StatPointsRecord record)
+        private void PopulateGrid(DataGridView grid, StatPointsRecord record, CharacterStats? currentStats)
         {
             grid.Rows.Clear();
 
@@ -846,12 +911,15 @@ namespace MyDoujinBot.Forms
                 int lvl = record.LevelUp.GetStat(key);
                 int evt = record.Event.GetStat(key);
                 int tot = lvl + evt;
+                int cur = currentStats?.GetStat(key) ?? 0;
+                string curText = currentStats != null ? cur.ToString() : (cur > 0 ? cur.ToString() : "—");
 
                 int rowIdx = grid.Rows.Add(
                     displayName,
                     lvl > 0 ? $"+{lvl}" : "0",
                     evt > 0 ? $"+{evt}" : "0",
-                    tot > 0 ? $"+{tot}" : "0"
+                    tot > 0 ? $"+{tot}" : "0",
+                    curText
                 );
 
                 var row = grid.Rows[rowIdx];
@@ -876,37 +944,19 @@ namespace MyDoujinBot.Forms
                     row.Cells[3].Style.ForeColor = Color.FromArgb(140, 210, 255);
                     row.Cells[3].Style.Font = new Font("Microsoft JhengHei UI", 11.5f, FontStyle.Bold);
                 }
+
+                // Col 4: 當前數值
+                if (cur == 0 && currentStats == null)
+                {
+                    row.Cells[4].Style.ForeColor = Color.FromArgb(110, 110, 130);
+                    row.Cells[4].Style.Font = new Font("Microsoft JhengHei UI", 11f);
+                }
+                else
+                {
+                    row.Cells[4].Style.ForeColor = Color.FromArgb(245, 245, 255);
+                    row.Cells[4].Style.Font = new Font("Microsoft JhengHei UI", 11.5f, FontStyle.Bold);
+                }
             }
-
-            int sumTot = record.Total.TotalPoints;
-            int sumLvl = record.LevelUp.TotalPoints;
-            int sumEvt = record.Event.TotalPoints;
-
-            int summaryRowIdx = grid.Rows.Add(
-                "合計點數",
-                sumLvl > 0 ? $"+{sumLvl}" : "0",
-                sumEvt > 0 ? $"+{sumEvt}" : "0",
-                sumTot > 0 ? $"+{sumTot}" : "0"
-            );
-
-            var sumRow = grid.Rows[summaryRowIdx];
-            sumRow.Height = 38;
-            sumRow.DefaultCellStyle.BackColor = Color.FromArgb(32, 35, 48);
-            sumRow.DefaultCellStyle.Font = new Font("Microsoft JhengHei UI", 12f, FontStyle.Bold);
-            sumRow.Cells[0].Style.ForeColor = Color.FromArgb(240, 240, 255);
-            sumRow.Cells[0].Style.Font = new Font("Microsoft JhengHei UI", 12f, FontStyle.Bold);
-
-            // Col 1: 升級合計
-            sumRow.Cells[1].Style.ForeColor = Color.FromArgb(100, 220, 140);
-            sumRow.Cells[1].Style.Font = new Font("Microsoft JhengHei UI", 12.5f, FontStyle.Bold);
-
-            // Col 2: 事件合計
-            sumRow.Cells[2].Style.ForeColor = Color.FromArgb(210, 170, 255);
-            sumRow.Cells[2].Style.Font = new Font("Microsoft JhengHei UI", 12.5f, FontStyle.Bold);
-
-            // Col 3: 總計合計
-            sumRow.Cells[3].Style.ForeColor = Color.FromArgb(140, 210, 255);
-            sumRow.Cells[3].Style.Font = new Font("Microsoft JhengHei UI", 12.5f, FontStyle.Bold);
 
             grid.ClearSelection();
             grid.CurrentCell = null;

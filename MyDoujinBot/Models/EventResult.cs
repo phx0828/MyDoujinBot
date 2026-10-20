@@ -127,6 +127,64 @@ namespace MyDoujinBot.Models
         public int Int { get; set; }
         [JsonPropertyName("luk")]
         public int Luk { get; set; }
+
+        public int GetStat(string key)
+        {
+            return key?.ToLowerInvariant() switch
+            {
+                "hp" => HP,
+                "atk" => Atk,
+                "def" => Def,
+                "sta" => Sta,
+                "agi" => Agi,
+                "spd" => Spd,
+                "tec" => Tec,
+                "int" => Int,
+                "luk" => Luk,
+                _ => 0
+            };
+        }
+
+        public void SetStat(string key, int value)
+        {
+            switch (key?.ToLowerInvariant())
+            {
+                case "hp": HP = value; break;
+                case "atk": Atk = value; break;
+                case "def": Def = value; break;
+                case "sta": Sta = value; break;
+                case "agi": Agi = value; break;
+                case "spd": Spd = value; break;
+                case "tec": Tec = value; break;
+                case "int": Int = value; break;
+                case "luk": Luk = value; break;
+            }
+        }
+
+        public void ApplyGains(IEnumerable<KeyValuePair<string, int>>? gains)
+        {
+            if (gains == null) return;
+            foreach (var kv in gains)
+            {
+                SetStat(kv.Key, GetStat(kv.Key) + kv.Value);
+            }
+        }
+
+        public CharacterStats Clone()
+        {
+            return new CharacterStats
+            {
+                HP = this.HP,
+                Atk = this.Atk,
+                Def = this.Def,
+                Sta = this.Sta,
+                Agi = this.Agi,
+                Spd = this.Spd,
+                Tec = this.Tec,
+                Int = this.Int,
+                Luk = this.Luk
+            };
+        }
     }
 
     /// <summary>

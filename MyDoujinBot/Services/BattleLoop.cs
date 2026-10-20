@@ -35,6 +35,7 @@ namespace MyDoujinBot.Services
         public int EventSuccessCount { get; set; }
         public int EventFailCount { get; set; }
         public int CurrentLevel { get; set; }
+        public CharacterStats? CurrentStats { get; set; }
         public int TotalExp { get; set; }
         public double NextRunCountdownSeconds { get; set; }
         public DateTime StartTime { get; set; }
@@ -81,6 +82,8 @@ namespace MyDoujinBot.Services
             Stats.StartTime = DateTime.Now;
             Stats.GainedCharacters.Clear();
             Stats.StatGains.Clear();
+            Stats.CurrentLevel = UserContext.Current.Level;
+            Stats.CurrentStats = UserContext.Current.ActiveCharacter?.Stats?.Clone();
 
             OnStatusChanged?.Invoke(LoopStatus.Running);
             NotifyStats();
@@ -152,10 +155,14 @@ namespace MyDoujinBot.Services
                     if (response.Gains != null)
                     {
                         Stats.StatGains.LevelUp.AddRange(response.Gains);
+                        Stats.CurrentStats?.ApplyGains(response.Gains);
+                        UserContext.ApplyStatGains(response.Gains);
                     }
                     if (response.ActionResult?.Gains != null)
                     {
                         Stats.StatGains.LevelUp.AddRange(response.ActionResult.Gains);
+                        Stats.CurrentStats?.ApplyGains(response.ActionResult.Gains);
+                        UserContext.ApplyStatGains(response.ActionResult.Gains);
                     }
 
                     NotifyStats();
@@ -318,6 +325,8 @@ namespace MyDoujinBot.Services
             if (er.Rewards?.BonusStats != null)
             {
                 Stats.StatGains.Event.AddRange(er.Rewards.BonusStats);
+                Stats.CurrentStats?.ApplyGains(er.Rewards.BonusStats);
+                UserContext.ApplyStatGains(er.Rewards.BonusStats);
             }
 
             Log(LoopLogHelper.FormatEventResult(er));

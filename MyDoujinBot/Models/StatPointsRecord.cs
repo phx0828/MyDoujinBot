@@ -97,6 +97,8 @@ namespace MyDoujinBot.Models
         public StageActionType ActionType { get; set; }
         public MyDoujinBot.Services.BattleType BattleType { get; set; }
         public int ChadoSuccessCount { get; set; }
+        public int LastLevel { get; set; }
+        public CharacterStats? LastStats { get; set; }
         public StatPointsRecord Record { get; } = new();
     }
 }

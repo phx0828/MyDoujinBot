@@ -1045,6 +1045,14 @@ namespace MyDoujinBot.Forms
                 string curMode = string.IsNullOrEmpty(_activeRunningMode) ? _selectedNavTab : _activeRunningMode;
                 string elapsed = lblStatusElapsed != null && !string.IsNullOrWhiteSpace(lblStatusElapsed.Text) ? lblStatusElapsed.Text : "00:00:00";
                 bool isChado = (rbBattleChado != null && rbBattleChado.Checked) || _currentStats.ChadoSuccessCount > 0;
+                if (_currentStats.CurrentLevel <= 0 && UserContext.Current.Level > 0)
+                {
+                    _currentStats.CurrentLevel = UserContext.Current.Level;
+                }
+                if (_currentStats.CurrentStats == null && UserContext.Current.ActiveCharacter?.Stats != null)
+                {
+                    _currentStats.CurrentStats = UserContext.Current.ActiveCharacter.Stats.Clone();
+                }
                 using var f = new StatGainsForm(_currentStats, curMode, elapsed, isChado);
                 f.ShowDialog(this);
             };
@@ -4244,7 +4252,11 @@ namespace MyDoujinBot.Forms
                 btnShowLastReport.Visible = false;
 
                 _loopStartTime = DateTime.Now;
-                _currentStats = new LoopStats();
+                _currentStats = new LoopStats
+                {
+                    CurrentLevel = UserContext.Current.Level,
+                    CurrentStats = UserContext.Current.ActiveCharacter?.Stats?.Clone()
+                };
                 UpdateTelemetryStats(_currentStats);
                 lblStatusElapsed.Text = "00:00:00";
                 _elapsedTimer.Tick += OnElapsedTick;
@@ -4314,6 +4326,7 @@ namespace MyDoujinBot.Forms
                             _currentStats.EventFailCount = bs.EventFailCount;
                             _currentStats.TotalExp = bs.TotalExp;
                             _currentStats.CurrentLevel = bs.CurrentLevel;
+                            _currentStats.CurrentStats = bs.CurrentStats?.Clone();
                             _currentStats.NextRunCountdownSeconds = bs.NextRunCountdownSeconds;
                             _currentStats.GainedCharacters = bs.GainedCharacters;
                             _currentStats.ChadoSuccessCount = bs.ChadoSuccessCount;

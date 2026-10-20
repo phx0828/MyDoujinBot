@@ -75,6 +75,8 @@ namespace MyDoujinBot.Services
             Stats.GainedCharacters.Clear();
             Stats.StatGains.Clear();
             Stats.StageStatGains.Clear();
+            Stats.CurrentLevel = UserContext.Current.Level;
+            Stats.CurrentStats = UserContext.Current.ActiveCharacter?.Stats?.Clone();
 
             OnStatusChanged?.Invoke(LoopStatus.Running);
             NotifyStats();
@@ -198,11 +200,22 @@ namespace MyDoujinBot.Services
                                 }
                                 Log(LoopLogHelper.FormatTrainingResult(ar));
                             }
-                            if (resp.ActiveCharacter != null && resp.ActiveCharacter.Level > 0)
+                            if (resp.ActiveCharacter != null)
                             {
-                                Stats.CurrentLevel = resp.ActiveCharacter.Level;
-                                UserContext.UpdateLevel(resp.ActiveCharacter.Level);
+                                if (resp.ActiveCharacter.Level > 0)
+                                {
+                                    Stats.CurrentLevel = resp.ActiveCharacter.Level;
+                                    UserContext.UpdateLevel(resp.ActiveCharacter.Level);
+                                }
+                                if (resp.ActiveCharacter.Stats != null)
+                                {
+                                    Stats.CurrentStats = resp.ActiveCharacter.Stats.Clone();
+                                    UserContext.UpdateCharacterStats(resp.ActiveCharacter.Stats);
+                                }
                             }
+                            var curStageRec = GetOrCreateStageRecord(stageIndex + 1, stage);
+                            curStageRec.LastLevel = Stats.CurrentLevel;
+                            curStageRec.LastStats = Stats.CurrentStats?.Clone();
                         }
                         else
                         {
@@ -269,13 +282,20 @@ namespace MyDoujinBot.Services
                                 Stats.StatGains.LevelUp.AddRange(bResp.Gains);
                                 var stageRec = GetOrCreateStageRecord(stageIndex + 1, stage);
                                 stageRec.Record.LevelUp.AddRange(bResp.Gains);
+                                Stats.CurrentStats?.ApplyGains(bResp.Gains);
+                                UserContext.ApplyStatGains(bResp.Gains);
                             }
                             if (bResp.ActionResult?.Gains != null)
                             {
                                 Stats.StatGains.LevelUp.AddRange(bResp.ActionResult.Gains);
                                 var stageRec = GetOrCreateStageRecord(stageIndex + 1, stage);
                                 stageRec.Record.LevelUp.AddRange(bResp.ActionResult.Gains);
+                                Stats.CurrentStats?.ApplyGains(bResp.ActionResult.Gains);
+                                UserContext.ApplyStatGains(bResp.ActionResult.Gains);
                             }
+                            var curBattleStageRec = GetOrCreateStageRecord(stageIndex + 1, stage);
+                            curBattleStageRec.LastLevel = Stats.CurrentLevel;
+                            curBattleStageRec.LastStats = Stats.CurrentStats?.Clone();
 
                             Log(LoopLogHelper.FormatBattleResult(stage.BattleType, isWin, bResp.ExpGained));
 
@@ -406,7 +426,9 @@ namespace MyDoujinBot.Services
                     StageName = stage.Name,
                     StageSummary = stage.GetActionSummary(),
                     ActionType = stage.ActionType,
-                    BattleType = stage.BattleType
+                    BattleType = stage.BattleType,
+                    LastLevel = Stats.CurrentLevel > 0 ? Stats.CurrentLevel : UserContext.Current.Level,
+                    LastStats = Stats.CurrentStats?.Clone() ?? UserContext.Current.ActiveCharacter?.Stats?.Clone()
                 };
                 Stats.StageStatGains[stageIdx] = record;
             }
@@ -451,6 +473,10 @@ namespace MyDoujinBot.Services
                 Stats.StatGains.Event.AddRange(er.Rewards.BonusStats);
                 var stageRec = GetOrCreateStageRecord(stageIdx, stage);
                 stageRec.Record.Event.AddRange(er.Rewards.BonusStats);
+                Stats.CurrentStats?.ApplyGains(er.Rewards.BonusStats);
+                UserContext.ApplyStatGains(er.Rewards.BonusStats);
+                stageRec.LastLevel = Stats.CurrentLevel;
+                stageRec.LastStats = Stats.CurrentStats?.Clone();
             }
 
             Log(LoopLogHelper.FormatEventResult(er));

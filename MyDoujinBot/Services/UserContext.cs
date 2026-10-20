@@ -165,6 +165,40 @@ namespace MyDoujinBot.Services
         }
 
         /// <summary>
+        /// 即時更新出戰角色能力值。
+        /// </summary>
+        public static void UpdateCharacterStats(CharacterStats? stats)
+        {
+            if (stats == null) return;
+
+            lock (_lock)
+            {
+                if (Current.ActiveCharacter != null)
+                {
+                    Current.ActiveCharacter.Stats = stats.Clone();
+                }
+            }
+            OnProfileUpdated?.Invoke();
+        }
+
+        /// <summary>
+        /// 即時套用能力成長值至出戰角色。
+        /// </summary>
+        public static void ApplyStatGains(System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, int>>? gains)
+        {
+            if (gains == null) return;
+
+            lock (_lock)
+            {
+                if (Current.ActiveCharacter?.Stats != null)
+                {
+                    Current.ActiveCharacter.Stats.ApplyGains(gains);
+                }
+            }
+            OnProfileUpdated?.Invoke();
+        }
+
+        /// <summary>
         /// 即時更新目前最高樓層。
         /// </summary>
         public static void UpdateFloor(int newFloor)

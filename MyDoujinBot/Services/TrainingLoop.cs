@@ -55,6 +55,7 @@ namespace MyDoujinBot.Services
         public int EventSuccessCount { get; set; }
         public int EventFailCount { get; set; }
         public int CurrentLevel { get; set; }
+        public CharacterStats? CurrentStats { get; set; }
         public int TotalExp { get; set; }
         public double NextRunCountdownSeconds { get; set; }  // 倒數秒數，供 UI 顯示
         public DateTime StartTime { get; set; }
@@ -138,6 +139,8 @@ namespace MyDoujinBot.Services
             Stats.GainedCharacters.Clear();
             Stats.StatGains.Clear();
             Stats.StageStatGains.Clear();
+            Stats.CurrentLevel = UserContext.Current.Level;
+            Stats.CurrentStats = UserContext.Current.ActiveCharacter?.Stats?.Clone();
 
             OnStatusChanged?.Invoke(LoopStatus.Running);
             NotifyStats();
@@ -217,10 +220,18 @@ namespace MyDoujinBot.Services
                         Stats.SuccessCount++;
                         ProcessActionResult(response.ActionResult);
                     }
-                    if (response.ActiveCharacter != null && response.ActiveCharacter.Level > 0)
+                    if (response.ActiveCharacter != null)
                     {
-                        Stats.CurrentLevel = response.ActiveCharacter.Level;
-                        UserContext.UpdateLevel(response.ActiveCharacter.Level);
+                        if (response.ActiveCharacter.Level > 0)
+                        {
+                            Stats.CurrentLevel = response.ActiveCharacter.Level;
+                            UserContext.UpdateLevel(response.ActiveCharacter.Level);
+                        }
+                        if (response.ActiveCharacter.Stats != null)
+                        {
+                            Stats.CurrentStats = response.ActiveCharacter.Stats.Clone();
+                            UserContext.UpdateCharacterStats(response.ActiveCharacter.Stats);
+                        }
                     }
 
                     NotifyStats();
@@ -516,6 +527,8 @@ namespace MyDoujinBot.Services
             if (er.Rewards?.BonusStats != null)
             {
                 Stats.StatGains.Event.AddRange(er.Rewards.BonusStats);
+                Stats.CurrentStats?.ApplyGains(er.Rewards.BonusStats);
+                UserContext.ApplyStatGains(er.Rewards.BonusStats);
             }
 
             Log(LoopLogHelper.FormatEventResult(er));
