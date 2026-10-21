@@ -31,6 +31,7 @@ namespace MyDoujinBot.Forms
         private ComboBox _cmbStatFilter = null!;
         private ComboBox _cmbEncounterFilter = null!;
         private ComboBox _cmbStatusFilter = null!;
+        private IconButton _btnBatchActions = null!;
         private IconButton _btnClearAll = null!;
 
         private ListBox _lstCharacters = null!;
@@ -287,13 +288,30 @@ namespace MyDoujinBot.Forms
             pnlFilters.Controls.Add(lblStatus);
             pnlFilters.Controls.Add(_cmbStatusFilter);
 
+            var flpRightActions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Right,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            _btnBatchActions = CreateCompactButton("批次操作 ▾", Color.FromArgb(46, 76, 120), IconChar.CheckDouble);
+            _btnBatchActions.Margin = new Padding(ScaleDpi(6), ScaleDpi(2), ScaleDpi(6), ScaleDpi(4));
+            _btnBatchActions.Click += OnBatchActionsClicked;
+
             _btnClearAll = CreateCompactButton("重置所有選項", Color.FromArgb(50, 55, 68), IconChar.ArrowRotateLeft);
-            _btnClearAll.Anchor = AnchorStyles.Right;
-            _btnClearAll.Margin = new Padding(ScaleDpi(6), ScaleDpi(2), 0, ScaleDpi(4));
+            _btnClearAll.Margin = new Padding(0, ScaleDpi(2), 0, ScaleDpi(4));
             _btnClearAll.Click += OnClearAllClicked;
 
+            flpRightActions.Controls.Add(_btnBatchActions);
+            flpRightActions.Controls.Add(_btnClearAll);
+
             pnlLine2.Controls.Add(pnlFilters, 0, 0);
-            pnlLine2.Controls.Add(_btnClearAll, 1, 0);
+            pnlLine2.Controls.Add(flpRightActions, 1, 0);
             pnlTopCard.Controls.Add(pnlLine2, 0, 1);
 
             pnlMainTable.Controls.Add(pnlTopCard, 0, 0);
@@ -701,6 +719,270 @@ namespace MyDoujinBot.Forms
             }
         }
 
+        private void OnBatchActionsClicked(object? sender, EventArgs e)
+        {
+            var menu = BuildBatchActionsMenu();
+            menu.Show(_btnBatchActions, new Point(0, _btnBatchActions.Height));
+        }
+
+        private ContextMenuStrip BuildBatchActionsMenu()
+        {
+            var menu = new ContextMenuStrip
+            {
+                Renderer = new DarkMenuRenderer(),
+                BackColor = Color.FromArgb(28, 30, 42),
+                ForeColor = Color.FromArgb(230, 230, 245),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                ShowImageMargin = false
+            };
+
+            void AddMenuItem(string text, Action onClick)
+            {
+                var item = new ToolStripMenuItem(text)
+                {
+                    ForeColor = Color.FromArgb(230, 230, 245),
+                    BackColor = Color.FromArgb(28, 30, 42)
+                };
+                item.Click += (s, ev) => onClick();
+                menu.Items.Add(item);
+            }
+
+            // ── 九大屬性 ──
+            AddMenuItem("勾選「+HP」選項", () => ExecuteBatchStatSelect("HP", "hp", "hp"));
+            AddMenuItem("勾選「+攻擊」選項", () => ExecuteBatchStatSelect("攻擊", "攻", "atk"));
+            AddMenuItem("勾選「+防禦」選項", () => ExecuteBatchStatSelect("防禦", "防", "def"));
+            AddMenuItem("勾選「+體力」選項", () => ExecuteBatchStatSelect("體力", "體", "sta"));
+            AddMenuItem("勾選「+敏捷」選項", () => ExecuteBatchStatSelect("敏捷", "敏", "agi"));
+            AddMenuItem("勾選「+反應速度」選項", () => ExecuteBatchStatSelect("反應速度", "反", "spd"));
+            AddMenuItem("勾選「+技巧」選項", () => ExecuteBatchStatSelect("技巧", "技", "tec"));
+            AddMenuItem("勾選「+智力」選項", () => ExecuteBatchStatSelect("智力", "智", "int"));
+            AddMenuItem("勾選「+幸運」選項", () => ExecuteBatchStatSelect("幸運", "幸", "luk"));
+
+            menu.Items.Add(new ToolStripSeparator());
+
+            // ── 有無遭遇戰 ──
+            AddMenuItem("勾選「無遭遇戰」選項", () => ExecuteBatchEncounterSelect(false));
+            AddMenuItem("勾選「有遭遇戰」選項", () => ExecuteBatchEncounterSelect(true));
+
+            menu.Items.Add(new ToolStripSeparator());
+
+            // ── 局部清理 ──
+            AddMenuItem("局部清理（重置目前畫面事件為未指定）", ExecuteBatchResetVisible);
+
+            return menu;
+        }
+
+        private void ExecuteBatchStatSelect(string statDisplayName, string primaryKey, string fallbackKey)
+        {
+            var visibleHeaderRows = _renderedRows.OfType<EventHeaderRowItem>().ToList();
+            if (visibleHeaderRows.Count == 0)
+            {
+                MessageBox.Show(this, "目前篩選條件下沒有任何事件可供操作。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var eventMap = _allRegistryEvents.ToDictionary(e => e.EventId);
+            int matchedCount = 0;
+            int changedCount = 0;
+
+            foreach (var header in visibleHeaderRows)
+            {
+                if (!eventMap.TryGetValue(header.EventId, out var ev)) continue;
+
+                var bestOption = PickBestStatOption(ev, primaryKey, fallbackKey);
+                if (bestOption == null) continue;
+
+                matchedCount++;
+                if (_workingChoices.TryGetValue(ev.EventId, out var currentOptId) && currentOptId == bestOption.OptionId)
+                {
+                    continue;
+                }
+
+                _workingChoices[ev.EventId] = bestOption.OptionId;
+                changedCount++;
+            }
+
+            if (matchedCount == 0)
+            {
+                MessageBox.Show(this, $"目前畫面上的 {visibleHeaderRows.Count} 個事件中，沒有任何選項包含【+{statDisplayName}】加成。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            ApplyBatchChangesToUI();
+
+            MessageBox.Show(this,
+                $"批次操作完成：\n目前畫面共有 {visibleHeaderRows.Count} 個事件，\n其中 {matchedCount} 個事件含有【+{statDisplayName}】選項（已變更 {changedCount} 個）。",
+                "批次操作完成",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private EventRegistryOption? PickBestStatOption(EventRegistryItem ev, string statKey1, string? statKey2)
+        {
+            var candidates = ev.Options
+                .Where(o => GetStatValue(o, statKey1, statKey2) > 0)
+                .ToList();
+
+            if (candidates.Count == 0) return null;
+            if (candidates.Count == 1) return candidates[0];
+
+            return candidates
+                .OrderByDescending(o => GetStatValue(o, statKey1, statKey2)) // 1. 數值優先
+                .ThenBy(o => o.HasEncounter ? 1 : 0)                         // 2. 避開遭遇戰 (0=無遭遇戰, 優先)
+                .ThenByDescending(o => GetGuideScore(o.GuideKind))           // 3. 攻略組指引
+                .First();
+        }
+
+        private void ExecuteBatchEncounterSelect(bool targetHasEncounter)
+        {
+            var visibleHeaderRows = _renderedRows.OfType<EventHeaderRowItem>().ToList();
+            if (visibleHeaderRows.Count == 0)
+            {
+                MessageBox.Show(this, "目前篩選條件下沒有任何事件可供操作。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string targetLabel = targetHasEncounter ? "有遭遇戰" : "無遭遇戰";
+            var eventMap = _allRegistryEvents.ToDictionary(e => e.EventId);
+            int matchedCount = 0;
+            int changedCount = 0;
+
+            foreach (var header in visibleHeaderRows)
+            {
+                if (!eventMap.TryGetValue(header.EventId, out var ev)) continue;
+
+                var bestOption = PickBestEncounterOption(ev, targetHasEncounter);
+                if (bestOption == null) continue;
+
+                matchedCount++;
+                if (_workingChoices.TryGetValue(ev.EventId, out var currentOptId) && currentOptId == bestOption.OptionId)
+                {
+                    continue;
+                }
+
+                _workingChoices[ev.EventId] = bestOption.OptionId;
+                changedCount++;
+            }
+
+            if (matchedCount == 0)
+            {
+                MessageBox.Show(this, $"目前畫面上的 {visibleHeaderRows.Count} 個事件中，沒有任何【{targetLabel}】選項。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            ApplyBatchChangesToUI();
+
+            MessageBox.Show(this,
+                $"批次操作完成：\n目前畫面共有 {visibleHeaderRows.Count} 個事件，\n其中 {matchedCount} 個事件含有【{targetLabel}】選項（已變更 {changedCount} 個）。",
+                "批次操作完成",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private EventRegistryOption? PickBestEncounterOption(EventRegistryItem ev, bool targetHasEncounter)
+        {
+            var candidates = ev.Options
+                .Where(o => o.HasEncounter == targetHasEncounter)
+                .ToList();
+
+            if (candidates.Count == 0) return null;
+            if (candidates.Count == 1) return candidates[0];
+
+            return candidates
+                .OrderByDescending(o => GetGuideScore(o.GuideKind))
+                .ThenByDescending(o => o.OnSuccess.Values.Where(v => v > 0).Sum())
+                .First();
+        }
+
+        private void ExecuteBatchResetVisible()
+        {
+            var visibleHeaderRows = _renderedRows.OfType<EventHeaderRowItem>().ToList();
+            if (visibleHeaderRows.Count == 0)
+            {
+                MessageBox.Show(this, "目前畫面沒有任何事件可供清理。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int assignedCount = visibleHeaderRows.Count(h => _workingChoices.ContainsKey(h.EventId));
+            if (assignedCount == 0)
+            {
+                MessageBox.Show(this, "目前畫面上的事件皆為未指定狀態，無需清理。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var result = MessageBox.Show(this,
+                $"確定要將目前畫面上的 {assignedCount} 個已指定事件重置為「未指定」狀態嗎？\n（未顯示於畫面的其他事件不受影響）",
+                "局部清理確認",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result != DialogResult.Yes) return;
+
+            foreach (var header in visibleHeaderRows)
+            {
+                _workingChoices.Remove(header.EventId);
+            }
+
+            ApplyBatchChangesToUI();
+
+            MessageBox.Show(this,
+                $"局部清理完成：已將目前畫面上的 {assignedCount} 個事件重置為未指定狀態。",
+                "清理完成",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private void ApplyBatchChangesToUI()
+        {
+            var eventMap = _allRegistryEvents.ToDictionary(e => e.EventId);
+
+            foreach (var row in _renderedRows)
+            {
+                if (row is EventHeaderRowItem header)
+                {
+                    if (_workingChoices.TryGetValue(header.EventId, out var optId) && !string.IsNullOrEmpty(optId))
+                    {
+                        header.SelectedOptionId = optId;
+                        if (eventMap.TryGetValue(header.EventId, out var ev))
+                        {
+                            var matchOpt = ev.Options.FirstOrDefault(o => o.OptionId == optId);
+                            header.SelectedOptionLabel = matchOpt?.Label ?? optId;
+                        }
+                    }
+                    else
+                    {
+                        header.SelectedOptionId = null;
+                        header.SelectedOptionLabel = null;
+                    }
+                }
+                else if (row is EventOptionRowItem opt)
+                {
+                    bool hasChoice = _workingChoices.TryGetValue(opt.EventId, out var currentOptId) && !string.IsNullOrEmpty(currentOptId);
+                    opt.IsSelected = (hasChoice && currentOptId == opt.OptionId);
+                    opt.IsFaded = (hasChoice && !opt.IsSelected);
+                }
+            }
+
+            UpdateSummaryLabel();
+            _lstEvents.Invalidate();
+        }
+
+        private static int GetStatValue(EventRegistryOption opt, string key1, string? key2 = null)
+        {
+            if (opt.OnSuccess == null) return 0;
+            if (opt.OnSuccess.TryGetValue(key1, out int v1) && v1 > 0) return v1;
+            if (key2 != null && opt.OnSuccess.TryGetValue(key2, out int v2) && v2 > 0) return v2;
+            return 0;
+        }
+
+        private static int GetGuideScore(string guideKind) => guideKind switch
+        {
+            "always" => 3,
+            "route" => 2,
+            "never" => 0,
+            _ => 1
+        };
+
         private void OnMeasureEventListItem(object? sender, MeasureItemEventArgs e)
         {
             if (e.Index < 0 || e.Index >= _renderedRows.Count) return;
@@ -1055,6 +1337,40 @@ namespace MyDoujinBot.Forms
                     TextRenderer.DrawText(g, guideTag, tagFont, new Point(badgeX, textY), badgeTextCol, TextFormatFlags.NoPadding);
                 }
             }
+        }
+
+        internal class DarkMenuRenderer : ToolStripProfessionalRenderer
+        {
+            public DarkMenuRenderer() : base(new DarkMenuColorTable()) { }
+
+            protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+            {
+                if (e.Item.Selected)
+                {
+                    using var brush = new SolidBrush(Color.FromArgb(48, 64, 96));
+                    e.Graphics.FillRectangle(brush, new Rectangle(Point.Empty, e.Item.Size));
+                }
+                else
+                {
+                    using var brush = new SolidBrush(Color.FromArgb(28, 30, 42));
+                    e.Graphics.FillRectangle(brush, new Rectangle(Point.Empty, e.Item.Size));
+                }
+            }
+        }
+
+        internal class DarkMenuColorTable : ProfessionalColorTable
+        {
+            public override Color ToolStripDropDownBackground => Color.FromArgb(28, 30, 42);
+            public override Color MenuBorder => Color.FromArgb(50, 55, 75);
+            public override Color MenuItemBorder => Color.Transparent;
+            public override Color MenuItemSelected => Color.FromArgb(48, 64, 96);
+            public override Color MenuItemSelectedGradientBegin => Color.FromArgb(48, 64, 96);
+            public override Color MenuItemSelectedGradientEnd => Color.FromArgb(48, 64, 96);
+            public override Color ImageMarginGradientBegin => Color.FromArgb(28, 30, 42);
+            public override Color ImageMarginGradientMiddle => Color.FromArgb(28, 30, 42);
+            public override Color ImageMarginGradientEnd => Color.FromArgb(28, 30, 42);
+            public override Color SeparatorDark => Color.FromArgb(55, 60, 80);
+            public override Color SeparatorLight => Color.Transparent;
         }
     }
 }
