@@ -3713,7 +3713,7 @@ namespace MyDoujinBot.Forms
         {
             if (string.IsNullOrWhiteSpace(_currentToken))
             {
-                while (string.IsNullOrWhiteSpace(_currentToken))
+                while (string.IsNullOrWhiteSpace(_currentToken) || !UserContext.Current.IsAuthenticated)
                 {
                     var promptResult = PromptDialog.ShowExtended(
                         this,
@@ -3962,7 +3962,8 @@ namespace MyDoujinBot.Forms
         /// <summary>
         /// 初次啟動於 Token 輸入視窗點擊「匯入備份資料」時執行。
         /// 在當前 Token 輸入視窗內顯示 Loading 進度並鎖定輸入框與按鈕，
-        /// 先驗證 Token 有效性，驗證成功後才寫入設定與方案，若發生錯誤則解鎖視窗並恢復操作。
+        /// 無論 Token 驗證成功或失敗（如 403 或程式異常），皆先寫入相關設定、排程方案與事件方案。
+        /// 若 Token 驗證成功則自動關閉視窗，若驗證失敗則保留輸入框供使用者重新驗證或更新 Token。
         /// </summary>
         private async Task<bool> ExecuteStartupBackupImportAsync(PromptDialog dialog)
         {
@@ -3993,25 +3994,54 @@ namespace MyDoujinBot.Forms
                 return false;
             }
 
-            var backupToken = package.Settings?.Token?.Trim();
-            if (string.IsNullOrWhiteSpace(backupToken))
+            dialog.SetLoading(true, "正在還原設定、排程與事件方案資料...");
+
+            // 1. 無論 Token 是否有效，一律先寫入並還原備份資料（設定、排程方案、事件自選方案）
+            try
             {
-                MessageBox.Show(
-                    dialog,
-                    "所選備份檔案中未包含 Token，無法在此處完成驗證。\n請選擇包含有效 Token 的備份檔，或直接在文字框輸入 Token。",
-                    "Token 未設定",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                ApplyFullBackup(package, preserveCurrentToken: false);
+            }
+            catch (Exception ex)
+            {
+                dialog.SetLoading(false);
+                AppendLog($"[錯誤] 寫入備份資料失敗：{ex.Message}", Color.FromArgb(220, 80, 80));
+                MessageBox.Show(dialog, $"寫入備份資料失敗：\n{ex.Message}", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
 
-            if (backupToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            var backupToken = package.Settings?.Token?.Trim();
+            if (!string.IsNullOrWhiteSpace(backupToken) && backupToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
                 backupToken = backupToken[7..].Trim();
             }
 
-            // 在 Token 輸入視窗內即時顯示 Loading 並鎖定所有操作元件
-            dialog.SetLoading(true, "正在連線伺服器驗證 Token...");
+            if (!string.IsNullOrWhiteSpace(backupToken))
+            {
+                _currentToken = backupToken;
+                AppSettingsManager.Current.Token = _currentToken;
+                AppSettingsManager.Save();
+                if (txtSettingsToken != null)
+                    txtSettingsToken.Text = _currentToken;
+                dialog.InputText = _currentToken;
+            }
+
+            // 2. 若備份檔未包含 Token，提示已還原方案並要求使用者輸入 Token
+            if (string.IsNullOrWhiteSpace(backupToken))
+            {
+                dialog.SetLoading(false);
+                UpdateTokenStatusVisual();
+                AppendLog("[提示] 備份資料（設定、排程、事件方案）已成功還原！但備份檔未包含 Token，請輸入有效 Token 進行驗證。", Color.FromArgb(220, 160, 60));
+                MessageBox.Show(
+                    dialog,
+                    "全域備份資料（相關設定、排程方案、事件自選方案）已成功還原！\n\n備份檔中未包含 Token，請在文字框貼上有效 Token 後點擊確定完成驗證。",
+                    "備份已還原（待設定 Token）",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return false;
+            }
+
+            // 3. 連線伺服器驗證備份檔中的 Token
+            dialog.SetLoading(true, "備份已還原，正在連線伺服器驗證 Token...");
             AppendLog("[系統] 正在驗證備份檔中的 Token...", Color.FromArgb(130, 170, 255));
             if (lblStatusToken != null)
             {
@@ -4019,38 +4049,19 @@ namespace MyDoujinBot.Forms
                 lblStatusToken.ForeColor = Color.FromArgb(130, 170, 255);
             }
 
-            var result = await _userService.ValidateAndFetchProfileAsync(backupToken);
-            if (!result.IsSuccess)
-            {
-                dialog.SetLoading(false);
-                AppendLog($"[錯誤] 備份檔 Token 驗證失敗：{result.ErrorMessage}", Color.FromArgb(220, 80, 80));
-                UpdateTokenStatusVisual();
-                if (lblStatusToken != null)
-                {
-                    lblStatusToken.Text = result.IsUnauthorized ? "● Token：無效/過期" : "● Token：驗證失敗";
-                    lblStatusToken.ForeColor = Color.FromArgb(220, 90, 90);
-                }
-
-                MessageBox.Show(
-                    dialog,
-                    $"備份檔中的 Token 驗證失敗！\n\n原因：{result.ErrorMessage}\n\n必須通過伺服器驗證才能寫入與套用備份資料。",
-                    "驗證失敗",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return false;
-            }
-
+            UserValidationResult? result = null;
+            string? exceptionError = null;
             try
             {
-                dialog.SetLoading(true, "Token 驗證通過，正在還原設定與方案資料...");
-                ApplyFullBackup(package, preserveCurrentToken: false);
-                _currentToken = backupToken;
-                AppSettingsManager.Current.Token = _currentToken;
-                AppSettingsManager.Save();
+                result = await _userService.ValidateAndFetchProfileAsync(backupToken);
+            }
+            catch (Exception ex)
+            {
+                exceptionError = ex.Message;
+            }
 
-                if (txtSettingsToken != null)
-                    txtSettingsToken.Text = _currentToken;
-
+            if (result != null && result.IsSuccess)
+            {
                 UpdateTokenStatusVisual();
                 AppendLog("[系統] ✓ 備份檔匯入並通過 Token 驗證！使用者資料同步成功。", Color.FromArgb(80, 220, 120));
 
@@ -4068,11 +4079,29 @@ namespace MyDoujinBot.Forms
 
                 return true;
             }
-            catch (Exception ex)
+            else
             {
                 dialog.SetLoading(false);
-                AppendLog($"[錯誤] 寫入備份資料失敗：{ex.Message}", Color.FromArgb(220, 80, 80));
-                MessageBox.Show(dialog, $"寫入備份資料失敗：\n{ex.Message}", "匯入失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                UpdateTokenStatusVisual();
+                if (lblStatusToken != null)
+                {
+                    lblStatusToken.Text = result?.IsUnauthorized == true ? "● Token：無效/過期" : "● Token：驗證失敗";
+                    lblStatusToken.ForeColor = Color.FromArgb(220, 90, 90);
+                }
+
+                string errorDetail = !string.IsNullOrWhiteSpace(exceptionError)
+                    ? exceptionError
+                    : (!string.IsNullOrWhiteSpace(result?.ErrorMessage) ? result.ErrorMessage : "伺服器拒絕存取 (403/401)");
+
+                AppendLog($"[警告] 備份資料（設定、排程、事件方案）已成功還原，但 Token 驗證失敗：{errorDetail}。請重新驗證 Token。", Color.FromArgb(220, 90, 90));
+
+                MessageBox.Show(
+                    dialog,
+                    $"備份資料（相關設定、排程方案、事件自選方案）已成功還原並寫入！\n\n但備份檔中的 Token 驗證未通過：\n{errorDetail}\n\n請在輸入框重新輸入有效 Token 進行驗證，或取消後至「連線設定」重新驗證。",
+                    "備份已還原（Token 待重新驗證）",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+
                 return false;
             }
         }
@@ -4141,7 +4170,7 @@ namespace MyDoujinBot.Forms
 
             // 3. 還原系統設定 (AppSettings)
             var newSettings = package.Settings ?? new AppSettings();
-            if (preserveCurrentToken)
+            if (preserveCurrentToken && !string.IsNullOrWhiteSpace(_currentToken))
             {
                 newSettings.Token = _currentToken;
             }

@@ -9,7 +9,7 @@ namespace MyDoujinBot.Models
     public class ActionStatusResponse
     {
         [JsonPropertyName("lastActionAt")]
-        public DateTimeOffset LastActionAt { get; set; }
+        public DateTimeOffset? LastActionAt { get; set; }
 
         [JsonPropertyName("serverTime")]
         public DateTimeOffset ServerTime { get; set; }

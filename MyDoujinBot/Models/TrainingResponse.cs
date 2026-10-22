@@ -11,7 +11,7 @@ namespace MyDoujinBot.Models
     {
         // 上一次行動的時間（ISO 8601 格式字串）
         [JsonPropertyName("lastActionAt")]
-        public DateTimeOffset LastActionAt { get; set; }
+        public DateTimeOffset? LastActionAt { get; set; }
 
         [JsonPropertyName("serverTime")]
         public DateTimeOffset ServerTime { get; set; }

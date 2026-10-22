@@ -33,7 +33,21 @@ namespace MyDoujinBot.Utilities
         private readonly Label _lblStatus;
         private readonly Func<PromptDialog, Task<bool>>? _onSecondaryActionAsync;
 
-        public string InputText => _txtInput.Text.Trim();
+        public string InputText
+        {
+            get => _txtInput.Text.Trim();
+            set
+            {
+                if (this.InvokeRequired)
+                {
+                    this.BeginInvoke(() => { _txtInput.Text = value ?? string.Empty; });
+                }
+                else
+                {
+                    _txtInput.Text = value ?? string.Empty;
+                }
+            }
+        }
         public PromptDialogResultType ResultType { get; private set; } = PromptDialogResultType.Cancel;
 
         private PromptDialog(

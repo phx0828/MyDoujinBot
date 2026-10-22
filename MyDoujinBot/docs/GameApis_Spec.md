@@ -38,7 +38,7 @@
 | `cooldownMs` | `int` | 基礎冷卻時間長度 (毫秒，例：`10000` = 10 秒) |
 | `pendingEvent` | `PendingEvent?` | **重要：目前是否有卡住未處理的事件**（無為 `null`，有則為事件詳情與選項清單） |
 | `isMaxLevel` | `bool` | 當前出戰角色是否已達等級上限 (例：`false`) |
-| `lastActionAt` | `DateTimeOffset` | 上次執行行動之 UTC 時間 (例：`"2026-10-16T15:09:10.213Z"`) |
+| `lastActionAt` | `DateTimeOffset?` | 上次執行行動之 UTC 時間 (例：`"2026-10-16T15:09:10.213Z"`，轉生後無前次行動紀錄時為 `null`) |
 | `serverTime` | `DateTimeOffset` | 伺服器當前 UTC 時間 (例：`"2026-10-16T15:09:15.677Z"`) |
 | `floorReward` | `FloorRewardInfo` | **樓層獎勵物件** (詳見下方子結構) |
 | `trainingSpec` | `TrainingSpecInfo` | **委託/長時間訓練設定規格** (詳見下方子結構) |
@@ -232,7 +232,7 @@
 ### 頂層欄位結構 (Root)
 | 欄位名稱 | 型別 | 說明 / 範例值 |
 | :--- | :--- | :--- |
-| `lastActionAt` | `DateTimeOffset` (string) | 上次執行行動之 UTC 時間戳記 (例：`"2026-10-16T14:39:14.996Z"`) |
+| `lastActionAt` | `DateTimeOffset?` (string / null) | 上次執行行動之 UTC 時間戳記 (例：`"2026-10-16T14:39:14.996Z"`，轉生後為 `null`) |
 | `serverTime` | `DateTimeOffset` (string) | 伺服器當前 UTC 時間戳記 (例：`"2026-10-16T14:39:15.012Z"`) |
 | `cooldownRemainingMs` | `int` | 當前剩餘冷卻毫秒數 (例：`9984`) |
 | `cooldownMs` | `int` | 該行動之基礎冷卻毫秒數 (例：`10000` = 10 秒) |
