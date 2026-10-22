@@ -194,6 +194,9 @@ namespace MyDoujinBot.Models
         [JsonPropertyName("buffType")]
         public string? BuffType { get; set; }
 
+        [JsonPropertyName("buffId")]
+        public string? BuffId { get; set; }
+
         [JsonPropertyName("message")]
         public string? Message { get; set; }
 

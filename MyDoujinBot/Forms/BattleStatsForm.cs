@@ -239,6 +239,7 @@ namespace MyDoujinBot.Forms
             ChartStyle.HealBar   => (Color.FromArgb(123, 213, 166), FontStyle.Regular),   // 治療長條 (綠)
             ChartStyle.Fallen    => (Color.FromArgb(255, 160, 60),  FontStyle.Bold),      // 【倒下】 橘色粗體
             ChartStyle.Dead      => (Color.FromArgb(246, 100, 100), FontStyle.Bold),      // 【死亡】 紅色粗體
+            ChartStyle.Warning   => (Color.FromArgb(255, 170, 70),  FontStyle.Regular),   // 警告訊息 (橘黃)
             ChartStyle.Heading   => (Color.FromArgb(255, 215, 70),  FontStyle.Bold),      // 標題 (金黃)
             ChartStyle.Muted     => (Color.FromArgb(160, 160, 180), FontStyle.Italic),    // 附註說明 (灰斜)
             _                    => (Color.FromArgb(220, 220, 230), FontStyle.Regular)    // 預設樣式

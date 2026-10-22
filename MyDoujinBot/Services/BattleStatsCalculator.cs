@@ -26,6 +26,8 @@ namespace MyDoujinBot.Services
             ["LUCK_EVENT"] = BattleEventHandlers.HandleLuckEvent,
             ["HEAL"] = BattleEventHandlers.HandleHeal,
             ["BUFF_EFFECT"] = BattleEventHandlers.HandleBuffEffect,
+            ["BUFF_APPLY"] = BattleEventHandlers.HandleBuffApply,
+            ["SKILL_TEXT"] = BattleEventHandlers.HandleSkillText,
             ["SP_RECOVER"] = BattleEventHandlers.HandleSpRecover,
             ["DEATH"] = BattleEventHandlers.HandleDeath,
             ["SUMMON"] = BattleEventHandlers.HandleSummon,
@@ -40,7 +42,7 @@ namespace MyDoujinBot.Services
         /// </summary>
         private static readonly HashSet<string> IgnoredTypes = new(StringComparer.Ordinal)
         {
-            "BATTLE_START", "BOSS_DIALOGUE", "SKILL_TEXT", "TEXT", "BUFF_APPLY",
+            "BATTLE_START", "BOSS_DIALOGUE", "TEXT",
             "HP_REMAINING", "EXP_GAIN", "SANITY_CHANGE", "SANITY_STATE_CHANGE",
             "FATIGUE", "BRICK_CRACK", "PLAYER_DEATH", "PLAYER_DEFEAT",
             "PART_BREAK", "REST", "CHADO"
@@ -51,10 +53,14 @@ namespace MyDoujinBot.Services
         /// </summary>
         public static BattleStatsResult Calculate(BattleReportIndex index, IEnumerable<BattleReportLog?> logs)
         {
-            var ctx = new BattleStatsContext(index);
+            var logList = logs as IReadOnlyList<BattleReportLog?> ?? (logs != null ? new List<BattleReportLog?>(logs) : Array.Empty<BattleReportLog?>());
+            var ctx = new BattleStatsContext(index, logList);
 
-            foreach (var log in logs)
+            for (int i = 0; i < logList.Count; i++)
             {
+                ctx.CurrentLogIndex = i;
+                var log = logList[i];
+
                 if (log == null)
                 {
                     RecordSkipped(ctx.Result, "(空白事件)");

@@ -35,6 +35,27 @@ namespace MyDoujinBot.Models
         /// <summary>爆擊次數</summary>
         public long Crits { get; set; }
 
+        /// <summary>對同隊造成的傷害（倒戈／自傷／友軍傷害）</summary>
+        public long FriendlyDamageDealt { get; set; }
+
+        /// <summary>受到同隊造成的傷害</summary>
+        public long FriendlyDamageTaken { get; set; }
+
+        /// <summary>對敵方的治療量（倒戈治療）</summary>
+        public long EnemyHealDealt { get; set; }
+
+        /// <summary>對同隊出手次數（含落空 MISS 與 BLOCK）</summary>
+        public long FriendlyShots { get; set; }
+
+        /// <summary>對敵方的治療次數</summary>
+        public long EnemyHealCount { get; set; }
+
+        /// <summary>召喚次數（發動 SUMMON 事件之次數）</summary>
+        public long Summons { get; set; }
+
+        /// <summary>是否有同隊傷害或敵方治療等倒戈叛變行為</summary>
+        public bool HasBetrayalActions => FriendlyDamageDealt > 0 || EnemyHealDealt > 0 || FriendlyShots > 0 || EnemyHealCount > 0;
+
         /// <summary>
         /// 命中率（百分比，四捨五入到小數點後一位）＝ 命中次數 ÷ 出手次數 × 100。
         /// 出手次數為 0 時為 0，不會發生除以零。
@@ -54,6 +75,19 @@ namespace MyDoujinBot.Models
     }
 
     /// <summary>
+    /// 無法歸屬施放者的 BUFF_EFFECT 紀錄（例如副本全場環境 DOT 中毒／灼傷）。
+    /// </summary>
+    public class UnattributedBuffRecord
+    {
+        public string BuffId { get; set; } = string.Empty;
+        public string BuffName { get; set; } = string.Empty;
+        public string BuffType { get; set; } = string.Empty;
+        public long TotalValue { get; set; }
+        public int Count { get; set; }
+        public Dictionary<string, long> ValueByTarget { get; } = new(StringComparer.Ordinal);
+    }
+
+    /// <summary>
     /// 一份戰報的統計結果（由 BattleStatsCalculator 產生）。
     /// 只放資料，不含任何顯示邏輯。
     /// </summary>
@@ -70,6 +104,9 @@ namespace MyDoujinBot.Models
 
         /// <summary>被略過的事件依 type 分組的筆數（供結束時回報）。</summary>
         public SortedDictionary<string, int> SkippedByType { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>無法歸屬施放者的 BUFF 統計（key = buffId 或 buffName）。</summary>
+        public Dictionary<string, UnattributedBuffRecord> UnattributedBuffs { get; } = new(StringComparer.Ordinal);
 
         /// <summary>取得單位數據；單位從未出現在 LOG 時回傳全 0 的空資料。</summary>
         public UnitStats GetUnitOrEmpty(string id) =>

@@ -99,20 +99,117 @@ namespace MyDoujinBot.Services
             return true;
         }
 
-        /// <summary>HEAL：actor 治療 ＋value（算在施放者）。actor 與 target 可相同（自我治療）。</summary>
+        /// <summary>
+        /// HEAL：actor 治療 ＋value（算在施放者）。
+        /// 若目標為敵方（倒戈治療）：不計入正常治療，改累計至 EnemyHealDealt 與 EnemyHealCount。
+        /// </summary>
         public static bool HandleHeal(BattleStatsContext ctx, BattleReportLog log)
         {
             if (IsBlank(log.ActorId) || !log.Value.HasValue) return false;
 
-            ctx.GetUnit(log.ActorId!).Heal += ToLong(log.Value.Value);
+            long value = ToLong(log.Value.Value);
+            string targetId = !string.IsNullOrWhiteSpace(log.TargetId) ? log.TargetId! : log.ActorId!;
+
+            if (!ctx.IsSameTeam(log.ActorId!, targetId))
+            {
+                var actor = ctx.GetUnit(log.ActorId!);
+                actor.EnemyHealDealt += value;
+                actor.EnemyHealCount++;
+                return true;
+            }
+
+            ctx.GetUnit(log.ActorId!).Heal += value;
+            return true;
+        }
+
+        private static readonly Regex BuffExtractPattern = new(@"受到\s+(?<name>.+?)\s+影響", RegexOptions.Compiled);
+        private static readonly Regex SkillTextBuffPattern = new(@"陷入了\s*(?<name>.+?)\s*[！!]", RegexOptions.Compiled);
+
+        /// <summary>BUFF_APPLY：記錄主動上 BUFF 的施放者與對象（Tier 1 註冊）。</summary>
+        public static bool HandleBuffApply(BattleStatsContext ctx, BattleReportLog log)
+        {
+            if (IsBlank(log.ActorId) || IsBlank(log.TargetId)) return true;
+
+            string casterId = log.ActorId!;
+            string targetId = log.TargetId!;
+
+            if (!string.IsNullOrWhiteSpace(log.BuffId))
+                ctx.RegisterActiveBuff(targetId, log.BuffId, casterId);
+
+            if (!string.IsNullOrWhiteSpace(log.SkillId))
+                ctx.RegisterActiveBuff(targetId, log.SkillId, casterId);
+
+            if (!string.IsNullOrWhiteSpace(log.Message))
+            {
+                var match = BuffExtractPattern.Match(log.Message);
+                if (match.Success)
+                    ctx.RegisterActiveBuff(targetId, match.Groups["name"].Value.Trim(), casterId);
+            }
+
+            return true;
+        }
+
+        /// <summary>SKILL_TEXT：從技能文字中捕捉特定 BUFF 施放（如番茄湯、陷入灼傷等，供 Tier 1 註冊）。</summary>
+        public static bool HandleSkillText(BattleStatsContext ctx, BattleReportLog log)
+        {
+            if (IsBlank(log.ActorId) || string.IsNullOrWhiteSpace(log.Message)) return true;
+
+            string casterId = log.ActorId!;
+            string msg = log.Message!;
+
+            if (msg.Contains("陷入了", StringComparison.Ordinal) || msg.Contains("推到", StringComparison.Ordinal) || msg.Contains("端出", StringComparison.Ordinal))
+            {
+                string? targetId = log.TargetId;
+                if (string.IsNullOrEmpty(targetId))
+                {
+                    foreach (var p in ctx.Index.Players)
+                    {
+                        if ((p.CharacterName != null && msg.Contains(p.CharacterName, StringComparison.Ordinal)) ||
+                            (p.Name != null && msg.Contains(p.Name, StringComparison.Ordinal)))
+                        {
+                            targetId = p.UserId;
+                            break;
+                        }
+                    }
+                    if (string.IsNullOrEmpty(targetId))
+                    {
+                        foreach (var e in ctx.Index.Enemies)
+                        {
+                            string? enemyId = e.Id;
+                            if (string.IsNullOrEmpty(enemyId)) continue;
+                            if ((e.CharacterName != null && msg.Contains(e.CharacterName, StringComparison.Ordinal)) ||
+                                (e.Name != null && msg.Contains(e.Name, StringComparison.Ordinal)))
+                            {
+                                targetId = enemyId;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(targetId))
+                {
+                    var match = SkillTextBuffPattern.Match(msg);
+                    if (match.Success)
+                        ctx.RegisterActiveBuff(targetId, match.Groups["name"].Value.Trim(), casterId);
+
+                    if (msg.Contains("番茄湯", StringComparison.Ordinal))
+                    {
+                        ctx.RegisterActiveBuff(targetId, "番茄湯", casterId);
+                        ctx.RegisterActiveBuff(targetId, "simmer_dish_tomato_soup", casterId);
+                    }
+                }
+            }
+
             return true;
         }
 
         /// <summary>
         /// BUFF_EFFECT：
-        /// - HOT：治療 ＋value，算在受益者本人（actorId）。
-        /// - DOT：受害者（actorId）承傷 ＋value，不歸屬任何人的輸出。
-        /// - 沒有 buffType（只有敘述）：略過（視為已辨識、不計入無法辨識）。
+        /// 透過四階層邏輯 (Active Map / Prefix / Deep Trace / Unattributed) 解析原施放者：
+        /// - HOT：治療 ＋value，歸屬原施放者（若受益者為敵方則記為敵方治療）。
+        /// - DOT：受害者（actorId）承傷 ＋value；原施放者累計輸出（若同隊則記為同隊傷害）。
+        /// - 無法判定施放者時：記錄至 UnattributedBuffs 於戰報底部顯示。
         /// </summary>
         public static bool HandleBuffEffect(BattleStatsContext ctx, BattleReportLog log)
         {
@@ -121,14 +218,60 @@ namespace MyDoujinBot.Services
             if (IsBlank(log.ActorId) || !log.Value.HasValue) return false;
 
             long value = ToLong(log.Value.Value);
+            string targetId = log.ActorId!; // 在 BUFF_EFFECT 中，actorId 為承受效果的目標
+
+            string? resolvedCaster = ctx.ResolveBuffCaster(log, ctx.CurrentLogIndex);
+
             switch (log.BuffType!.ToUpperInvariant())
             {
                 case "HOT":
-                    ctx.GetUnit(log.ActorId!).Heal += value;
+                {
+                    if (resolvedCaster != null)
+                    {
+                        var casterId = ctx.ResolveAttackOwnerId(resolvedCaster);
+                        if (ctx.IsSameTeam(casterId, targetId))
+                        {
+                            ctx.GetUnit(casterId).Heal += value;
+                        }
+                        else
+                        {
+                            var caster = ctx.GetUnit(casterId);
+                            caster.EnemyHealDealt += value;
+                            caster.EnemyHealCount++;
+                        }
+                    }
+                    else
+                    {
+                        ctx.RecordUnattributedBuff(targetId, log, value);
+                    }
                     return true;
+                }
+
                 case "DOT":
-                    ctx.GetUnit(log.ActorId!).Taken += value;
+                {
+                    // 目標受害者一律承傷
+                    ctx.GetUnit(targetId).Taken += value;
+
+                    if (resolvedCaster != null)
+                    {
+                        var casterId = ctx.ResolveAttackOwnerId(resolvedCaster);
+                        if (ctx.IsSameTeam(casterId, targetId))
+                        {
+                            ctx.GetUnit(targetId).FriendlyDamageTaken += value;
+                            ctx.GetUnit(casterId).FriendlyDamageDealt += value;
+                        }
+                        else
+                        {
+                            ctx.GetUnit(casterId).Output += value;
+                        }
+                    }
+                    else
+                    {
+                        ctx.RecordUnattributedBuff(targetId, log, value);
+                    }
                     return true;
+                }
+
                 default:
                     return false; // 未知的 buffType
             }
@@ -178,12 +321,13 @@ namespace MyDoujinBot.Services
             return true;
         }
 
-        /// <summary>SUMMON：只用來建立召喚者對照表（targetId 召喚物 → actorId 召喚者），不影響數據。</summary>
+        /// <summary>SUMMON：記錄召喚次數，並建立召喚者對照表（targetId 召喚物 → actorId 召喚者）。</summary>
         public static bool HandleSummon(BattleStatsContext ctx, BattleReportLog log)
         {
             if (IsBlank(log.ActorId) || IsBlank(log.TargetId)) return false;
 
             ctx.RegisterSummon(log.TargetId!, log.ActorId!);
+            ctx.GetUnit(log.ActorId!).Summons++;
             return true;
         }
 

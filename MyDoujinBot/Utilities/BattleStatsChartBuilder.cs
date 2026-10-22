@@ -23,6 +23,8 @@ namespace MyDoujinBot.Utilities
         Fallen,
         /// <summary>【死亡】紅色粗體</summary>
         Dead,
+        /// <summary>【警告 / 倒戈】橘黃色（用於同隊傷害與敵方治療等提示）</summary>
+        Warning,
         /// <summary>輸出長條（紅）</summary>
         OutputBar,
         /// <summary>承傷長條（藍）</summary>
@@ -77,6 +79,34 @@ namespace MyDoujinBot.Utilities
                 lines.Add(BuildMetricLine("承傷", unit.Taken, globalMax, ChartStyle.TakenBar));
                 lines.Add(BuildMetricLine("治療", unit.Heal, globalMax, ChartStyle.HealBar));
                 lines.Add(BuildShotLine(unit));
+
+                if (unit.HasBetrayalActions)
+                {
+                    lines.Add(BuildBetrayalLine(unit));
+                    lines.Add(BuildBetrayalActionLine(unit));
+                }
+
+                lines.Add(new List<ChartSegment>());
+            }
+
+            // ── 未歸屬效果區塊（置於我方與 BOSS / 敵方數據之間） ──
+            if (stats.UnattributedBuffs.Count > 0)
+            {
+                lines.Add(new List<ChartSegment> { new("────────────────────────────────────────", ChartStyle.Muted) });
+                lines.Add(new List<ChartSegment> { new("【未歸屬效果】", ChartStyle.Heading) });
+                foreach (var record in stats.UnattributedBuffs.Values)
+                {
+                    string actionText = record.BuffType.Equals("HOT", StringComparison.OrdinalIgnoreCase) ? "回復" : "受到";
+                    string unitText = record.BuffType.Equals("HOT", StringComparison.OrdinalIgnoreCase) ? "點生命" : "點傷害";
+                    string nameDisplay = !string.IsNullOrWhiteSpace(record.BuffName)
+                        ? (!string.IsNullOrWhiteSpace(record.BuffId) && record.BuffId != record.BuffName ? $"{record.BuffName} ({record.BuffId})" : record.BuffName)
+                        : record.BuffId;
+
+                    var targetDetails = record.ValueByTarget.Select(kv => $"{kv.Key} {actionText} {FormatNumber(kv.Value)} {unitText}");
+                    string targetSummary = string.Join("、", targetDetails);
+                    string text = $"  • {nameDisplay}：{targetSummary}";
+                    lines.Add(new List<ChartSegment> { new(text, ChartStyle.Muted) });
+                }
                 lines.Add(new List<ChartSegment>());
             }
 
@@ -99,6 +129,13 @@ namespace MyDoujinBot.Utilities
                     lines.Add(BuildMetricLine("承傷", unit.Taken, globalMax, ChartStyle.TakenBar));
                     lines.Add(BuildMetricLine("治療", unit.Heal, globalMax, ChartStyle.HealBar));
                     lines.Add(BuildShotLine(unit));
+
+                    if (enemy.IsPlayerOpponent && unit.HasBetrayalActions)
+                    {
+                        lines.Add(BuildBetrayalLine(unit));
+                        lines.Add(BuildBetrayalActionLine(unit));
+                    }
+
                     lines.Add(new List<ChartSegment>());
                 }
             }
@@ -109,11 +146,22 @@ namespace MyDoujinBot.Utilities
             return lines;
         }
 
-        /// <summary>戰報基本資訊行，例：戰報 #118362｜BOSS｜三鍋臭媽媽｜勝利</summary>
+        /// <summary>戰報基本資訊行，例：戰報 #118362｜BOSS｜46F｜高士官長｜失敗</summary>
         public static List<ChartSegment> BuildReportHeaderLine(BattleReportResponse report)
         {
             var parts = new List<string> { $"戰報 #{report.ReportId}" };
-            if (!string.IsNullOrWhiteSpace(report.BattleType)) parts.Add(report.BattleType!);
+
+            string battleType = report.BattleType ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(battleType))
+            {
+                parts.Add(battleType);
+            }
+
+            if (report.Boss?.FloorNumber.HasValue == true && report.Boss.FloorNumber.Value > 0)
+            {
+                parts.Add($"{report.Boss.FloorNumber.Value}F");
+            }
+
             if (!string.IsNullOrWhiteSpace(report.Boss?.Name)) parts.Add(report.Boss!.Name!);
             parts.Add(FormatResult(report.Result));
 
@@ -191,7 +239,31 @@ namespace MyDoujinBot.Utilities
         {
             string text = $"出手 {FormatNumber(unit.Shots)} 次｜命中 {FormatNumber(unit.Hits)} 次｜命中率 {FormatPercent(unit.HitRatePercent)}"
                         + $"｜爆擊 {FormatNumber(unit.Crits)} 次｜爆擊率 {FormatPercent(unit.CritRatePercent)}";
+
+            if (unit.Summons > 0)
+            {
+                text += $"｜召喚 {FormatNumber(unit.Summons)} 次";
+            }
+
             return new List<ChartSegment> { new(text) };
+        }
+
+        /// <summary>
+        /// 叛變行為數值行：⚠️ 同隊傷害 5,306｜治療敵方 21,504
+        /// </summary>
+        public static List<ChartSegment> BuildBetrayalLine(UnitStats unit)
+        {
+            string text = $"⚠️ 同隊傷害 {FormatNumber(unit.FriendlyDamageDealt)}｜治療敵方 {FormatNumber(unit.EnemyHealDealt)}";
+            return new List<ChartSegment> { new(text, ChartStyle.Warning) };
+        }
+
+        /// <summary>
+        /// 叛變行為次數行：⚠️ 對同隊出手 8 次｜對敵方治療 4 次
+        /// </summary>
+        public static List<ChartSegment> BuildBetrayalActionLine(UnitStats unit)
+        {
+            string text = $"⚠️ 對同隊出手 {FormatNumber(unit.FriendlyShots)} 次｜對敵方治療 {FormatNumber(unit.EnemyHealCount)} 次";
+            return new List<ChartSegment> { new(text, ChartStyle.Warning) };
         }
 
         /// <summary>略過筆數回報，例：略過 2 筆無法辨識或缺少必要欄位的事件（DAMAGE ×1、WEIRD ×1）</summary>

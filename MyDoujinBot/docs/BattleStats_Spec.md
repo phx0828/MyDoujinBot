@@ -1,184 +1,196 @@
-# 戰鬥數據功能 需求規格(Battle Stats Spec)
+# 戰鬥數據功能 需求規格 (Battle Stats Spec)
 
-> 狀態:**僅記錄需求,尚未實作**。等待使用者提供其餘 LOG 檔案,用以驗證 API response 格式與統計規則。
-> 原則:沿用現有專案風格與分層(Models / Services / Forms / Utilities),不另起新結構。
+> 狀態：已實作完成。包含動態前綴辨識、BUFF 四階層歸屬判定、倒戈叛變行為統計、召喚次數、未歸屬效果區塊與雙陣營圖表呈現之完整規格。
+> 原則：沿用現有專案風格與分層 (Models / Services / Forms / Utilities)，不另起新結構，客觀記錄規格。
 
 ## 1. 任務
 
-玩家輸入戰報編號 → 呼叫 API 取得戰報 → 統計每位玩家的 輸出 / 承傷 / 治療 / 出手 / 爆擊 → 以長條圖顯示。
+玩家輸入戰報編號 → 呼叫 API 取得戰報 → 統計每位玩家與敵方/BOSS 的 輸出 / 承傷 / 治療 / 出手 / 爆擊 / 召喚 / 倒戈 → 以長條圖顯示。
 
-## 2. 輸入:API
+## 2. 輸入：API
 
-- `GET https://mydoujin-backend.onrender.com/api/battle-reports/{戰報編號}`(例:`.../118253`)
-- 錯誤處理(需明確提示玩家):編號不存在、網路失敗、逾時、回傳格式異常。
+- `GET https://mydoujin-backend.onrender.com/api/battle-reports/{戰報編號}`（例：`.../118253`）
+- 錯誤處理（需明確提示玩家）：編號不存在、網路失敗、逾時、回傳格式異常。
 
 ### 回傳資料結構
 
-**基本資訊**:`reportId`、`battleType`(例 BOSS)、`boss`、`result`(WIN/LOSE)、`createdAt`
+**基本資訊**：`reportId`、`battleType`（例 BOSS、PVP）、`boss`、`result`（WIN/LOSE）、`createdAt`
 
 **participants.players**
-- `userId`(**唯一識別**,顯示與讀 LOG 一律以此辨識)、`name`、`characterName`
-- `characterId`、`title`、`level`、`stats`(hp, atk, def, sta, agi, spd, tec, int, luk)、`imagePath`(本功能不使用)
+- `userId`（唯一識別，顯示與讀 LOG 一律以此辨識）、`name`、`characterName`
+- `characterId`、`title`、`level`、`stats` (hp, atk, def, sta, agi, spd, tec, int, luk)、`imagePath`
 
 **participants.enemies**
-- `entityId`(**唯一識別**,例 `mob_0_three_brothers_liu_bei`)
-- `monsterId`(不可作唯一識別)、`name`、`title`、`floor`、`level`、`stats`、`imagePath`
-- 召喚物也可能在此清單,帶 `summonerId`(召喚者 userId),`stats` 可能為 null。
+- `entityId`（唯一識別，例 `mob_0_three_brothers_liu_bei`）
+- `monsterId`、`name`、`title`、`floor`、`level`、`stats`、`imagePath`
+- 召喚物也可能在此清單，帶 `summonerId`（召喚者 userId），`stats` 可能為 null。
 
 **outcomes**
-- `userId`、`name`(此處為**角色名稱**)、`expGained`、`newFloor`、`isDead`
-- 可能缺少某位玩家,缺少時 `isDead` 視為 false,不可報錯。
+- `userId`、`name`（此處為角色名稱）、`expGained`、`newFloor`、`isDead`
+- 可能缺少某位玩家，缺少時 `isDead` 視為 false，不可報錯。
 
 ### 資料處理規則
-- 玩家清單以 `participants.players` 為準;頂層 `userIds` 不可作為玩家清單。
-- 完整保存 players 與 enemies,以 `userId` / `entityId` 建立對照表。
-- LOG 中的 ID 一律透過對照表轉換為名稱,不比對名稱字串。
+- 玩家清單以 `participants.players` 為準；頂層 `userIds` 不可作為玩家清單。
+- 完整保存 players 與 enemies，以 `userId` / `entityId` 建立對照表。
+- LOG 中的 ID 一律透過對照表轉換為名稱，不比對名稱字串。
 
-## 3. 輸入:戰鬥 LOG
+## 3. 輸入：戰鬥 LOG
 
 ### 基本規則
-- LOG 在頂層 `logs` 陣列,依序逐筆處理,以 `type` 區分事件。
-- 一律使用結構化欄位,**不解析 `message`**。
-- 傷害用 `actualDamage`(已扣除溢出),不用 `value`;只有 COUNTER、LUCK_EVENT、BUFF_EFFECT 沒有 `actualDamage`,才用 `value`。
-- 玩家與敵方都累計,畫面只顯示玩家,敵方保留供日後擴充。
-- 目前只有玩家↔敵方傷害,沒有友軍傷害。
-- 遇到不在 participants 內的 ID(如 `summon_1`),建立臨時單位,不中斷。
+- LOG 在頂層 `logs` 陣列，依序逐筆處理，以 `type` 區分事件。
+- 一律使用結構化欄位為主，特定無施法者之狀態效果則輔以狀態歸屬機制。
+- 傷害用 `actualDamage`（已扣除溢出），不用 `value`；只有 COUNTER、LUCK_EVENT、BUFF_EFFECT 沒有 `actualDamage`，才用 `value`。
+- 玩家與敵方都累計，畫面顯示玩家區塊與敵方/BOSS區塊。
+- 遇到不在 participants 內的 ID（如 `summon_1`），建立臨時單位，不中斷。
 
 ### 召喚物歸屬
-- 召喚者對照表:處理 SUMMON 時記錄 `targetId`(召喚物)→ `actorId`(召喚者),並以 enemies 的 `summonerId` 補充。
-- 召喚物「主動造成」的傷害(DAMAGE、BLOCK、COUNTER 中 actor 為召喚物):輸出、出手、爆擊都算召喚者。
-- 僅限上述攻擊;召喚物承傷、召喚物治療**不**算給召喚者。
-- 玩家攻擊召喚物時,輸出仍算攻擊的玩家。
+- 召喚者對照表：處理 SUMMON 時記錄 `targetId`（召喚物）→ `actorId`（召喚者），並以 enemies 的 `summonerId` 補充。
+- 召喚事件累計施放者之召喚次數（`Summons + 1`），**不計入出手次數**。
+- 召喚物「主動造成」的傷害（DAMAGE、BLOCK、COUNTER 中 actor 為召喚物）：輸出、出手、爆擊都算召喚者。
+- 僅限上述攻擊；召喚物承傷、召喚物治療不給召喚者。
+- 玩家攻擊召喚物時，輸出仍算攻擊的玩家。
+
+### 倒戈與敵友判定（Defection & Betrayal）
+- 陣營判定：若攻擊方與受害方皆為我方玩家（同陣營），或治療方與受療方為敵對陣營（玩家補 BOSS / 敵方），皆視為倒戈叛變行為。
+- 同隊傷害：攻擊方不累計至正常「輸出」，獨立累計至 `FriendlyDamageDealt`；受害方正常計入「承傷」，並記錄 `FriendlyDamageTaken`。
+- 對同隊出手：跨陣營攻擊計入「出手次數」，對同隊出手則獨立累計至 `FriendlyShots`，不計入正常「出手次數」。
+- 治療敵方：治療方不累計至正常「治療」，獨立累計至 `EnemyHealDealt`，次數計入 `EnemyHealCount`。
+
+### BUFF_EFFECT 四階層歸屬機制 (Four-Tier Buff Attribution)
+針對長時間持續性 DOT（傷害）與 HOT（治療）之 BUFF_EFFECT 事件，依以下四階層精確追溯施放者：
+1. **Tier 1: 即時記憶對照 (Active Buff Mapping)**
+   - 監聽 `BUFF_APPLY` 與 `SKILL_TEXT` 事件。當技能附加狀態（如 `buffId`、`skillId`）至特定目標時，於對照表中記錄 `(targetId, buffId) -> casterId`。
+   - 後續 `BUFF_EFFECT` 觸發時優先精確比對此映射。
+2. **Tier 2: 動態前綴與精確技能解析 (Dynamic Prefix & Skill Mapping)**
+   - 無需寫死特定角色名稱。初始化時自動以出戰敵方之 `monsterId`、`entityId` 等建立敵方技能前綴；同時自整場戰鬥之 `SKILL_TEXT` / `DAMAGE` 事件中，動態學習技能 ID 與施放者的精準對應表（例如「同人」借用「西米」技能施放，可直接精確解析回同人）。
+   - 若 `buffId` 帶有前綴（如 `bocchi_`、`sakura_`），比對當前出戰角色或敵方之技能字首識別施放者。
+3. **Tier 3: 狀態事件全場回溯 (Timeline Backtracking)**
+   - 若前兩層未命中，自訊息提取 BUFF 名稱，自當前索引 `currentIndex - 1` 大膽回溯至戰鬥開端（索引 0）。
+   - 比對包含該 BUFF 名稱或 ID、且目標一致的前置施放事件（需排除 `BUFF_EFFECT` 本身，因其 `actorId` 為承受效果之受害者而非施法來源），找到即確認施放者，並回填至 Active Map。
+4. **Tier 4: 未知/無法歸屬效果 (Unattributed Buff Fallback)**
+   - 若前三層皆無法判定（如全場環境毒/火），受害者依舊承受 DOT 傷害或 HOT 回復，輸出/治療無人認領，記錄至 `UnattributedBuffs` 集合中，於我方與 BOSS / 敵方數據之間呈現各角色承受或回復數值。
 
 ### 單位統計欄位
-輸出、承傷、治療、出手次數、命中次數、爆擊次數;命中 = 出手 − MISS;命中率 = 命中 ÷ 出手;爆擊率 = 爆擊 ÷ 命中(分母為 0 時為 0)。
+輸出、承傷、治療、出手次數、命中次數、爆擊次數、召喚次數、同隊傷害、受到友傷、治療敵方、對同隊出手、對敵方治療；命中 = 出手 − MISS；命中率 = 命中 ÷ 出手；爆擊率 = 爆擊 ÷ 命中（分母為 0 時為 0.0%）。
 
 ### PVP 戰報
-- `battleType == "PVP"`;對手同樣放在 `participants.enemies`,但**沒有 `entityId`**,改以 `userId` 識別,並帶有 `characterName`。
-- 敵方單位一律以 `entityId ?? userId` 作為唯一識別(`BattleReportEnemy.Id`)。
-- 統計規則與 PVE 相同;圖表下方區塊標題改為【對手統計】,標題行格式同玩家:`玩家名稱 (角色名稱) 【倒下】`。
-- `CHADO`(茶渡結尾嘲諷)為已辨識、不影響統計的事件。
+- `battleType == "PVP"`；對手同樣放在 `participants.enemies`，但沒有 `entityId`，改以 `userId` 識別，並帶有 `characterName`。
+- 敵方單位一律以 `entityId ?? userId` 作為唯一識別（`BattleReportEnemy.Id`）。
+- 統計規則與 PVE 相同；圖表下方區塊標題改為【對手統計】，標題行格式同玩家：`玩家名稱 (角色名稱) 【倒下】`。
+- `CHADO`（茶渡結尾嘲諷）為已辨識、不影響統計的事件。
 
 ### 事件處理規則
 
 | type | 規則 |
 |---|---|
-| DAMAGE | 略過 `isCounter == true`(與前一筆 COUNTER 重複)。actor 輸出 +actualDamage;target 承傷 +actualDamage。**有 `isCrit` 欄位**才算一次出手(actor 出手 +1,`isCrit==true` 爆擊 +1)。**無 `isCrit`** 只累傷害不算出手:source=REFLECTION(傷害算 actor)、source=DIRECT、skillId=`three_brothers_guard`(替身承受;actor 是原攻擊者,target 是替身者) |
-| BLOCK | 同 DAMAGE:actor 輸出、target 承傷,用 actualDamage。每筆都算一次出手(isCrit 則爆擊 +1)。`actualDamage==0` 是被替身擋下,後接一筆 three_brothers_guard DAMAGE,傷害由該筆累計,BLOCK 只算出手。方向不可相反(actor 攻擊方、target 被攻擊方) |
-| MISS | actor 為攻擊方、target 為閃避方。actor 出手 +1,不算命中、不爆擊、不累計傷害 |
-| COUNTER | actor 輸出 +value;target 承傷 +value。不算出手、不算爆擊 |
-| LUCK_EVENT | actor 承傷 +value;`opponentId` 輸出 +value。不算出手(目前 actorId==targetId,opponentId 為對立陣營) |
-| HEAL | actor 治療 +value(算施放者);actor 與 target 可相同 |
-| BUFF_EFFECT | `buffType=HOT`:actorId 治療 +value。`buffType=DOT`:actorId 承傷 +value,不歸屬任何人輸出。無 buffType:略過 |
-| DEATH | 用來判斷玩家「倒下」狀態 |
+| DAMAGE | 略過 `isCounter == true`（與前一筆 COUNTER 重複）。actor 輸出 +actualDamage；target 承傷 +actualDamage。同陣營時依倒戈規則轉移。**有 `isCrit` 欄位**才算一次出手（actor 出手 +1，`isCrit==true` 爆擊 +1）。**無 `isCrit`** 只累傷害不算出手：source=REFLECTION、source=DIRECT、skillId=`three_brothers_guard` |
+| BLOCK | 同 DAMAGE：actor 輸出、target 承傷，用 actualDamage。同陣營時依倒戈規則轉移。每筆都算一次出手（isCrit 則爆擊 +1）。`actualDamage==0` 是被替身擋下，後接一筆 three_brothers_guard DAMAGE，傷害由該筆累計，BLOCK 只算出手。方向不可相反（actor 攻擊方、target 被攻擊方） |
+| MISS | actor 為攻擊方、target 為閃避方。跨陣營：actor 出手 +1，不算命中、不爆擊、不累計傷害。同陣營：actor 對同隊出手 +1 |
+| COUNTER | actor 輸出 +value；target 承傷 +value。不算出手、不算爆擊 |
+| LUCK_EVENT | actor 承傷 +value；`opponentId` 輸出 +value。不算出手 |
+| HEAL | actor 治療 +value（算施放者）；若受治者為敵方，累計至 EnemyHealDealt 與 EnemyHealCount，不計入正常 Heal |
+| BUFF_APPLY | 註冊主動 BUFF 施放關係（Tier 1） |
+| SKILL_TEXT | 捕捉技能文本中之狀態施加事件（Tier 1）與動態技能擁有者（Tier 2） |
+| BUFF_EFFECT | 經四階層解析施放者。`buffType=HOT`：施放者治療 +value（敵方則計為 EnemyHeal）。`buffType=DOT`：受害者承傷 +value，施放者輸出 +value（同隊則計為 FriendlyDamage）。無法判定者記至 UnattributedBuffs |
+| DEATH | 用來判斷單位「倒下」狀態 |
+| SUMMON | 建立召喚物對照表，累計 actor 召喚次數 `Summons + 1`，不計入出手次數 |
 
-**已辨識、不影響統計(略過,不計入「無法辨識」)**:
-BATTLE_START、BOSS_DIALOGUE、SKILL_TEXT、TEXT、BUFF_APPLY、SP_RECOVER(回復 SP,不算治療)、SUMMON(只建召喚者對照表)、HP_REMAINING、EXP_GAIN、SANITY_CHANGE、SANITY_STATE_CHANGE、FATIGUE、BRICK_CRACK、PLAYER_DEATH、PLAYER_DEFEAT(死亡狀態改由 `outcomes.isDead` 判斷)
+**已辨識、不影響統計（略過，不計入「無法辨識」）**：
+BATTLE_START、BOSS_DIALOGUE、TEXT、SP_RECOVER（回復 SP，若文字含 HP 則計入治療）、HP_REMAINING、EXP_GAIN、SANITY_CHANGE、SANITY_STATE_CHANGE、FATIGUE、BRICK_CRACK、PLAYER_DEATH、PLAYER_DEFEAT（死亡狀態改由 `outcomes.isDead` 判斷）、PART_BREAK、REST、CHADO
 
 ### 解析要求
-type 不在上述清單、或缺少必要欄位的資料:略過並計數,結束時回報筆數。
+type 不在上述清單、或缺少必要欄位的資料：略過並計數，結束時回報筆數。
 
 ## 4. 統計規則
-- 以單位(userId/entityId)累加 輸出、承傷、治療、出手、爆擊。
-- 畫面只顯示 `participants.players`。
-- 出手、爆擊、爆擊率需計算並顯示。
+- 以單位（userId/entityId）累加 輸出、承傷、治療、出手、爆擊、召喚、倒戈數據。
+- 畫面顯示 `participants.players` 與敵方/BOSS。
+- 出手、爆擊、爆擊率、召喚、倒戈指標需計算並顯示。
 
 ## 5. 輸出格式
 
-每位玩家:標題行 → 輸出 / 承傷 / 治療 三行長條 → 一行出手與爆擊資訊。
+每位玩家：標題行 → 輸出 / 承傷 / 治療 三行長條 → 一行出手與爆擊資訊（含召喚次數） → 若有倒戈行為則顯示兩行警告。
 
-### 標題行
-格式:`玩家名稱 (角色名稱) 【倒下】 【死亡】`
-- 玩家名稱 = `players.name`;角色名稱 = `players.characterName`
-- 【倒下】:logs 中存在 `type==DEATH` 且 `actorId==該玩家 userId`
-- 【死亡】:`outcomes` 中該玩家 `isDead==true`(缺資料視為 false)
-- 兩標記獨立判斷、可同時出現;都不符合則不顯示任何標記,**不留多餘空格**
-- 【死亡】= 紅色粗體;【倒下】= 橘色粗體;其餘文字預設樣式
+### 戰報標題行
+格式：`戰報 #{reportId}｜{battleType}｜{floorNumber}F｜{bossName}｜{result}`（若無層數則不顯示層數，如 PVP：`戰報 #{reportId}｜PVP｜{opponentName}｜{result}`）。
+例：`戰報 #270110｜BOSS｜46F｜高士官長｜失敗`
+
+### 玩家標題行
+格式：`玩家名稱 (角色名稱) 【倒下】 【死亡】`
+- 玩家名稱 = `players.name`；角色名稱 = `players.characterName`
+- 【倒下】：logs 中存在 `type==DEATH` 且 `actorId==該玩家 userId`
+- 【死亡】：`outcomes` 中該玩家 `isDead==true`（缺資料視為 false）
+- 兩標記獨立判斷、可同時出現；都不符合則不顯示任何標記，**不留多餘空格**
+- 【死亡】= 紅色粗體；【倒下】= 橘色粗體；其餘文字預設樣式
+
+### 出手與爆擊資訊
+- 三條長條之後另起一行，純文字、不畫長條、預設顏色。
+- 格式：`出手 N 次｜命中 N 次｜命中率 N.N%｜爆擊 N 次｜爆擊率 N.N%`（若有發動過 SUMMON 則行末加上`｜召喚 N 次`）。
+- 出手次數不包含 SUMMON；召喚物攻擊算召喚者；反擊不計入。
+- 命中 = 出手 − MISS（被完全擋下的 BLOCK 仍算命中）。
+- 命中率 = 命中 ÷ 出手 × 100；爆擊率 = 爆擊 ÷ 命中 × 100；皆四捨五入到小數 1 位。分母為 0 顯示 `0.0%`。
+
+### 倒戈叛變行為行
+若玩家具備倒戈叛變數值（`FriendlyDamageDealt > 0` 或 `EnemyHealDealt > 0` 或 `FriendlyShots > 0` 或 `EnemyHealCount > 0`）：
+- 第一行：`⚠️ 同隊傷害 5,306｜治療敵方 21,504`
+- 第二行：`⚠️ 對同隊出手 13 次｜對敵方治療 4 次`
+- 樣式：兩行皆使用橘黃色警告樣式（`ChartStyle.Warning`，RGB: 255, 170, 70）。
+
+### 未歸屬效果區塊
+若戰報中存在 Tier 4 無法歸屬施放者的 BUFF_EFFECT（如環境毒/火）：
+顯示於我方與 BOSS / 敵方數據之間，條列狀態名稱與各對象實際承受之傷害或回復生命量（不揣測來源）。
+例：`  • 中毒 (poison)：花澤輝氣 受到 89 點傷害、二階堂希羅 受到 56 點傷害、木之本櫻 受到 82 點傷害`
 
 ### 範例
 ```
-老ㄐ訶德 (羅伊·馬斯坦) 【倒下】 【死亡】
-輸出 ███████████ 125,000
-承傷 ███████ 82,000
-治療 ████ 45,000
-出手 163 次｜命中 160 次｜命中率 98.2%｜爆擊 70 次｜爆擊率 43.8%
+戰報 #270110｜BOSS｜46F｜高士官長｜失敗
 
-阿爾吉利亞 (塞雷婭) 【倒下】
-輸出 ████ 45,000
-承傷 ███████████ 82,000
-治療 ███████████ 125,000
-出手 8 次｜命中 8 次｜命中率 100.0%｜爆擊 2 次｜爆擊率 25.0%
+老ㄐ訶德 (寶月夜宵)
+輸出 █████████ 56,433
+承傷 █ 8,367
+治療 0
+出手 36 次｜命中 36 次｜命中率 100.0%｜爆擊 10 次｜爆擊率 27.8%｜召喚 4 次
+⚠️ 同隊傷害 16,676｜治療敵方 0
+⚠️ 對同隊出手 14 次｜對敵方治療 0 次
+
+阿爾吉利亞 (同人) 【死亡】
+輸出 █ 7,541
+承傷 ██ 14,958
+治療 ████ 23,583
+出手 13 次｜命中 6 次｜命中率 46.2%｜爆擊 0 次｜爆擊率 0.0%
+⚠️ 同隊傷害 5,306｜治療敵方 21,504
+⚠️ 對同隊出手 13 次｜對敵方治療 4 次
+
+Bulleyez (木之本櫻) 【死亡】
+輸出 ██████████ 60,097
+承傷 ██ 13,092
+治療 0
+出手 42 次｜命中 33 次｜命中率 78.6%｜爆擊 14 次｜爆擊率 42.4%
+⚠️ 同隊傷害 5,867｜治療敵方 0
+⚠️ 對同隊出手 15 次｜對敵方治療 0 次
+
+────────────────────────────────────────
+【敵方 / BOSS 統計】
+
+高士官長 (人才招募員)
+輸出 ██ 13,909
+承傷 ████████████████████ 124,071
+治療 0
+出手 14 次｜命中 10 次｜命中率 71.4%｜爆擊 5 次｜爆擊率 50.0%
 ```
 
 ### 圖表規格
-- 顏色:輸出=紅、承傷=藍、治療=綠(長條與對應顏色一致)
-- 長條長度:每個項目**各自**以該項目最大值為 100% 等比例縮放
-- 數值千分位逗號;非零數值至少 1 格
-
-### 出手與爆擊資訊
-- 三條長條之後另起一行,純文字、不畫長條、預設顏色。
-- 格式:`出手 N 次｜命中 N 次｜命中率 N.N%｜爆擊 N 次｜爆擊率 N.N%`
-- 數值直接使用統計累計欄位,不另外重算。
-- 出手含 MISS;召喚物攻擊算召喚者;反擊不計入。
-- 命中 = 出手 − MISS(被完全擋下的 BLOCK 仍算命中)。
-- 命中率 = 命中 ÷ 出手 × 100;爆擊率 = 爆擊 ÷ 命中 × 100;皆四捨五入到小數 1 位。
-- 分母為 0 → 顯示 `0.0%`,不可除以零或出現 NaN。
-- 數字使用千分位逗號。
+- 顏色：輸出=紅、承傷=藍、治療=綠（長條與對應顏色一致）；警告=橘黃；標題=金黃；註解=灰斜
+- 長條長度：全場統一最大值基準（Global Scale），涵蓋玩家與敵方最大數值為 100% 等比例縮放
+- 數值千分位逗號；非零數值至少 1 格
 
 ## 6. 其他要求
 - 取得資料、解析、統計、繪圖分成獨立函式/類別。
-- 每種事件類型的處理獨立成各自函式或區塊,方便新增事件類型。
-- 附簡短使用說明與測試資料,需涵蓋:有人倒下、有人死亡、無人倒下、outcomes 缺玩家、含召喚物,且涵蓋所有上述事件類型。
-- 完成後以下列驗收數值自行核對;對不上時**說明原因,不可自行改規則湊數字**。
-- 盡量結構化、解耦,降低維護成本。
+- 每種事件類型的處理獨立成各自函式或區塊，方便新增事件類型。
+- 盡量結構化、解耦，降低維護成本。
 
-## 7. 驗收數值
+## 7. 現有專案參考（實作時沿用）
 
-> 註:下表「爆擊率」為舊公式(爆擊 ÷ 出手)的數值,改為 爆擊 ÷ 命中 後需依實際 MISS 數重新核對。
-
-**LOG6**(WIN,outcomes 缺芙莉蓮)
-
-| 玩家 | 輸出 | 承傷 | 治療 | 出手 | 爆擊 | 爆擊率 | 標記 |
-|---|---|---|---|---|---|---|---|
-| 源氏 | 101,225 | 16,547 | 11,697 | 163 | 70 | 42.9% | 無 |
-| 壺頭哥 | 18,642 | 6,427 | 0 | 42 | 19 | 45.2% | 【倒下】 |
-| 芙莉蓮 | 46,673 | 6,004 | 790 | 25(含 3 次落空) | 11 | 44.0% | 無 |
-
-**LOG1**(LOSE,含召喚物;格林輸出包含召喚物造成的 349)
-
-| 玩家 | 輸出 | 承傷 | 治療 | 出手 | 爆擊 | 爆擊率 | 標記 |
-|---|---|---|---|---|---|---|---|
-| 愛麗絲 | 38,394 | 7,801 | 2,693 | 46 | 16 | 34.8% | 【倒下】【死亡】 |
-| 塞雷婭 | 7,071 | 12,905 | 2,982 | 8 | 2 | 25.0% | 【倒下】 |
-| 格林 | 37,509 | 16,651 | 4,308 | 72 | 22 | 30.6% | 【倒下】【死亡】 |
-
-**可選對帳**:被擊殺敵人的「承傷總和」應等於其 `stats.hp` + 它受到的治療。
-
-## 8. 現有專案參考(實作時沿用)
-
-- 網路層:[HttpService.cs](../Services/HttpService.cs) 的 `GetAsync<T>` / `ApiResponse<T>`(已含 timeout 30s、HTTP 錯誤、JsonException 處理)。
-  - ⚠ 目前 `GetAsync` **強制要求 Token**;需確認 battle-reports 端點是否需要驗證(見待確認)。
-- 業務層:[BattleService.cs](../Services/BattleService.cs)(`BaseUrl` 已為 `https://mydoujin-backend.onrender.com/api`)。
-- Models:[Models/](../Models/)(已有 `BattleLog`、`BattleResult`,供「戰鬥報告」視窗使用)。
-- UI:[BattleReportForm.cs](../Forms/BattleReportForm.cs) 為深色主題(背景 `28,28,35`、字型 Microsoft JhengHei UI、RichTextBox LOG 區),新視窗應與之風格一致。
-
-## 9. 預計分層(草案,待看過 LOG 後確認)
-
-| 層 | 職責 |
-|---|---|
-| Models | 戰報 DTO(`BattleReportResponse`、players/enemies/outcomes/logs)、`UnitStats`、`BattleStatsResult` |
-| Services(取得) | `BattleService.GetBattleReportAsync(id)` |
-| Services(解析/索引) | 建立 userId/entityId 對照表、召喚者對照表、臨時單位 |
-| Services(統計) | `BattleStatsCalculator`:事件分派表 `type → handler`,每種事件獨立 handler;回報略過筆數 |
-| Utilities(繪圖/格式) | 長條字串、千分位、爆擊率格式化、標題標記判斷 |
-| Forms | 戰鬥數據視窗(輸入編號、顯示 RichTextBox 結果),與主畫面入口 |
-| 測試資料 | 涵蓋所有事件與情境的範例 JSON + 使用說明 |
-
-## 10. 已確認決策
-1. **Token**:battle-reports 端點統一需要 Bearer Token,直接沿用 `HttpService.GetAsync`(Token 未設定時回傳既有的提示訊息,401 沿用既有處理),不需新增免 Token 的 GET。
-2. **入口位置**:MainForm 左側設定區,放在「自動訓練 / 自動戰鬥」下方,新增一顆「戰鬥數據」按鈕,點擊開啟獨立的戰鬥數據視窗(實作時需先確認該區現有的版面與控制項命名)。
-3. **其餘 LOG 檔案**:使用者稍後提供,用於驗證 API response 格式與統計規則。
-
-## 11. 待確認事項
-1. 測試資料/驗證方式(專案目前無測試專案):新增 xUnit 專案,或僅附範例 JSON + 使用說明?
-
+- 網路層：[HttpService.cs](../Services/HttpService.cs) 的 `GetAsync<T>` / `ApiResponse<T>`。
+- 業務層：[BattleService.cs](../Services/BattleService.cs)（`BaseUrl` 已為 `https://mydoujin-backend.onrender.com/api`）。
+- Models：[Models/](../Models/)（`BattleReportResponse`、`BattleStatsResult` 等）。
+- UI：[BattleStatsForm.cs](../Forms/BattleStatsForm.cs)（深色主題背景 `28,28,38`、RichTextBox LOG 區）。
