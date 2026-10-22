@@ -18,13 +18,13 @@ namespace MyDoujinBot.Models
         public string Id { get; }
 
         /// <summary>輸出（造成的傷害）</summary>
-        public long Output { get; set; }
+        public double Output { get; set; }
 
         /// <summary>承傷（受到的傷害）</summary>
-        public long Taken { get; set; }
+        public double Taken { get; set; }
 
         /// <summary>治療（回復的 HP）</summary>
-        public long Heal { get; set; }
+        public double Heal { get; set; }
 
         /// <summary>出手次數（含落空 MISS 與被完全擋下的 BLOCK，反擊不計入）</summary>
         public long Shots { get; set; }
@@ -36,13 +36,13 @@ namespace MyDoujinBot.Models
         public long Crits { get; set; }
 
         /// <summary>對同隊造成的傷害（倒戈／自傷／友軍傷害）</summary>
-        public long FriendlyDamageDealt { get; set; }
+        public double FriendlyDamageDealt { get; set; }
 
         /// <summary>受到同隊造成的傷害</summary>
-        public long FriendlyDamageTaken { get; set; }
+        public double FriendlyDamageTaken { get; set; }
 
         /// <summary>對敵方的治療量（倒戈治療）</summary>
-        public long EnemyHealDealt { get; set; }
+        public double EnemyHealDealt { get; set; }
 
         /// <summary>對同隊出手次數（含落空 MISS 與 BLOCK）</summary>
         public long FriendlyShots { get; set; }
@@ -75,19 +75,6 @@ namespace MyDoujinBot.Models
     }
 
     /// <summary>
-    /// 無法歸屬施放者的 BUFF_EFFECT 紀錄（例如副本全場環境 DOT 中毒／灼傷）。
-    /// </summary>
-    public class UnattributedBuffRecord
-    {
-        public string BuffId { get; set; } = string.Empty;
-        public string BuffName { get; set; } = string.Empty;
-        public string BuffType { get; set; } = string.Empty;
-        public long TotalValue { get; set; }
-        public int Count { get; set; }
-        public Dictionary<string, long> ValueByTarget { get; } = new(StringComparer.Ordinal);
-    }
-
-    /// <summary>
     /// 一份戰報的統計結果（由 BattleStatsCalculator 產生）。
     /// 只放資料，不含任何顯示邏輯。
     /// </summary>
@@ -105,8 +92,24 @@ namespace MyDoujinBot.Models
         /// <summary>被略過的事件依 type 分組的筆數（供結束時回報）。</summary>
         public SortedDictionary<string, int> SkippedByType { get; } = new(StringComparer.Ordinal);
 
-        /// <summary>無法歸屬施放者的 BUFF 統計（key = buffId 或 buffName）。</summary>
-        public Dictionary<string, UnattributedBuffRecord> UnattributedBuffs { get; } = new(StringComparer.Ordinal);
+        /// <summary>敵方承受的未歸類傷害（key = BUFF 名稱，value = 總傷害）</summary>
+        public Dictionary<string, double> EnemyUnattributedDamage { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>隊伍承受的未歸類傷害（key = BUFF 名稱，value = 總傷害）</summary>
+        public Dictionary<string, double> TeamUnattributedDamage { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>敵方獲得的未歸類治療（key = BUFF 名稱，value = 總治療）</summary>
+        public Dictionary<string, double> EnemyUnattributedHeal { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>隊伍獲得的未歸類治療（key = BUFF 名稱，value = 總治療）</summary>
+        public Dictionary<string, double> TeamUnattributedHeal { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>是否存在任何未歸類效果（傷害或治療）</summary>
+        public bool HasUnattributedEntries =>
+            EnemyUnattributedDamage.Count > 0 ||
+            TeamUnattributedDamage.Count > 0 ||
+            EnemyUnattributedHeal.Count > 0 ||
+            TeamUnattributedHeal.Count > 0;
 
         /// <summary>取得單位數據；單位從未出現在 LOG 時回傳全 0 的空資料。</summary>
         public UnitStats GetUnitOrEmpty(string id) =>

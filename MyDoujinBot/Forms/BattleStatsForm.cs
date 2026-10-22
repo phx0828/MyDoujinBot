@@ -241,6 +241,7 @@ namespace MyDoujinBot.Forms
             ChartStyle.Dead      => (Color.FromArgb(246, 100, 100), FontStyle.Bold),      // 【死亡】 紅色粗體
             ChartStyle.Warning   => (Color.FromArgb(255, 170, 70),  FontStyle.Regular),   // 警告訊息 (橘黃)
             ChartStyle.Heading   => (Color.FromArgb(255, 215, 70),  FontStyle.Bold),      // 標題 (金黃)
+            ChartStyle.UnitTitle => (Color.FromArgb(100, 210, 255), FontStyle.Bold),      // 名稱 (角色) 與標籤 (水藍粗)
             ChartStyle.Muted     => (Color.FromArgb(160, 160, 180), FontStyle.Italic),    // 附註說明 (灰斜)
             _                    => (Color.FromArgb(220, 220, 230), FontStyle.Regular)    // 預設樣式
         };

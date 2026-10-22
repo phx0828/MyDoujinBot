@@ -207,9 +207,10 @@ namespace MyDoujinBot.Services
         /// <summary>
         /// BUFF_EFFECT：
         /// 透過四階層邏輯 (Active Map / Prefix / Deep Trace / Unattributed) 解析原施放者：
+        /// - 若同一目標有多位同角色施放過此 BUFF，將數值平均分配給所有施放者。
         /// - HOT：治療 ＋value，歸屬原施放者（若受益者為敵方則記為敵方治療）。
         /// - DOT：受害者（actorId）承傷 ＋value；原施放者累計輸出（若同隊則記為同隊傷害）。
-        /// - 無法判定施放者時：記錄至 UnattributedBuffs 於戰報底部顯示。
+        /// - 無法判定施放者時：記錄至未歸類清單（隊伍／敵方之傷害與治療）。
         /// </summary>
         public static bool HandleBuffEffect(BattleStatsContext ctx, BattleReportLog log)
         {
@@ -217,27 +218,31 @@ namespace MyDoujinBot.Services
 
             if (IsBlank(log.ActorId) || !log.Value.HasValue) return false;
 
-            long value = ToLong(log.Value.Value);
+            double value = log.Value.Value;
             string targetId = log.ActorId!; // 在 BUFF_EFFECT 中，actorId 為承受效果的目標
 
-            string? resolvedCaster = ctx.ResolveBuffCaster(log, ctx.CurrentLogIndex);
+            var resolvedCasters = ctx.ResolveBuffCasters(log, ctx.CurrentLogIndex);
 
             switch (log.BuffType!.ToUpperInvariant())
             {
                 case "HOT":
                 {
-                    if (resolvedCaster != null)
+                    if (resolvedCasters != null && resolvedCasters.Count > 0)
                     {
-                        var casterId = ctx.ResolveAttackOwnerId(resolvedCaster);
-                        if (ctx.IsSameTeam(casterId, targetId))
+                        double share = value / resolvedCasters.Count;
+                        foreach (var caster in resolvedCasters)
                         {
-                            ctx.GetUnit(casterId).Heal += value;
-                        }
-                        else
-                        {
-                            var caster = ctx.GetUnit(casterId);
-                            caster.EnemyHealDealt += value;
-                            caster.EnemyHealCount++;
+                            var casterId = ctx.ResolveAttackOwnerId(caster);
+                            if (ctx.IsSameTeam(casterId, targetId))
+                            {
+                                ctx.GetUnit(casterId).Heal += share;
+                            }
+                            else
+                            {
+                                var unit = ctx.GetUnit(casterId);
+                                unit.EnemyHealDealt += share;
+                                unit.EnemyHealCount++;
+                            }
                         }
                     }
                     else
@@ -252,17 +257,21 @@ namespace MyDoujinBot.Services
                     // 目標受害者一律承傷
                     ctx.GetUnit(targetId).Taken += value;
 
-                    if (resolvedCaster != null)
+                    if (resolvedCasters != null && resolvedCasters.Count > 0)
                     {
-                        var casterId = ctx.ResolveAttackOwnerId(resolvedCaster);
-                        if (ctx.IsSameTeam(casterId, targetId))
+                        double share = value / resolvedCasters.Count;
+                        foreach (var caster in resolvedCasters)
                         {
-                            ctx.GetUnit(targetId).FriendlyDamageTaken += value;
-                            ctx.GetUnit(casterId).FriendlyDamageDealt += value;
-                        }
-                        else
-                        {
-                            ctx.GetUnit(casterId).Output += value;
+                            var casterId = ctx.ResolveAttackOwnerId(caster);
+                            if (ctx.IsSameTeam(casterId, targetId))
+                            {
+                                ctx.GetUnit(targetId).FriendlyDamageTaken += share;
+                                ctx.GetUnit(casterId).FriendlyDamageDealt += share;
+                            }
+                            else
+                            {
+                                ctx.GetUnit(casterId).Output += share;
+                            }
                         }
                     }
                     else

@@ -15,8 +15,10 @@ namespace MyDoujinBot.Utilities
     {
         /// <summary>預設樣式</summary>
         Normal,
-        /// <summary>標題（戰報基本資訊）</summary>
+        /// <summary>標題（戰報基本資訊、陣營統計分隔）</summary>
         Heading,
+        /// <summary>單位標題（名稱 (角色)）、未歸類標籤（水藍色粗體）</summary>
+        UnitTitle,
         /// <summary>次要說明（略過筆數等）</summary>
         Muted,
         /// <summary>【倒下】橘色粗體</summary>
@@ -61,7 +63,7 @@ namespace MyDoujinBot.Utilities
             lines.Add(new List<ChartSegment>());
 
             // 全場統一最大值基準 (Global Scale)：涵蓋所有單位（玩家與敵方/BOSS）的最大數值
-            long globalMax = stats.Units.Values.Count > 0
+            double globalMax = stats.Units.Values.Count > 0
                 ? stats.Units.Values.Max(u => Math.Max(u.Output, Math.Max(u.Taken, u.Heal)))
                 : 0;
 
@@ -89,25 +91,10 @@ namespace MyDoujinBot.Utilities
                 lines.Add(new List<ChartSegment>());
             }
 
-            // ── 未歸屬效果區塊（置於我方與 BOSS / 敵方數據之間） ──
-            if (stats.UnattributedBuffs.Count > 0)
+            // ── 我方未歸類傷害 / 治療區塊（置於我方數據底下，無分隔線） ──
+            if (stats.EnemyUnattributedDamage.Count > 0 || stats.EnemyUnattributedHeal.Count > 0)
             {
-                lines.Add(new List<ChartSegment> { new("────────────────────────────────────────", ChartStyle.Muted) });
-                lines.Add(new List<ChartSegment> { new("【未歸屬效果】", ChartStyle.Heading) });
-                foreach (var record in stats.UnattributedBuffs.Values)
-                {
-                    string actionText = record.BuffType.Equals("HOT", StringComparison.OrdinalIgnoreCase) ? "回復" : "受到";
-                    string unitText = record.BuffType.Equals("HOT", StringComparison.OrdinalIgnoreCase) ? "點生命" : "點傷害";
-                    string nameDisplay = !string.IsNullOrWhiteSpace(record.BuffName)
-                        ? (!string.IsNullOrWhiteSpace(record.BuffId) && record.BuffId != record.BuffName ? $"{record.BuffName} ({record.BuffId})" : record.BuffName)
-                        : record.BuffId;
-
-                    var targetDetails = record.ValueByTarget.Select(kv => $"{kv.Key} {actionText} {FormatNumber(kv.Value)} {unitText}");
-                    string targetSummary = string.Join("、", targetDetails);
-                    string text = $"  • {nameDisplay}：{targetSummary}";
-                    lines.Add(new List<ChartSegment> { new(text, ChartStyle.Muted) });
-                }
-                lines.Add(new List<ChartSegment>());
+                lines.AddRange(BuildUnattributedLines("我方", "敵方", stats.EnemyUnattributedDamage, stats.EnemyUnattributedHeal));
             }
 
             // ── 敵方 / BOSS / PVP 對手區塊 ──
@@ -140,9 +127,53 @@ namespace MyDoujinBot.Utilities
                 }
             }
 
+            // ── 敵方未歸類傷害 / 治療區塊（置於敵方數據底下，無分隔線） ──
+            if (stats.TeamUnattributedDamage.Count > 0 || stats.TeamUnattributedHeal.Count > 0)
+            {
+                lines.AddRange(BuildUnattributedLines("敵方", "我方", stats.TeamUnattributedDamage, stats.TeamUnattributedHeal));
+            }
+
             if (stats.SkippedCount > 0)
                 lines.Add(BuildSkippedLine(stats));
 
+            return lines;
+        }
+
+        /// <summary>
+        /// 未歸類傷害 / 治療區塊（無分隔線，置於造成效果的陣營下方）。
+        /// 格式：
+        /// [未歸類傷害] (黃字) 系統無法辨識效果來源 (灰斜體)
+        /// 我方 對 敵方 造成未歸類傷害：流血 500 點 (一般顏色字體)
+        /// </summary>
+        public static List<List<ChartSegment>> BuildUnattributedLines(
+            string sourceSide,
+            string targetSide,
+            Dictionary<string, double> damageDict,
+            Dictionary<string, double> healDict)
+        {
+            var lines = new List<List<ChartSegment>>();
+            if (damageDict.Count == 0 && healDict.Count == 0) return lines;
+
+            string titleLabel = damageDict.Count > 0 ? "[未歸類傷害] " : "[未歸類治療] ";
+            lines.Add(new List<ChartSegment>
+            {
+                new(titleLabel, ChartStyle.UnitTitle),
+                new("系統無法辨識效果來源", ChartStyle.Muted)
+            });
+
+            if (damageDict.Count > 0)
+            {
+                var details = string.Join("、", damageDict.Select(kv => $"{kv.Key} {FormatNumber(kv.Value)} 點"));
+                lines.Add(new List<ChartSegment> { new($"{sourceSide} 對 {targetSide} 造成未歸類傷害：{details}", ChartStyle.Normal) });
+            }
+
+            if (healDict.Count > 0)
+            {
+                var details = string.Join("、", healDict.Select(kv => $"{kv.Key} {FormatNumber(kv.Value)} 點"));
+                lines.Add(new List<ChartSegment> { new($"{sourceSide} 對 {targetSide} 造成未歸類治療：{details}", ChartStyle.Normal) });
+            }
+
+            lines.Add(new List<ChartSegment>());
             return lines;
         }
 
@@ -176,7 +207,7 @@ namespace MyDoujinBot.Utilities
         {
             var line = new List<ChartSegment>
             {
-                new($"{player.Name} ({player.CharacterName})")
+                new($"{player.Name} ({player.CharacterName})", ChartStyle.UnitTitle)
             };
 
             if (isFallen)
@@ -204,7 +235,7 @@ namespace MyDoujinBot.Utilities
             string titlePart = string.IsNullOrWhiteSpace(subtitle) ? string.Empty : $" ({subtitle})";
             var line = new List<ChartSegment>
             {
-                new($"{enemy.Name}{titlePart}")
+                new($"{enemy.Name}{titlePart}", ChartStyle.UnitTitle)
             };
 
             if (isFallen)
@@ -217,7 +248,7 @@ namespace MyDoujinBot.Utilities
         }
 
         /// <summary>長條行，例：輸出 ███████████ 125,000（長條上色，文字與數值為預設樣式）。</summary>
-        public static List<ChartSegment> BuildMetricLine(string label, long value, long max, ChartStyle barStyle)
+        public static List<ChartSegment> BuildMetricLine(string label, double value, double max, ChartStyle barStyle)
         {
             string bar = BuildBar(value, max);
 
@@ -280,14 +311,20 @@ namespace MyDoujinBot.Utilities
         /// 長條字串：以 max 為 100% 等比例縮放成最多 MaxBarLength 格；
         /// 非零數值至少顯示 1 格（避免長條消失）；0 或 max 為 0 時回傳空字串。
         /// </summary>
-        public static string BuildBar(long value, long max)
+        public static string BuildBar(double value, double max)
         {
             if (value <= 0 || max <= 0) return string.Empty;
 
-            int length = (int)Math.Round((double)value / max * MaxBarLength, MidpointRounding.AwayFromZero);
+            int length = (int)Math.Round(value / max * MaxBarLength, MidpointRounding.AwayFromZero);
             length = Math.Clamp(length, 1, MaxBarLength);
             return new string(BarChar, length);
         }
+
+        /// <summary>千分位逗號（整數顯示為整數，小數保留至小數點一位）。</summary>
+        public static string FormatNumber(double value) =>
+            (Math.Abs(value - Math.Round(value)) < 0.001)
+                ? ((long)Math.Round(value)).ToString("N0", CultureInfo.InvariantCulture)
+                : value.ToString("N1", CultureInfo.InvariantCulture);
 
         /// <summary>千分位逗號（固定使用 InvariantCulture，避免受系統地區設定影響）。</summary>
         public static string FormatNumber(long value) =>

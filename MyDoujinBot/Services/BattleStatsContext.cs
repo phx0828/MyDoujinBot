@@ -27,7 +27,7 @@ namespace MyDoujinBot.Services
         private static readonly Regex BuffExtractRegex = new(@"受到\s+(?<name>.+?)\s+影響", RegexOptions.Compiled);
 
         private readonly Dictionary<string, string> _summonerOf = new();
-        private readonly Dictionary<(string TargetId, string BuffKey), string> _activeBuffs = new();
+        private readonly Dictionary<(string TargetId, string BuffKey), List<string>> _activeBuffs = new();
 
         // 動態前綴與技能施放者映射（完全不寫死角色名稱，依本場出戰敵方與實際施放日誌動態學習）
         private readonly Dictionary<string, HashSet<string>> _prefixToActors = new(StringComparer.OrdinalIgnoreCase);
@@ -141,24 +141,34 @@ namespace MyDoujinBot.Services
         // ---------------------------------------------------------------------
 
         /// <summary>
-        /// Tier 1 主動註冊：記錄 BUFF 上去的時機與對象，建立 (targetId, buffKey) → casterId 映射。
+        /// Tier 1 主動註冊：記錄 BUFF 上去的時機與對象，建立 (targetId, buffKey) → casters 映射。
+        /// 若該受體已有施放者，追加至清單，供後續平分傷害／治療。
         /// </summary>
         public void RegisterActiveBuff(string targetId, string? buffKey, string casterId)
         {
             if (string.IsNullOrWhiteSpace(targetId) || string.IsNullOrWhiteSpace(buffKey) || string.IsNullOrWhiteSpace(casterId))
                 return;
 
-            _activeBuffs[(targetId, buffKey)] = casterId;
+            var key = (targetId, buffKey);
+            if (!_activeBuffs.TryGetValue(key, out var list))
+            {
+                list = new List<string>();
+                _activeBuffs[key] = list;
+            }
+            if (!list.Contains(casterId, StringComparer.Ordinal))
+            {
+                list.Add(casterId);
+            }
         }
 
         /// <summary>
         /// 解析 BUFF_EFFECT 的施放者（四階層判定）：
-        /// Tier 1: 運行時主動註冊表 (Active Buff Mapping)
+        /// Tier 1: 運行時主動註冊表 (Active Buff Mapping，若同一受體有多人施放則回傳全部施放者清單)
         /// Tier 2: 角色專屬 buffId 前綴表 (Character Prefix Mapping)
         /// Tier 3: 深度回溯至起點 (Deep Backwards Tracing to Index 0)
-        /// Tier 4: 無法判定（回傳 null，由呼叫端記錄至 UnattributedBuffs）
+        /// Tier 4: 無法判定（回傳 null，由呼叫端記錄至未歸類清單）
         /// </summary>
-        public string? ResolveBuffCaster(BattleReportLog log, int currentIndex)
+        public IReadOnlyList<string>? ResolveBuffCasters(BattleReportLog log, int currentIndex)
         {
             string targetId = log.ActorId ?? string.Empty;
             string? buffId = log.BuffId;
@@ -172,13 +182,26 @@ namespace MyDoujinBot.Services
                     buffName = match.Groups["name"].Value.Trim();
             }
 
-            // Tier 1: 運行時主動註冊表
-            if (!string.IsNullOrEmpty(buffId) && _activeBuffs.TryGetValue((targetId, buffId), out var caster1))
-                return caster1;
-            if (!string.IsNullOrEmpty(buffName) && _activeBuffs.TryGetValue((targetId, buffName), out var caster2))
-                return caster2;
-            if (!string.IsNullOrEmpty(skillId) && _activeBuffs.TryGetValue((targetId, skillId), out var caster3))
-                return caster3;
+            // Tier 1: 運行時主動註冊表（收集該受體上對應此 BUFF 的所有已施放者）
+            var matchedCasters = new List<string>();
+            void TryAddCasters(string? key)
+            {
+                if (!string.IsNullOrEmpty(key) && _activeBuffs.TryGetValue((targetId, key), out var list))
+                {
+                    foreach (var c in list)
+                    {
+                        if (!matchedCasters.Contains(c, StringComparer.Ordinal))
+                            matchedCasters.Add(c);
+                    }
+                }
+            }
+
+            TryAddCasters(buffId);
+            TryAddCasters(buffName);
+            TryAddCasters(skillId);
+
+            if (matchedCasters.Count > 0)
+                return matchedCasters;
 
             // Tier 2: 動態技能與前綴對照 (Dynamic Skill & Prefix Mapping，不寫死任何角色名稱)
             // 2a: 精確匹配本場出戰角色曾施放之 skillId（特別適用於「同人」等借用他人技能之角色）
@@ -188,7 +211,7 @@ namespace MyDoujinBot.Services
                 {
                     RegisterActiveBuff(targetId, buffId, caster);
                     if (!string.IsNullOrEmpty(buffName)) RegisterActiveBuff(targetId, buffName, caster);
-                    return caster;
+                    return new[] { caster };
                 }
             }
 
@@ -202,15 +225,16 @@ namespace MyDoujinBot.Services
                     {
                         RegisterActiveBuff(targetId, buffId, caster);
                         if (!string.IsNullOrEmpty(buffName)) RegisterActiveBuff(targetId, buffName, caster);
-                        return caster;
+                        return new[] { caster };
                     }
                 }
             }
 
-            // Tier 3: 深度回溯至起點 (回溯到底，至 index 0)
+            // Tier 3: 深度回溯至起點 (回溯到底，至 index 0，找出此目標在當前時間點前所有匹配的施放者)
             if (Logs != null && (!string.IsNullOrEmpty(buffName) || !string.IsNullOrEmpty(buffId)))
             {
                 string? targetName = GetUnitDisplayName(targetId);
+                var backtrackedCasters = new List<string>();
 
                 for (int j = currentIndex - 1; j >= 0; j--)
                 {
@@ -231,11 +255,22 @@ namespace MyDoujinBot.Services
                         if (targetMatches)
                         {
                             string caster = prev.ActorId!;
-                            if (!string.IsNullOrEmpty(buffName)) RegisterActiveBuff(targetId, buffName, caster);
-                            if (!string.IsNullOrEmpty(buffId)) RegisterActiveBuff(targetId, buffId, caster);
-                            return caster;
+                            if (!backtrackedCasters.Contains(caster, StringComparer.Ordinal))
+                            {
+                                backtrackedCasters.Add(caster);
+                            }
                         }
                     }
+                }
+
+                if (backtrackedCasters.Count > 0)
+                {
+                    foreach (var caster in backtrackedCasters)
+                    {
+                        if (!string.IsNullOrEmpty(buffName)) RegisterActiveBuff(targetId, buffName, caster);
+                        if (!string.IsNullOrEmpty(buffId)) RegisterActiveBuff(targetId, buffId, caster);
+                    }
+                    return backtrackedCasters;
                 }
             }
 
@@ -339,8 +374,8 @@ namespace MyDoujinBot.Services
             return idx > 0 ? id.Substring(0, idx + 1).ToLowerInvariant() : null;
         }
 
-        /// <summary>記錄無法歸屬的 BUFF_EFFECT（Tier 4）供戰報底部呈現</summary>
-        public void RecordUnattributedBuff(string targetId, BattleReportLog log, long value)
+        /// <summary>記錄無法歸屬的 BUFF_EFFECT（Tier 4）供戰報【未歸類傷害】區塊呈現</summary>
+        public void RecordUnattributedBuff(string targetId, BattleReportLog log, double value)
         {
             string? buffName = null;
             if (!string.IsNullOrEmpty(log.Message))
@@ -350,26 +385,39 @@ namespace MyDoujinBot.Services
                     buffName = match.Groups["name"].Value.Trim();
             }
 
-            string buffId = log.BuffId ?? string.Empty;
-            string buffType = log.BuffType ?? "DOT";
-            string key = !string.IsNullOrWhiteSpace(buffId) ? buffId : (!string.IsNullOrWhiteSpace(buffName) ? buffName : "unknown");
+            string displayName = !string.IsNullOrWhiteSpace(buffName)
+                ? buffName
+                : (!string.IsNullOrWhiteSpace(log.BuffId) ? log.BuffId : "未知效果");
 
-            if (!Result.UnattributedBuffs.TryGetValue(key, out var record))
+            string buffType = log.BuffType?.ToUpperInvariant() ?? "DOT";
+            var team = GetTeam(targetId);
+
+            if (buffType == "DOT")
             {
-                record = new UnattributedBuffRecord
+                if (team == BattleTeam.Enemy)
                 {
-                    BuffId = buffId,
-                    BuffName = buffName ?? string.Empty,
-                    BuffType = buffType
-                };
-                Result.UnattributedBuffs[key] = record;
+                    Result.EnemyUnattributedDamage[displayName] =
+                        Result.EnemyUnattributedDamage.TryGetValue(displayName, out var cur) ? cur + value : value;
+                }
+                else
+                {
+                    Result.TeamUnattributedDamage[displayName] =
+                        Result.TeamUnattributedDamage.TryGetValue(displayName, out var cur) ? cur + value : value;
+                }
             }
-
-            record.TotalValue += value;
-            record.Count++;
-
-            string targetName = GetUnitDisplayName(targetId) ?? targetId;
-            record.ValueByTarget[targetName] = record.ValueByTarget.TryGetValue(targetName, out var v) ? v + value : value;
+            else if (buffType == "HOT")
+            {
+                if (team == BattleTeam.Enemy)
+                {
+                    Result.EnemyUnattributedHeal[displayName] =
+                        Result.EnemyUnattributedHeal.TryGetValue(displayName, out var cur) ? cur + value : value;
+                }
+                else
+                {
+                    Result.TeamUnattributedHeal[displayName] =
+                        Result.TeamUnattributedHeal.TryGetValue(displayName, out var cur) ? cur + value : value;
+                }
+            }
         }
 
         // ---------------------------------------------------------------------
@@ -386,7 +434,7 @@ namespace MyDoujinBot.Services
         /// - 跨陣營：輸出算在攻擊歸屬者（召喚物歸召喚者）；countAsShot 為 true 時
         ///   出手 ＋1，isCrit 為 true 再加爆擊 ＋1。
         /// </summary>
-        public void ApplyAttackDamage(string actorId, string targetId, long damage, bool countAsShot, bool isCrit)
+        public void ApplyAttackDamage(string actorId, string targetId, double damage, bool countAsShot, bool isCrit)
         {
             GetUnit(targetId).Taken += damage;
 

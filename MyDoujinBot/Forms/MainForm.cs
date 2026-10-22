@@ -3200,7 +3200,9 @@ namespace MyDoujinBot.Forms
                         ChartStyle.HealBar   => (Color.FromArgb(123, 213, 166), FontStyle.Regular),
                         ChartStyle.Fallen    => (Color.FromArgb(255, 160, 60),  FontStyle.Bold),
                         ChartStyle.Dead      => (Color.FromArgb(246, 100, 100), FontStyle.Bold),
+                        ChartStyle.Warning   => (Color.FromArgb(255, 170, 70),  FontStyle.Regular),
                         ChartStyle.Heading   => (Color.FromArgb(255, 215, 70),  FontStyle.Bold),
+                        ChartStyle.UnitTitle => (Color.FromArgb(100, 210, 255), FontStyle.Bold),
                         ChartStyle.Muted     => (Color.FromArgb(160, 160, 180), FontStyle.Italic),
                         _                    => (Color.FromArgb(220, 220, 230), FontStyle.Regular)
                     };
