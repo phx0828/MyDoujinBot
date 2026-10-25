@@ -13,7 +13,7 @@
 | :--- | :--- | :--- |
 | **檔案大小** | ~351 KB (12,469 行) | ~1.26 MB (30,123 行) |
 | **主要用途** | 事件基本目錄、選項成果對照（純淨的選項結果與屬性增減） | 深度攻略路線、DC 檢定門檻、選取次數統計、期望值推薦、前置條件圖譜 |
-| **收錄規模** | 418 個事件、1,244 個選項 | 56 條角色線、424 個事件、1,256 個選項、77 條前置條件、2 套總覽評級 |
+| **收錄規模** | 512 個事件、1,446 個選項 | 66 條角色線、516 個事件、1,528 個選項、102 條前置條件、2 套總覽評級 |
 | **關聯對齊方式** | 根層鍵值為「**事件名稱**」，子層鍵值為「**選項文字**」 | 透過 `title`（事件名稱）與 `label`（選項文字）與簡要檔完全互通對齊；同時額外具備唯一代碼 `key` |
 | **對應 C# 命名空間** | [MyDoujinBot.Models.ExternalEvents](file:///d:/MyDoujinBot/MyDoujinBot/Models/ExternalEvents/ExternalEventBrief.cs) | [MyDoujinBot.Models.ExternalEvents](file:///d:/MyDoujinBot/MyDoujinBot/Models/ExternalEvents/ExternalEventRoute.cs) |
 
@@ -288,8 +288,8 @@ MyDoujinBot/
 
 ### 4.2 反序列化驗證測試
 本規格定義之 C# 模型已於 [Program.cs](file:///C:/Users/phx/.gemini/antigravity-ide/brain/8ae1ef8a-d5e8-4e64-b666-a96d230769de/scratch/test_runner/Program.cs) 進行全量 100% 資料反序列化驗證：
-- **`DefaultEventBrief.json`**：418 個事件全部通過無損解析。
-- **`DefaultEventRoute.json`**：56 條角色線、424 個事件、1,256 個選項、77 條前置條件、2 個總覽設定檔全部通過無損解析。
+- **`DefaultEventBrief.json`**：512 個事件全部通過無損解析。
+- **`DefaultEventRoute.json`**：66 條角色線、516 個事件、1,528 個選項、102 條前置條件、2 個總覽設定檔全部通過無損解析。
 - **專案建置**：`dotnet build /t:Compile` 達成 0 錯誤、0 警告。
 
 ### 4.3 本機儲存與 Jint 線上動態更新機制
@@ -301,7 +301,7 @@ MyDoujinBot/
   - `data/defaults/DefaultEventBrief.json` 與 `data/defaults/DefaultEventRoute.json`。初次使用或本機檔案缺失時自動還原複製（亦內嵌於組件中）。
 - **更新服務類別**：[EventArchiveService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/EventArchiveService.cs)
 - **更新運作方式**：
-  1. 發送 GET 請求取得第三方圖鑑網 HTML。
+  1. 若傳入 Claude Artifact 主網址，自動解析其 `uuid` 與 `manifest` 並查詢後端 API 動態合成當前最新沙盒 Frame URL（若遇 Cloudflare WAF 阻擋則自動啟用 `curl.exe` 備援），再下載沙盒 HTML。
   2. 提取 `<script id="seed">` 原始資料庫與計算腳本。
   3. 動態識別「匯出事件檔」與「匯出路線檔」按鈕所呼叫之函式（`buildExport` 與 `buildRouteExport`）。
   4. 透過內嵌輕量 JS 引擎 **Jint (4.1.0)** 執行計算並輸出 JSON 字串。

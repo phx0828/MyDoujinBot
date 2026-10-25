@@ -52,7 +52,7 @@ namespace MyDoujinBot.Services
     /// </summary>
     public class EventArchiveService
     {
-        public const string DefaultRemoteUrl = "https://48b8ce48-6995-4245-9468-c61c2b43540b.frame.claudeusercontent.com/_f/1792312812-93cc/?__frame_v=manifest.99164b231888b1a4.json";
+        public const string DefaultRemoteUrl = "https://claude.ai/artifact/9yqkhfkm7rTQt4wD7TtsfG";
 
         private readonly string _eventsDir;
         private readonly string _defaultsDir;
@@ -182,28 +182,174 @@ namespace MyDoujinBot.Services
         }
 
         /// <summary>
+        /// 發送 HTTP GET 請求取得字串。若 HttpClient 遇 Cloudflare WAF 防護阻擋 (403 Forbidden)，自動切換至本機 curl.exe 備援。
+        /// </summary>
+        private static async Task<string> FetchStringWithFallbackAsync(
+            string url,
+            System.Collections.Generic.Dictionary<string, string>? headers = null,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                if (headers != null)
+                {
+                    foreach (var kvp in headers)
+                    {
+                        req.Headers.TryAddWithoutValidation(kvp.Key, kvp.Value);
+                    }
+                }
+
+                using var resp = await _httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                if (resp.IsSuccessStatusCode)
+                {
+                    return await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                }
+
+                if (resp.StatusCode != System.Net.HttpStatusCode.Forbidden)
+                {
+                    resp.EnsureSuccessStatusCode();
+                }
+            }
+            catch (Exception ex) when (ex is not InvalidOperationException && !ct.IsCancellationRequested)
+            {
+                // 發生 403 或連線異常時進入 curl.exe 備援
+            }
+
+            // 備援：透過系統 curl.exe 發送請求（自動帶入瀏覽器等級之標準 TLS 握手堆疊）
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "curl.exe",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                psi.ArgumentList.Add("-s");
+                psi.ArgumentList.Add("-A");
+                psi.ArgumentList.Add("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                if (headers != null)
+                {
+                    foreach (var kvp in headers)
+                    {
+                        psi.ArgumentList.Add("-H");
+                        psi.ArgumentList.Add($"{kvp.Key}: {kvp.Value}");
+                    }
+                }
+                psi.ArgumentList.Add(url);
+
+                using var proc = System.Diagnostics.Process.Start(psi);
+                if (proc != null)
+                {
+                    string output = await proc.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+                    await proc.WaitForExitAsync(ct).ConfigureAwait(false);
+                    if (proc.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+                    {
+                        return output;
+                    }
+                }
+            }
+            catch { }
+
+            throw new InvalidOperationException($"無法取得目標網址內容：{url}");
+        }
+
+        /// <summary>
+        /// 解析 Claude Artifact 主頁，自動取得沙盒 UUID、Manifest Pin 與當前發布版本號 (ver)，合成最新 Frame URL。
+        /// 若傳入已為 direct frame URL 則直接回傳。
+        /// </summary>
+        public async Task<string> ResolveFrameUrlAsync(
+            string artifactUrl,
+            Action<string>? onProgress = null,
+            CancellationToken ct = default)
+        {
+            if (artifactUrl.Contains("frame.claudeusercontent.com", StringComparison.OrdinalIgnoreCase))
+            {
+                return artifactUrl;
+            }
+
+            if (!artifactUrl.Contains("claude.ai/artifact/", StringComparison.OrdinalIgnoreCase))
+            {
+                return artifactUrl;
+            }
+
+            onProgress?.Invoke("正在連線至【我的同人攻略圖鑑網】解析沙盒資訊...");
+
+            string html = await FetchStringWithFallbackAsync(artifactUrl, null, ct).ConfigureAwait(false);
+
+            // 1. 取得 data-frame-uuid 與 data-frame-uchost
+            var uuidMatch = Regex.Match(html, @"data-frame-uuid=[""']([^""']+)[""']");
+            if (!uuidMatch.Success)
+            {
+                throw new InvalidOperationException("無法自 Claude Artifact 頁面解析 data-frame-uuid。");
+            }
+            string frameUuid = uuidMatch.Groups[1].Value;
+
+            var uchostMatch = Regex.Match(html, @"data-frame-uchost=[""']([^""']+)[""']");
+            string uchost = uchostMatch.Success ? uchostMatch.Groups[1].Value : $"{frameUuid}.frame.claudeusercontent.com";
+
+            // 2. 取得 frame-runtime-pin 與 build-timestamp
+            var pinMatch = Regex.Match(html, @"<meta[^>]*name=[""']frame-runtime-pin[""'][^>]*content=[""']([^""']+)[""']", RegexOptions.IgnoreCase);
+            if (!pinMatch.Success)
+            {
+                pinMatch = Regex.Match(html, @"<meta[^>]*content=[""']([^""']+)[""'][^>]*name=[""']frame-runtime-pin[""']", RegexOptions.IgnoreCase);
+            }
+            string manifestPin = pinMatch.Success ? pinMatch.Groups[1].Value : "manifest.51dd5bc6ff21b6dc.json";
+
+            var tsMatch = Regex.Match(html, @"<meta[^>]*name=[""']build-timestamp[""'][^>]*content=[""']([^""']+)[""']", RegexOptions.IgnoreCase);
+            string clientVersion = tsMatch.Success ? tsMatch.Groups[1].Value : "1792948231";
+
+            onProgress?.Invoke("正在查詢 Artifact 最新發布版本...");
+
+            // 3. 呼叫 /api/frame/{uuid} 取得最新版本號 (ver)
+            string apiEndpoint = $"https://claude.ai/api/frame/{frameUuid}?via=user_open&bk=initial&actor=id&vt=1&rw=1";
+            var apiHeaders = new System.Collections.Generic.Dictionary<string, string>
+            {
+                ["X-Frame-CP"] = "go",
+                ["X-Frame-Platform"] = "web",
+                ["X-Frame-Surface"] = "standalone",
+                ["X-Frame-Client-Version"] = clientVersion
+            };
+
+            string apiJson = await FetchStringWithFallbackAsync(apiEndpoint, apiHeaders, ct).ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(apiJson);
+            if (!doc.RootElement.TryGetProperty("ver", out var verProp) || string.IsNullOrWhiteSpace(verProp.GetString()))
+            {
+                throw new InvalidOperationException("Claude Frame API 回傳資料未包含版本號 ver。");
+            }
+            string ver = verProp.GetString()!;
+
+            string resolvedUrl = $"https://{uchost}/_f/{ver}/?__frame_v={manifestPin}";
+            return resolvedUrl;
+        }
+
+        /// <summary>
         /// 自第三方網頁更新事件庫。
         /// 執行流程：
-        /// 1. HTTP GET 下載網頁 HTML。
-        /// 2. 擷取 seed 資料庫種子與 script 運算代碼。
-        /// 3. 動態識別按鈕「匯出事件檔」與「匯出路線檔」所綁定之 Function。
-        /// 4. 透過 Jint 記憶體引擎執行 Function 取得 JSON。
-        /// 5. 驗證資料有效性後，以原子方式寫入 EventBrief.json 與 EventRoute.json。
+        /// 1. 若來源為 Claude Artifact 主頁，自動解析最新沙盒 Frame URL。
+        /// 2. HTTP GET 下載網頁 HTML。
+        /// 3. 擷取 seed 資料庫種子與 script 運算代碼。
+        /// 4. 動態識別按鈕「匯出事件檔」與「匯出路線檔」所綁定之 Function。
+        /// 5. 透過 Jint 記憶體引擎執行 Function 取得 JSON。
+        /// 6. 驗證資料有效性後，以原子方式寫入 EventBrief.json 與 EventRoute.json。
         /// </summary>
         public async Task<EventArchiveUpdateResult> UpdateFromRemoteAsync(
             string url = DefaultRemoteUrl,
             Action<string>? onProgress = null,
             CancellationToken ct = default)
         {
-            onProgress?.Invoke("正在連線至【我的同仁攻略圖鑑網】取得最新資料...");
+            string targetUrl = url;
+            if (targetUrl.Contains("claude.ai/artifact/", StringComparison.OrdinalIgnoreCase))
+            {
+                targetUrl = await ResolveFrameUrlAsync(targetUrl, onProgress, ct).ConfigureAwait(false);
+            }
 
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            onProgress?.Invoke("正在連線至【我的同人攻略圖鑑網】取得最新資料...");
 
-            using var resp = await _httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-            resp.EnsureSuccessStatusCode();
-
-            string html = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            string html = await FetchStringWithFallbackAsync(targetUrl, null, ct).ConfigureAwait(false);
 
             onProgress?.Invoke("正在剖析網頁結構...");
 
@@ -392,19 +538,37 @@ function runExportRoute() {{
         {
             // 區塊 1: RW, ptsW, pOf, routeOf
             int pRw = script.IndexOf("const RW =", StringComparison.Ordinal);
+            if (pRw < 0) throw new InvalidOperationException("無法定位 'const RW =' 運算代碼區塊。");
+
             int pGtxt = script.IndexOf("const gtxt =", pRw, StringComparison.Ordinal);
+            if (pGtxt < 0) throw new InvalidOperationException("無法定位 'const gtxt =' 運算代碼區塊。");
+
             string rwPtswBlock = script.Substring(pRw, pGtxt - pRw);
 
             int pRo = script.IndexOf("const routeOf =", StringComparison.Ordinal);
+            if (pRo < 0) throw new InvalidOperationException("無法定位 'const routeOf =' 運算代碼區塊。");
+
             int pRenderPre = script.IndexOf("const renderPre =", pRo, StringComparison.Ordinal);
-            int pRoEnd = script.LastIndexOf("};", pRenderPre, StringComparison.Ordinal) + 2;
+            if (pRenderPre < 0) throw new InvalidOperationException("無法定位 'const renderPre =' 運算代碼區塊。");
+
+            int pRoEnd = script.LastIndexOf("};", pRenderPre, StringComparison.Ordinal);
+            if (pRoEnd < 0) throw new InvalidOperationException("無法定位 routeOf 結束標記。");
+            pRoEnd += 2;
             string routeOfBlock = script.Substring(pRo, pRoEnd - pRo);
 
             // 區塊 2: AB, statsOf, STATN, buildRouteExport, PRE_KIND, preText, buildExport
             int pAb = script.IndexOf("const AB =", StringComparison.Ordinal);
+            if (pAb < 0) throw new InvalidOperationException("無法定位 'const AB =' 運算代碼區塊。");
+
             int pBe = script.IndexOf("const buildExport =", StringComparison.Ordinal);
+            if (pBe < 0) throw new InvalidOperationException("無法定位 'const buildExport =' 運算代碼區塊。");
+
             int pRet = script.IndexOf("return out;", pBe, StringComparison.Ordinal);
-            int pBeEnd = script.IndexOf("};", pRet, StringComparison.Ordinal) + 2;
+            if (pRet < 0) throw new InvalidOperationException("無法定位 'return out;' 運算代碼區塊。");
+
+            int pBeEnd = script.IndexOf("};", pRet, StringComparison.Ordinal);
+            if (pBeEnd < 0) throw new InvalidOperationException("無法定位 buildExport 結束標記。");
+            pBeEnd += 2;
             string exportBlock = script.Substring(pAb, pBeEnd - pAb);
 
             return rwPtswBlock + "\n" + routeOfBlock + "\n" + exportBlock;
