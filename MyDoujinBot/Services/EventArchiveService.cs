@@ -226,7 +226,9 @@ namespace MyDoujinBot.Services
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
-                    CreateNoWindow = true
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = System.Text.Encoding.UTF8,
+                    StandardErrorEncoding = System.Text.Encoding.UTF8
                 };
                 psi.ArgumentList.Add("-s");
                 psi.ArgumentList.Add("-A");
@@ -244,8 +246,10 @@ namespace MyDoujinBot.Services
                 using var proc = System.Diagnostics.Process.Start(psi);
                 if (proc != null)
                 {
-                    string output = await proc.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-                    await proc.WaitForExitAsync(ct).ConfigureAwait(false);
+                    var outputTask = proc.StandardOutput.ReadToEndAsync();
+                    var errorTask = proc.StandardError.ReadToEndAsync();
+                    await Task.WhenAll(outputTask, errorTask, proc.WaitForExitAsync(ct)).ConfigureAwait(false);
+                    string output = await outputTask.ConfigureAwait(false);
                     if (proc.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
                     {
                         return output;
@@ -339,7 +343,8 @@ namespace MyDoujinBot.Services
         public async Task<EventArchiveUpdateResult> UpdateFromRemoteAsync(
             string url = DefaultRemoteUrl,
             Action<string>? onProgress = null,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            bool syncDefaults = true)
         {
             string targetUrl = url;
             if (targetUrl.Contains("claude.ai/artifact/", StringComparison.OrdinalIgnoreCase))
@@ -473,6 +478,36 @@ function runExportRoute() {{
             // 7. 原子寫入 (先寫入 .tmp 再覆寫目標檔)
             SaveAtomic(_briefPath, generatedBriefJson);
             SaveAtomic(_routePath, generatedRouteJson);
+
+            // 同步寫入出廠預設資料庫 (data/defaults/)
+            if (syncDefaults)
+            {
+                try
+                {
+                    if (!Directory.Exists(_defaultsDir))
+                    {
+                        Directory.CreateDirectory(_defaultsDir);
+                    }
+                    string defaultBriefPath = Path.Combine(_defaultsDir, "DefaultEventBrief.json");
+                    string defaultRoutePath = Path.Combine(_defaultsDir, "DefaultEventRoute.json");
+
+                    var indentOptions = new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    };
+
+                    string formattedBrief = JsonSerializer.Serialize(briefObj, indentOptions);
+                    string formattedRoute = JsonSerializer.Serialize(routeObj, indentOptions);
+
+                    SaveAtomic(defaultBriefPath, formattedBrief);
+                    SaveAtomic(defaultRoutePath, formattedRoute);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[EventArchiveService] 同步出廠預設庫異常: {ex.Message}");
+                }
+            }
 
             int totalRouteEvents = 0;
             var newChainNames = new System.Collections.Generic.List<string>();
