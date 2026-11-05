@@ -571,14 +571,18 @@ function runExportRoute() {{
         /// </summary>
         private static string ExtractCalculationJs(string script)
         {
-            // 區塊 1: RW, ptsW, pOf, routeOf
-            int pRw = script.IndexOf("const RW =", StringComparison.Ordinal);
-            if (pRw < 0) throw new InvalidOperationException("無法定位 'const RW =' 運算代碼區塊。");
+            // 區塊 1: RFOC, RFW, RW, pM, SNx, ptsW, pOf, routeOf
+            int pStart = script.IndexOf("const RFOC =", StringComparison.Ordinal);
+            if (pStart < 0)
+            {
+                pStart = script.IndexOf("const RW =", StringComparison.Ordinal);
+            }
+            if (pStart < 0) throw new InvalidOperationException("無法定位 'const RFOC =' 或 'const RW =' 運算代碼區塊。");
 
-            int pGtxt = script.IndexOf("const gtxt =", pRw, StringComparison.Ordinal);
+            int pGtxt = script.IndexOf("const gtxt =", pStart, StringComparison.Ordinal);
             if (pGtxt < 0) throw new InvalidOperationException("無法定位 'const gtxt =' 運算代碼區塊。");
 
-            string rwPtswBlock = script.Substring(pRw, pGtxt - pRw);
+            string rwPtswBlock = script.Substring(pStart, pGtxt - pStart);
 
             int pRo = script.IndexOf("const routeOf =", StringComparison.Ordinal);
             if (pRo < 0) throw new InvalidOperationException("無法定位 'const routeOf =' 運算代碼區塊。");
