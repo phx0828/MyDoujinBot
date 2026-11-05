@@ -189,6 +189,7 @@ namespace MyDoujinBot.Forms
         private CheckBox chkEventNotifySound = null!;
         private Label lblEventArchiveStatus = null!;
         private Button btnUpdateEventArchive = null!;
+        private Button btnImportEventArchive = null!;
         private EventCustomChoicePanel _eventChoicePanel = null!;
 
         // --- 分頁 5: 戰報分析控制項 ---
@@ -2839,7 +2840,18 @@ namespace MyDoujinBot.Forms
             _eventChoicePanel = new EventCustomChoicePanel(_eventArchiveService);
             TblAdd(tbl, _eventChoicePanel);
 
-            // 第三方事件檔案庫更新按鈕與狀態列 (移至該分類最下面)
+            // 第三方事件檔案庫更新按鈕列與狀態列 (移至該分類最下面)
+            var pnlArchiveButtons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                BackColor = Color.Transparent,
+                Padding = Padding.Empty,
+                Margin = new Padding(ScaleDpi(16), ScaleDpi(6), 0, ScaleDpi(4))
+            };
+
             btnUpdateEventArchive = new IconButton
             {
                 Text = " 更新事件庫",
@@ -2855,11 +2867,36 @@ namespace MyDoujinBot.Forms
                 TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(ScaleDpi(10), ScaleDpi(4), ScaleDpi(10), ScaleDpi(4)),
-                Margin = new Padding(ScaleDpi(16), ScaleDpi(6), 0, ScaleDpi(4))
+                Margin = new Padding(0, 0, ScaleDpi(8), 0)
             };
             btnUpdateEventArchive.FlatAppearance.BorderSize = 0;
             btnUpdateEventArchive.Click += OnUpdateEventArchiveClicked;
-            TblAdd(tbl, btnUpdateEventArchive);
+            statusToolTip.SetToolTip(btnUpdateEventArchive, "點擊連線第三方網站線上更新本機事件庫");
+
+            btnImportEventArchive = new IconButton
+            {
+                Text = " 手動匯入更新",
+                AutoSize = true,
+                BackColor = Color.FromArgb(52, 78, 72),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                Cursor = Cursors.Hand,
+                IconChar = IconChar.FileImport,
+                IconColor = Color.White,
+                IconSize = ScaleDpi(18),
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                ImageAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(ScaleDpi(10), ScaleDpi(4), ScaleDpi(10), ScaleDpi(4)),
+                Margin = Padding.Empty
+            };
+            btnImportEventArchive.FlatAppearance.BorderSize = 0;
+            btnImportEventArchive.Click += OnImportEventArchiveClicked;
+            statusToolTip.SetToolTip(btnImportEventArchive, "當線上更新異常時，可手動選取或貼上「匯出路線檔」JSON 進行更新");
+
+            pnlArchiveButtons.Controls.Add(btnUpdateEventArchive);
+            pnlArchiveButtons.Controls.Add(btnImportEventArchive);
+            TblAdd(tbl, pnlArchiveButtons);
 
             lblEventArchiveStatus = new Label
             {
@@ -2904,6 +2941,7 @@ namespace MyDoujinBot.Forms
 
             // 鎖定畫面，避免尚未更新完成使用者搶著操作
             btnUpdateEventArchive.Enabled = false;
+            if (btnImportEventArchive != null) btnImportEventArchive.Enabled = false;
             var prevCursor = this.Cursor;
             this.Cursor = Cursors.WaitCursor;
 
@@ -2941,26 +2979,7 @@ namespace MyDoujinBot.Forms
 
                 if (result.Success)
                 {
-                    static string FormatDelta(int diff) => diff switch
-                    {
-                        > 0 => $"+{diff}",
-                        < 0 => $"{diff}",
-                        _ => "無增減"
-                    };
-
-                    string briefDelta = FormatDelta(result.BriefEventDiff);
-                    string chainDelta = FormatDelta(result.RouteChainDiff);
-
-                    UpdateEventArchiveStatusText();
-                    _eventChoicePanel?.ReloadRegistry();
-                    AppendLog($"[事件庫] {result.Message}", Color.FromArgb(100, 220, 140));
-
-                    string detail = "事件庫已更新完成！\n\n" +
-                                    $"• 事件總數：{result.BriefEventCount} 個（{briefDelta}）\n" +
-                                    $"• 路線總數：{result.RouteChainCount} 條（{chainDelta}）\n" +
-                                    $"• 路線節點：{result.RouteEventCount} 個（{FormatDelta(result.RouteEventDiff)}）\n\n";
-
-                    MessageBox.Show(this, detail, "事件庫更新成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    HandleEventArchiveUpdateSuccess(result);
                 }
             }
             catch (Exception ex)
@@ -2973,12 +2992,46 @@ namespace MyDoujinBot.Forms
             finally
             {
                 btnUpdateEventArchive.Enabled = true;
+                if (btnImportEventArchive != null) btnImportEventArchive.Enabled = true;
                 rbEventAuto.Enabled = prevAuto;
                 rbEventManual.Enabled = prevManual;
                 foreach (var navBtn in _navButtons) SetNavLocked(navBtn, false);
                 this.Cursor = prevCursor;
                 statusToolTip.SetToolTip(btnUpdateEventArchive, "點擊連線第三方網站線上更新本機事件庫");
             }
+        }
+
+        private void OnImportEventArchiveClicked(object? sender, EventArgs e)
+        {
+            using var importForm = new EventArchiveImportForm(_eventArchiveService);
+            if (importForm.ShowDialog(this) == DialogResult.OK && importForm.UpdateResult is { Success: true } result)
+            {
+                HandleEventArchiveUpdateSuccess(result);
+            }
+        }
+
+        private void HandleEventArchiveUpdateSuccess(EventArchiveUpdateResult result)
+        {
+            static string FormatDelta(int diff) => diff switch
+            {
+                > 0 => $"+{diff}",
+                < 0 => $"{diff}",
+                _ => "無增減"
+            };
+
+            string briefDelta = FormatDelta(result.BriefEventDiff);
+            string chainDelta = FormatDelta(result.RouteChainDiff);
+
+            UpdateEventArchiveStatusText();
+            _eventChoicePanel?.ReloadRegistry();
+            AppendLog($"[事件庫] {result.Message}", Color.FromArgb(100, 220, 140));
+
+            string detail = "事件庫已更新完成！\n\n" +
+                            $"• 事件總數：{result.BriefEventCount} 個（{briefDelta}）\n" +
+                            $"• 路線總數：{result.RouteChainCount} 條（{chainDelta}）\n" +
+                            $"• 路線節點：{result.RouteEventCount} 個（{FormatDelta(result.RouteEventDiff)}）\n\n";
+
+            MessageBox.Show(this, detail, "事件庫更新成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void OnEventModeGroupChanged()

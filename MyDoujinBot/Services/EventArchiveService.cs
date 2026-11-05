@@ -446,6 +446,142 @@ function runExportRoute() {{
                 throw new InvalidOperationException($"產出資料異常 (事件數: {briefObj.Count}, 路線數: {routeObj.Chains.Count})。");
             }
 
+            return ApplyArchiveUpdate(routeObj, generatedRouteJson, briefObj, generatedBriefJson, syncDefaults, onProgress);
+        }
+
+        /// <summary>
+        /// 自手動匯入之路線檔 JSON 字串更新本機事件庫（自動更新之備援機制）。
+        /// 支援直接貼上「匯出路線檔」JSON 文字，並自動由路線結構合成對應之 EventBrief.json。
+        /// </summary>
+        public EventArchiveUpdateResult ImportFromRouteJson(
+            string routeJson,
+            bool syncDefaults = true,
+            Action<string>? onProgress = null)
+        {
+            if (string.IsNullOrWhiteSpace(routeJson))
+            {
+                throw new InvalidOperationException("匯入的 JSON 內容為空。");
+            }
+
+            onProgress?.Invoke("正在驗證路線檔 JSON 結構...");
+
+            ExternalRouteFile? routeObj;
+            try
+            {
+                routeObj = JsonSerializer.Deserialize<ExternalRouteFile>(routeJson, _jsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException($"JSON 格式解析失敗，請確認內容是否完整：{ex.Message}", ex);
+            }
+
+            if (routeObj == null || routeObj.Chains == null || routeObj.Chains.Count == 0)
+            {
+                throw new InvalidOperationException("匯入的資料不包含有效的路線結構（chains 為空）。請確認在網站上點擊的是「匯出路線檔」而非「匯出事件檔」。");
+            }
+
+            var briefObj = BuildBriefFromRoute(routeObj);
+            if (briefObj.Count == 0)
+            {
+                throw new InvalidOperationException("路線檔中未包含任何有效事件節點。");
+            }
+
+            var indentOptions = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            };
+            string generatedBriefJson = JsonSerializer.Serialize(briefObj, indentOptions);
+
+            return ApplyArchiveUpdate(routeObj, routeJson, briefObj, generatedBriefJson, syncDefaults, onProgress);
+        }
+
+        /// <summary>
+        /// 自本機路線檔 (.json) 匯入更新事件庫。
+        /// </summary>
+        public EventArchiveUpdateResult ImportFromRouteFile(
+            string filePath,
+            bool syncDefaults = true,
+            Action<string>? onProgress = null)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                throw new FileNotFoundException("找不到指定的路線檔。", filePath);
+            }
+
+            string routeJson = File.ReadAllText(filePath);
+            return ImportFromRouteJson(routeJson, syncDefaults, onProgress);
+        }
+
+        /// <summary>
+        /// 由路線檔物件合成對應之簡要事件檔物件，確保單獨匯入路線檔時 EventBrief.json 與事件數量統計維持同步。
+        /// </summary>
+        private static ExternalEventBriefFile BuildBriefFromRoute(ExternalRouteFile routeObj)
+        {
+            var brief = new ExternalEventBriefFile();
+            if (routeObj.Chains == null) return brief;
+
+            foreach (var chain in routeObj.Chains.Values)
+            {
+                if (chain.Events == null) continue;
+                foreach (var ev in chain.Events)
+                {
+                    if (string.IsNullOrWhiteSpace(ev.Title) || ev.Options == null) continue;
+
+                    if (!brief.TryGetValue(ev.Title, out var optDict))
+                    {
+                        optDict = new System.Collections.Generic.Dictionary<string, ExternalEventBriefOption>();
+                        brief[ev.Title] = optDict;
+                    }
+
+                    foreach (var opt in ev.Options)
+                    {
+                        if (string.IsNullOrWhiteSpace(opt.Label)) continue;
+
+                        var briefOpt = new ExternalEventBriefOption
+                        {
+                            Success = new ExternalEventBriefOutcome
+                            {
+                                Stats = opt.OnSuccess ?? new(),
+                                Encounter = opt.Encounter?.HasEncounter ?? false,
+                                Unlock = opt.Unlock
+                            }
+                        };
+
+                        if (opt.OnFail != null)
+                        {
+                            briefOpt.Failed = new ExternalEventBriefOutcome
+                            {
+                                Stats = opt.OnFail,
+                                Encounter = opt.Encounter?.IsAlways ?? false,
+                                Unlock = null
+                            };
+                        }
+
+                        optDict[opt.Label] = briefOpt;
+                    }
+
+                    if (optDict.Count == 0)
+                    {
+                        brief.Remove(ev.Title);
+                    }
+                }
+            }
+
+            return brief;
+        }
+
+        /// <summary>
+        /// 執行差異比對、原子寫入 data/events/、同步出廠預設檔與更新 metadata.json。
+        /// </summary>
+        private EventArchiveUpdateResult ApplyArchiveUpdate(
+            ExternalRouteFile routeObj,
+            string routeJson,
+            ExternalEventBriefFile briefObj,
+            string briefJson,
+            bool syncDefaults,
+            Action<string>? onProgress = null)
+        {
             // 讀取更新前的本機資料庫狀態（用於計算增減數量）
             int prevBriefCount = 0;
             int prevChainCount = 0;
@@ -476,8 +612,8 @@ function runExportRoute() {{
             onProgress?.Invoke("正在儲存至本機檔案庫 (data/events/)...");
 
             // 7. 原子寫入 (先寫入 .tmp 再覆寫目標檔)
-            SaveAtomic(_briefPath, generatedBriefJson);
-            SaveAtomic(_routePath, generatedRouteJson);
+            SaveAtomic(_briefPath, briefJson);
+            SaveAtomic(_routePath, routeJson);
 
             // 同步寫入出廠預設資料庫 (data/defaults/)
             if (syncDefaults)
@@ -539,15 +675,19 @@ function runExportRoute() {{
             string msg = $"更新成功！共載入 {briefObj.Count} 個事件（{briefDiffText}）、{routeObj.Chains.Count} 條路線（{chainDiffText}，共 {totalRouteEvents} 個節點）。";
 
             var now = DateTime.Now;
+            string siteName = !string.IsNullOrWhiteSpace(routeObj.About?.Site) ? routeObj.About.Site : "我的同人攻略圖鑑網";
+            string authorName = !string.IsNullOrWhiteSpace(routeObj.About?.Author) ? routeObj.About.Author : "赤羽和一（Discord）";
+            string dataDate = !string.IsNullOrWhiteSpace(routeObj.About?.DataDate) ? routeObj.About.DataDate : now.ToString("yyyy-MM-dd");
+
             var meta = new EventArchiveMetadata
             {
-                Version = routeObj.About.Version > 0 ? routeObj.About.Version : 2,
+                Version = routeObj.About?.Version > 0 ? routeObj.About.Version : 2,
                 LastUpdatedAt = now,
-                Site = routeObj.About.Site,
-                Author = routeObj.About.Author,
+                Site = siteName,
+                Author = authorName,
                 BriefEventCount = briefObj.Count,
                 RouteChainCount = routeObj.Chains.Count,
-                SourceInfo = $"{routeObj.About.Site} ({routeObj.About.DataDate})"
+                SourceInfo = $"{siteName} ({dataDate})"
             };
             SaveMetadata(meta);
 
