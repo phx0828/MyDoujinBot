@@ -8,7 +8,7 @@
 
 ## 1. 玩家自身基本資訊 (`users/me`)
 
-- **端點 URL**：`GET https://mydoujin-backend.onrender.com/api/users/me`
+- **端點 URL**：`GET https://api.mydoujin.online/api/users/me`
 - **用途**：取得目前登入使用者的帳號資訊、當前出戰角色 ID 與目前所在最高樓層。
 - **對應 C# Model**：[UserMeResponse.cs](file:///d:/MyDoujinBot/MyDoujinBot/Models/UserMeResponse.cs)
 
@@ -27,7 +27,7 @@
 
 ## 2. 行動與即時狀態 (`action/status`)
 
-- **端點 URL**：`GET https://mydoujin-backend.onrender.com/api/action/status`
+- **端點 URL**：`GET https://api.mydoujin.online/api/action/status`
 - **用途**：取得即時冷卻剩餘時間、未決策的突發事件、樓層獎勵冷卻與滿等狀態。
 - **對應 C# Model**：[ActionStatusResponse.cs](file:///d:/MyDoujinBot/MyDoujinBot/Models/ActionStatusResponse.cs)
 
@@ -65,7 +65,7 @@
 
 ## 3. 當前出戰角色詳情 (`characters/active`)
 
-- **端點 URL**：`GET https://mydoujin-backend.onrender.com/api/characters/active`
+- **端點 URL**：`GET https://api.mydoujin.online/api/characters/active`
 - **用途**：取得當前出戰角色的各項九圍能力、扔屎與沾屎戰績統計、技能配備、紙娃娃外觀與轉生狀態。
 - **頂層包裹**：`{ "character": { ... } }`
 - **對應 C# Model**：[ActiveCharacterResponse.cs](file:///d:/MyDoujinBot/MyDoujinBot/Models/ActiveCharacterResponse.cs)
@@ -137,7 +137,7 @@
 
 ## 4. 全角色清單與轉生配點 (`characters`)
 
-- **端點 URL**：`GET https://mydoujin-backend.onrender.com/api/characters`
+- **端點 URL**：`GET https://api.mydoujin.online/api/characters`
 - **用途**：取得玩家擁有的全部角色清單、事件偏好名單、最高跳樓層數以及分配轉生點配置。
 - **對應 C# Model**：[CharactersResponse.cs](file:///d:/MyDoujinBot/MyDoujinBot/Models/CharactersResponse.cs)
 
@@ -224,7 +224,7 @@
 
 ## 5. 訓練與探險行動 (`action/explore`)
 
-- **端點 URL**：`POST https://mydoujin-backend.onrender.com/api/action/explore`
+- **端點 URL**：`POST https://api.mydoujin.online/api/action/explore`
 - **用途**：執行指定的訓練/探險行動，回傳本次行動冷卻、是否滿等、出戰角色即時資料、行動結算結果，以及是否觸發突發事件。
 - **Request Payload**：`{ "actionId": "charity" }`（例：`hunt`, `training`, `picnic`, `flirt`, `charity`, `rest`, `fishing`）
 - **對應 C# Model**：[TrainingResponse.cs](file:///d:/MyDoujinBot/MyDoujinBot/Models/TrainingResponse.cs)

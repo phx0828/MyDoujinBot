@@ -11,7 +11,7 @@ namespace MyDoujinBot.Services
     /// </summary>
     public class TrainingService : IDisposable
     {
-        private const string TrainingEndpoint = "https://mydoujin-backend.onrender.com/api/action/explore";
+        private const string TrainingEndpoint = $"{HttpService.ApiBaseUrl}/action/explore";
         private readonly HttpService _httpService;
 
         public TrainingService(HttpService? httpService = null)

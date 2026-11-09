@@ -12,10 +12,10 @@ namespace MyDoujinBot.Services
     /// </summary>
     public class UserService : IDisposable
     {
-        private const string MeEndpoint = "https://mydoujin-backend.onrender.com/api/users/me";
-        private const string ActiveCharacterEndpoint = "https://mydoujin-backend.onrender.com/api/characters/active";
-        private const string ActionStatusEndpoint = "https://mydoujin-backend.onrender.com/api/action/status";
-        private const string FloorRewardEndpoint = "https://mydoujin-backend.onrender.com/api/action/floor-reward";
+        private const string MeEndpoint = $"{HttpService.ApiBaseUrl}/users/me";
+        private const string ActiveCharacterEndpoint = $"{HttpService.ApiBaseUrl}/characters/active";
+        private const string ActionStatusEndpoint = $"{HttpService.ApiBaseUrl}/action/status";
+        private const string FloorRewardEndpoint = $"{HttpService.ApiBaseUrl}/action/floor-reward";
 
         private readonly HttpService _httpService;
         private readonly bool _ownsHttpService;

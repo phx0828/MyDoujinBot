@@ -7,7 +7,7 @@ namespace MyDoujinBot.Services
 {
     public class BattleService
     {
-        private const string BaseUrl = "https://mydoujin-backend.onrender.com/api";
+        private const string BaseUrl = HttpService.ApiBaseUrl;
         private readonly HttpService _httpService;
 
         public BattleService()

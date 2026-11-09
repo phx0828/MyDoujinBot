@@ -1,6 +1,6 @@
 # MyDoujin Bot - API 端點與服務對照手冊 (API Catalog)
 
-> **基礎伺服器網址**：`https://mydoujin-backend.onrender.com/api`  
+> **基礎伺服器網址**：`https://api.mydoujin.online/api`（統一於 [HttpService.ApiBaseUrl](file:///d:/MyDoujinBot/MyDoujinBot/Services/HttpService.cs#L26) 集中管理）  
 > **目標遊戲主機**：`https://mydoujin.online`  
 > **通用標頭 (Headers)**：由 [HttpService.cs](file:///d:/MyDoujinBot/MyDoujinBot/Services/HttpService.cs) 統一封裝，所有呼叫自動帶入：
 > - `Authorization: Bearer <Token>`

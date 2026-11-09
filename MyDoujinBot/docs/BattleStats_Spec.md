@@ -9,7 +9,7 @@
 
 ## 2. 輸入：API
 
-- `GET https://mydoujin-backend.onrender.com/api/battle-reports/{戰報編號}`（例：`.../118253`）
+- `GET https://api.mydoujin.online/api/battle-reports/{戰報編號}`（例：`.../118253`）
 - 錯誤處理（需明確提示玩家）：編號不存在、網路失敗、逾時、回傳格式異常。
 
 ### 回傳資料結構
@@ -204,6 +204,6 @@ Bulleyez (木之本櫻) 【死亡】
 ## 7. 現有專案參考（實作時沿用）
 
 - 網路層：[HttpService.cs](../Services/HttpService.cs) 的 `GetAsync<T>` / `ApiResponse<T>`。
-- 業務層：[BattleService.cs](../Services/BattleService.cs)（`BaseUrl` 已為 `https://mydoujin-backend.onrender.com/api`）。
+- 業務層：[BattleService.cs](../Services/BattleService.cs)（`BaseUrl` 引用 `HttpService.ApiBaseUrl`，即 `https://api.mydoujin.online/api`）。
 - Models：[Models/](../Models/)（`BattleReportResponse`、`BattleStatsResult` 等）。
 - UI：[BattleStatsForm.cs](../Forms/BattleStatsForm.cs)（深色主題背景 `28,28,38`、RichTextBox LOG 區）。

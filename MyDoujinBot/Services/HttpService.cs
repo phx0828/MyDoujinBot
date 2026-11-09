@@ -20,6 +20,11 @@ namespace MyDoujinBot.Services
     /// </summary>
     public class HttpService : IDisposable
     {
+        /// <summary>
+        /// 遊戲後端 API 基礎網址（統一於此集中管理，所有 Service 共用）。
+        /// </summary>
+        public const string ApiBaseUrl = "https://api.mydoujin.online/api";
+
         private readonly HttpClient _httpClient;
 
         private static readonly JsonSerializerOptions _jsonOptions = new()

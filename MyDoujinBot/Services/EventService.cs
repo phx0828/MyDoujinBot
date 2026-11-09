@@ -11,7 +11,7 @@ namespace MyDoujinBot.Services
     /// </summary>
     public class EventService : IDisposable
     {
-        private const string EventEndpoint = "https://mydoujin-backend.onrender.com/api/action/resolve";
+        private const string EventEndpoint = $"{HttpService.ApiBaseUrl}/action/resolve";
         private readonly HttpService _httpService;
 
         public EventService(HttpService? httpService = null)
