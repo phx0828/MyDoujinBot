@@ -1,11 +1,14 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using FontAwesome.Sharp;
 using MyDoujinBot.Models;
 using MyDoujinBot.Services;
+using MyDoujinBot.Utilities;
 
 namespace MyDoujinBot.Forms
 {
@@ -14,9 +17,12 @@ namespace MyDoujinBot.Forms
     /// </summary>
     public sealed class PlayerDetailForm : Form
     {
-        private static readonly Color DeadNameColor   = Color.FromArgb(245, 85, 85);
-        private static readonly Color SoiledNameColor = Color.FromArgb(195, 135, 75);
-        private static readonly Color NormalNameColor = Color.FromArgb(240, 240, 250);
+        private static readonly Color DeadNameColor               = Color.FromArgb(245, 85, 85);
+        private static readonly Color SoiledNameColor             = Color.FromArgb(195, 135, 75);
+        private static readonly Color NormalNameColor             = Color.FromArgb(240, 240, 250);
+        private static readonly Color UniformStatValueColor       = Color.FromArgb(235, 238, 248);
+        private static readonly Color HighestStatValueColor       = Color.FromArgb(255, 215, 70);  // 金黃色（除 HP 外最高）
+        private static readonly Color SecondHighestStatValueColor = Color.FromArgb(242, 232, 185); // 偏白淺暖黃（除 HP 外次高）
 
         private readonly BattleService _battleService;
         private readonly string _playerId;
@@ -24,15 +30,15 @@ namespace MyDoujinBot.Forms
         private readonly PlayerSummaryItem? _summaryHint;
         private readonly CancellationTokenSource _cts = new();
 
+        private string _currentPlayerId;
         private PictureBox _picAvatar = null!;
-        private Bitmap? _loadedAvatar;
         private Label _lblNickname = null!;
-        private Label _lblStatusTags = null!;
+        private Label _lblDeadTag = null!;
+        private Label _lblPersonalStatus = null!;
         private Label _lblCharacterTitle = null!;
-        private Label _lblLevelExp = null!;
-        private Label _lblFloorStatus = null!;
+        private Label _lblLevelFloor = null!;
+        private IconPictureBox _picCopyIdIcon = null!;
         private Label _lblPlayerIdValue = null!;
-        private IconButton _btnCopyId = null!;
         private Label _lblCopyFeedback = null!;
         private Label _lblLoadingStatus = null!;
 
@@ -66,17 +72,18 @@ namespace MyDoujinBot.Forms
         {
             _battleService = battleService;
             _playerId = playerId;
+            _currentPlayerId = playerId;
             _token = token;
             _summaryHint = summaryHint;
 
             string initName = summaryHint?.Nickname ?? playerId;
             this.Text = $"玩家詳細資訊 - {initName}";
-            this.Size = new Size(ScaleDpi(600), ScaleDpi(540));
-            this.MinimumSize = new Size(ScaleDpi(540), ScaleDpi(480));
+            this.Size = new Size(ScaleDpi(620), ScaleDpi(580));
+            this.MinimumSize = new Size(ScaleDpi(560), ScaleDpi(520));
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(22, 22, 30);
             this.ForeColor = Color.FromArgb(225, 225, 238);
-            this.Font = new Font("Microsoft JhengHei UI", 9.5f);
+            this.Font = new Font("Microsoft JhengHei UI", 10.5f);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -93,7 +100,6 @@ namespace MyDoujinBot.Forms
             {
                 _cts.Cancel();
                 _cts.Dispose();
-                _loadedAvatar?.Dispose();
             };
         }
 
@@ -124,19 +130,20 @@ namespace MyDoujinBot.Forms
                 ColumnCount = 2,
                 RowCount = 1,
                 BackColor = Color.FromArgb(30, 32, 44),
-                Padding = new Padding(ScaleDpi(12)),
+                Padding = new Padding(ScaleDpi(14)),
                 Margin = new Padding(0, 0, 0, ScaleDpi(10))
             };
             pnlHeaderCard.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             pnlHeaderCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
-            _picAvatar = new PictureBox
+            _picAvatar = new HighQualityAvatarBox
             {
-                Size = new Size(ScaleDpi(76), ScaleDpi(76)),
+                Size = new Size(ScaleDpi(96), ScaleDpi(96)),
                 SizeMode = PictureBoxSizeMode.Zoom,
                 BackColor = Color.FromArgb(40, 42, 56),
                 BorderStyle = BorderStyle.FixedSingle,
-                Margin = new Padding(0, ScaleDpi(2), ScaleDpi(14), 0)
+                Margin = new Padding(0, ScaleDpi(4), ScaleDpi(16), 0),
+                Image = _battleService.TryGetCachedAvatarBitmap(_summaryHint?.ImagePath, 0)
             };
             pnlHeaderCard.Controls.Add(_picAvatar, 0, 0);
 
@@ -151,7 +158,7 @@ namespace MyDoujinBot.Forms
             };
             tblInfo.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
-            // 暱稱 + 狀態標記列
+            // 1. 暱稱 (死亡標記紅色字體「(死亡)」)
             var pnlNameRow = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
@@ -159,71 +166,73 @@ namespace MyDoujinBot.Forms
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = true,
                 BackColor = Color.Transparent,
-                Margin = new Padding(0, 0, 0, ScaleDpi(2))
+                Margin = new Padding(0, 0, 0, ScaleDpi(3))
             };
+
+            bool initDead = _summaryHint?.IsDead ?? false;
+            bool initSoiled = _summaryHint?.IsSoiled ?? false;
 
             _lblNickname = new Label
             {
                 Text = _summaryHint?.Nickname ?? "載入中...",
-                Font = new Font("Microsoft JhengHei UI", 13f, FontStyle.Bold),
-                ForeColor = GetNicknameColor(_summaryHint?.IsDead ?? false, _summaryHint?.IsSoiled ?? false),
+                Font = new Font("Microsoft JhengHei UI", 14.5f, FontStyle.Bold),
+                ForeColor = GetNicknameColor(initDead, initSoiled),
                 AutoSize = true,
-                Margin = new Padding(0, 0, ScaleDpi(8), 0)
+                Margin = new Padding(0, 0, ScaleDpi(6), 0)
             };
 
-            _lblStatusTags = new Label
+            _lblDeadTag = new Label
             {
-                Text = FormatStatusBadgeText(_summaryHint?.IsDead ?? false, _summaryHint?.IsSoiled ?? false),
-                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                ForeColor = (_summaryHint?.IsDead ?? false) ? DeadNameColor : SoiledNameColor,
+                Text = "(死亡)",
+                Font = new Font("Microsoft JhengHei UI", 12.5f, FontStyle.Bold),
+                ForeColor = DeadNameColor,
                 AutoSize = true,
-                Margin = new Padding(0, ScaleDpi(4), 0, 0)
+                Visible = initDead,
+                Margin = new Padding(0, ScaleDpi(2), 0, 0)
             };
 
             pnlNameRow.Controls.Add(_lblNickname);
-            pnlNameRow.Controls.Add(_lblStatusTags);
+            pnlNameRow.Controls.Add(_lblDeadTag);
             tblInfo.Controls.Add(pnlNameRow, 0, 0);
 
-            // 角色與稱號
+            // 2. 狀態文字
+            _lblPersonalStatus = new Label
+            {
+                Text = !string.IsNullOrWhiteSpace(_summaryHint?.PersonalStatus)
+                    ? _summaryHint.PersonalStatus
+                    : "—",
+                Font = new Font("Microsoft JhengHei UI", 10.5f),
+                ForeColor = Color.FromArgb(175, 185, 205),
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, ScaleDpi(3))
+            };
+            tblInfo.Controls.Add(_lblPersonalStatus, 0, 1);
+
+            // 3. 角色（稱號）
             _lblCharacterTitle = new Label
             {
                 Text = _summaryHint != null
-                    ? $"角色：{_summaryHint.CharacterName}（{_summaryHint.CharacterTitle}）"
-                    : "角色：載入中...",
-                Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
+                    ? FormatCharacterTitle(_summaryHint.CharacterName, _summaryHint.CharacterTitle)
+                    : "載入中...",
+                Font = new Font("Microsoft JhengHei UI", 11.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(140, 195, 255),
                 AutoSize = true,
-                Margin = new Padding(0, 0, 0, ScaleDpi(2))
+                Margin = new Padding(0, 0, 0, ScaleDpi(3))
             };
-            tblInfo.Controls.Add(_lblCharacterTitle, 0, 1);
+            tblInfo.Controls.Add(_lblCharacterTitle, 0, 2);
 
-            // 等級與經驗值
-            _lblLevelExp = new Label
+            // 4. 等級：Lv.88｜樓層：1F / 80F
+            _lblLevelFloor = new Label
             {
-                Text = _summaryHint != null ? $"等級：Lv.{_summaryHint.Level}" : "等級：—",
-                Font = new Font("Microsoft JhengHei UI", 9.5f),
-                ForeColor = Color.FromArgb(205, 210, 225),
+                Text = FormatLevelAndFloor(_summaryHint?.Level ?? 0, _summaryHint?.Floor ?? 0, _summaryHint?.HighestFloor ?? 0),
+                Font = new Font("Microsoft JhengHei UI", 11f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(215, 220, 235),
                 AutoSize = true,
-                Margin = new Padding(0, 0, 0, ScaleDpi(2))
-            };
-            tblInfo.Controls.Add(_lblLevelExp, 0, 2);
-
-            // 樓層與個人狀態（若有）
-            _lblFloorStatus = new Label
-            {
-                Text = _summaryHint != null
-                    ? $"層數：{_summaryHint.Floor} / {_summaryHint.HighestFloor} F" +
-                      (!string.IsNullOrWhiteSpace(_summaryHint.PersonalStatus) ? $" ｜ 狀態：{_summaryHint.PersonalStatus}" : "")
-                    : string.Empty,
-                Font = new Font("Microsoft JhengHei UI", 9f),
-                ForeColor = Color.FromArgb(165, 175, 195),
-                AutoSize = true,
-                Visible = _summaryHint != null,
                 Margin = new Padding(0, 0, 0, ScaleDpi(4))
             };
-            tblInfo.Controls.Add(_lblFloorStatus, 0, 3);
+            tblInfo.Controls.Add(_lblLevelFloor, 0, 3);
 
-            // 玩家 ID 列（點擊直接複製）
+            // 5. 玩家ID：[複製icon]xxxxxxx (點圖示或字串複製)
             var pnlIdRow = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
@@ -236,57 +245,49 @@ namespace MyDoujinBot.Forms
 
             var lblIdPrefix = new Label
             {
-                Text = "玩家 ID：",
-                Font = new Font("Microsoft JhengHei UI", 9f),
-                ForeColor = Color.FromArgb(150, 160, 180),
+                Text = "玩家ID：",
+                Font = new Font("Microsoft JhengHei UI", 10.5f),
+                ForeColor = Color.FromArgb(165, 175, 195),
                 AutoSize = true,
-                Margin = new Padding(0, ScaleDpi(4), 0, 0)
+                Margin = new Padding(0, ScaleDpi(1), 0, 0)
             };
+
+            _picCopyIdIcon = new IconPictureBox
+            {
+                IconChar = IconChar.Copy,
+                IconColor = Color.FromArgb(120, 200, 255),
+                IconSize = ScaleDpi(16),
+                Size = new Size(ScaleDpi(18), ScaleDpi(18)),
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, ScaleDpi(3), ScaleDpi(2), 0)
+            };
+            _picCopyIdIcon.Click += (_, _) => CopyPlayerIdToClipboard();
 
             _lblPlayerIdValue = new Label
             {
-                Text = _playerId,
-                Font = new Font("Consolas", 9.5f, FontStyle.Underline),
+                Text = _currentPlayerId,
+                Font = new Font("Consolas", 11f, FontStyle.Underline),
                 ForeColor = Color.FromArgb(120, 200, 255),
                 AutoSize = true,
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, ScaleDpi(4), ScaleDpi(8), 0)
+                Margin = new Padding(0, ScaleDpi(1), ScaleDpi(8), 0)
             };
             _lblPlayerIdValue.Click += (_, _) => CopyPlayerIdToClipboard();
-
-            _btnCopyId = new IconButton
-            {
-                Text = " 複製 ID",
-                AutoSize = true,
-                BackColor = Color.FromArgb(48, 72, 108),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 8.8f),
-                Cursor = Cursors.Hand,
-                IconChar = IconChar.Copy,
-                IconColor = Color.White,
-                IconSize = ScaleDpi(14),
-                TextImageRelation = TextImageRelation.ImageBeforeText,
-                ImageAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(ScaleDpi(6), ScaleDpi(2), ScaleDpi(6), ScaleDpi(2)),
-                Margin = new Padding(0, 0, ScaleDpi(6), 0)
-            };
-            _btnCopyId.FlatAppearance.BorderSize = 0;
-            _btnCopyId.Click += (_, _) => CopyPlayerIdToClipboard();
 
             _lblCopyFeedback = new Label
             {
                 Text = "✓ 已複製！",
-                Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
+                Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(95, 225, 135),
                 AutoSize = true,
                 Visible = false,
-                Margin = new Padding(0, ScaleDpi(4), 0, 0)
+                Margin = new Padding(0, ScaleDpi(1), 0, 0)
             };
 
             pnlIdRow.Controls.Add(lblIdPrefix);
+            pnlIdRow.Controls.Add(_picCopyIdIcon);
             pnlIdRow.Controls.Add(_lblPlayerIdValue);
-            pnlIdRow.Controls.Add(_btnCopyId);
             pnlIdRow.Controls.Add(_lblCopyFeedback);
             tblInfo.Controls.Add(pnlIdRow, 0, 4);
 
@@ -294,42 +295,42 @@ namespace MyDoujinBot.Forms
             tblRoot.Controls.Add(pnlHeaderCard, 0, 0);
 
             // ═══════════════════════════════════════════════════════════════════
-            // Row 1: 狀態提示
+            // Row 1: 狀態提示（僅於載入中或錯誤時顯示，載入完成後自動隱藏）
             // ═══════════════════════════════════════════════════════════════════
             _lblLoadingStatus = new Label
             {
                 Text = "⏳ 正在讀取玩家詳細數值...",
                 ForeColor = Color.FromArgb(235, 185, 80),
-                Font = new Font("Microsoft JhengHei UI", 9.2f),
+                Font = new Font("Microsoft JhengHei UI", 10f),
                 AutoSize = true,
                 Margin = new Padding(0, 0, 0, ScaleDpi(8))
             };
             tblRoot.Controls.Add(_lblLoadingStatus, 0, 1);
 
             // ═══════════════════════════════════════════════════════════════════
-            // Row 2: 九圍戰鬥屬性表格
+            // Row 2: 玩家角色數值表格
             // ═══════════════════════════════════════════════════════════════════
-            var grpStats = CreateSectionCard("九圍戰鬥屬性", out var tblStatsGrid, columns: 3, rows: 3);
-            _valHp  = AddStatCell(tblStatsGrid, 0, 0, "HP", Color.FromArgb(110, 225, 145));
-            _valAtk = AddStatCell(tblStatsGrid, 1, 0, "攻擊", Color.FromArgb(245, 130, 120));
-            _valDef = AddStatCell(tblStatsGrid, 2, 0, "防禦", Color.FromArgb(130, 185, 245));
-            _valSta = AddStatCell(tblStatsGrid, 0, 1, "體力", Color.FromArgb(235, 190, 105));
-            _valAgi = AddStatCell(tblStatsGrid, 1, 1, "敏捷", Color.FromArgb(130, 220, 210));
-            _valSpd = AddStatCell(tblStatsGrid, 2, 1, "反應速度", Color.FromArgb(165, 205, 250));
-            _valTec = AddStatCell(tblStatsGrid, 0, 2, "技巧", Color.FromArgb(215, 165, 245));
-            _valInt = AddStatCell(tblStatsGrid, 1, 2, "智力", Color.FromArgb(120, 200, 255));
-            _valLuk = AddStatCell(tblStatsGrid, 2, 2, "幸運", Color.FromArgb(245, 215, 110));
+            var grpStats = CreateSectionCard("玩家角色數值", out var tblStatsGrid, columns: 3, rows: 3);
+            _valHp  = AddStatCell(tblStatsGrid, 0, 0, "HP",       UniformStatValueColor);
+            _valAtk = AddStatCell(tblStatsGrid, 1, 0, "攻擊",     UniformStatValueColor);
+            _valDef = AddStatCell(tblStatsGrid, 2, 0, "防禦",     UniformStatValueColor);
+            _valSta = AddStatCell(tblStatsGrid, 0, 1, "體力",     UniformStatValueColor);
+            _valAgi = AddStatCell(tblStatsGrid, 1, 1, "敏捷",     UniformStatValueColor);
+            _valSpd = AddStatCell(tblStatsGrid, 2, 1, "反應速度", UniformStatValueColor);
+            _valTec = AddStatCell(tblStatsGrid, 0, 2, "技巧",     UniformStatValueColor);
+            _valInt = AddStatCell(tblStatsGrid, 1, 2, "智力",     UniformStatValueColor);
+            _valLuk = AddStatCell(tblStatsGrid, 2, 2, "幸運",     UniformStatValueColor);
             tblRoot.Controls.Add(grpStats, 0, 2);
 
             // ═══════════════════════════════════════════════════════════════════
             // Row 3: 本輪戰績統計表格
             // ═══════════════════════════════════════════════════════════════════
             var grpCombat = CreateSectionCard("本輪戰績統計", out var tblCombatGrid, columns: 3, rows: 2);
-            _valWins          = AddStatCell(tblCombatGrid, 0, 0, "勝場", Color.FromArgb(100, 225, 140));
-            _valLosses        = AddStatCell(tblCombatGrid, 1, 0, "敗場", Color.FromArgb(235, 115, 115));
-            _valActiveThrows  = AddStatCell(tblCombatGrid, 2, 0, "主動扔屎", Color.FromArgb(215, 175, 115));
-            _valDefenseThrows = AddStatCell(tblCombatGrid, 0, 1, "防衛扔屎", Color.FromArgb(215, 175, 115));
-            _valAssaultSoiled = AddStatCell(tblCombatGrid, 1, 1, "遭襲沾屎", Color.FromArgb(195, 140, 85));
+            _valWins          = AddStatCell(tblCombatGrid, 0, 0, "勝場",       Color.FromArgb(100, 225, 140));
+            _valLosses        = AddStatCell(tblCombatGrid, 1, 0, "敗場",       Color.FromArgb(235, 115, 115));
+            _valActiveThrows  = AddStatCell(tblCombatGrid, 2, 0, "主動扔屎",   Color.FromArgb(215, 175, 115));
+            _valDefenseThrows = AddStatCell(tblCombatGrid, 0, 1, "防衛扔屎",   Color.FromArgb(215, 175, 115));
+            _valAssaultSoiled = AddStatCell(tblCombatGrid, 1, 1, "遭襲沾屎",   Color.FromArgb(195, 140, 85));
             _valCounterSoiled = AddStatCell(tblCombatGrid, 2, 1, "遭反殺沾屎", Color.FromArgb(195, 140, 85));
             tblRoot.Controls.Add(grpCombat, 0, 3);
 
@@ -349,14 +350,15 @@ namespace MyDoujinBot.Forms
             {
                 Text = "關閉",
                 DialogResult = DialogResult.Cancel,
-                Size = new Size(ScaleDpi(90), ScaleDpi(32)),
+                Size = new Size(ScaleDpi(96), ScaleDpi(34)),
                 BackColor = Color.FromArgb(55, 58, 75),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand,
-                Font = new Font("Microsoft JhengHei UI", 9.5f)
+                Font = new Font("Microsoft JhengHei UI", 10.5f)
             };
             btnClose.FlatAppearance.BorderSize = 0;
+            btnClose.Click += (_, _) => this.Close();
             pnlBottom.Controls.Add(btnClose);
 
             tblRoot.Controls.Add(pnlBottom, 0, 4);
@@ -389,7 +391,7 @@ namespace MyDoujinBot.Forms
             var lblTitle = new Label
             {
                 Text = $"▎{title}",
-                Font = new Font("Microsoft JhengHei UI", 9.8f, FontStyle.Bold),
+                Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(145, 180, 255),
                 AutoSize = true,
                 Margin = new Padding(0, 0, 0, ScaleDpi(6))
@@ -429,7 +431,7 @@ namespace MyDoujinBot.Forms
                 ColumnCount = 2,
                 RowCount = 1,
                 BackColor = Color.FromArgb(26, 28, 38),
-                Padding = new Padding(ScaleDpi(8), ScaleDpi(6), ScaleDpi(8), ScaleDpi(6)),
+                Padding = new Padding(ScaleDpi(10), ScaleDpi(7), ScaleDpi(10), ScaleDpi(7)),
                 Margin = Padding.Empty
             };
             pnlCell.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -438,8 +440,8 @@ namespace MyDoujinBot.Forms
             var lblKey = new Label
             {
                 Text = labelText,
-                ForeColor = Color.FromArgb(165, 172, 192),
-                Font = new Font("Microsoft JhengHei UI", 9.2f),
+                ForeColor = Color.FromArgb(175, 182, 202),
+                Font = new Font("Microsoft JhengHei UI", 10.5f),
                 AutoSize = true,
                 Anchor = AnchorStyles.Left
             };
@@ -448,7 +450,7 @@ namespace MyDoujinBot.Forms
             {
                 Text = "—",
                 ForeColor = valueColor,
-                Font = new Font("Consolas", 10.5f, FontStyle.Bold),
+                Font = new Font("Consolas", 12f, FontStyle.Bold),
                 AutoSize = true,
                 Anchor = AnchorStyles.Right
             };
@@ -461,10 +463,10 @@ namespace MyDoujinBot.Forms
 
         private void CopyPlayerIdToClipboard()
         {
-            if (string.IsNullOrWhiteSpace(_lblPlayerIdValue.Text)) return;
+            if (string.IsNullOrWhiteSpace(_currentPlayerId)) return;
             try
             {
-                Clipboard.SetText(_lblPlayerIdValue.Text);
+                Clipboard.SetText(_currentPlayerId);
                 _lblCopyFeedback.Visible = true;
             }
             catch (Exception ex)
@@ -482,7 +484,7 @@ namespace MyDoujinBot.Forms
                 // 若已有列表帶入的頭像路徑，可同步開始抓頭像
                 string? initialImgPath = _summaryHint?.ImagePath;
                 Task<Bitmap?>? avatarTask = !string.IsNullOrWhiteSpace(initialImgPath)
-                    ? _battleService.FetchAvatarBitmapAsync(initialImgPath, ScaleDpi(76), _cts.Token)
+                    ? _battleService.FetchAvatarBitmapAsync(initialImgPath, 0, _cts.Token)
                     : null;
 
                 var profileRes = await profileTask;
@@ -492,6 +494,7 @@ namespace MyDoujinBot.Forms
                 {
                     _lblLoadingStatus.Text = $"❌ 無法取得詳細資料：{profileRes.ErrorMessage ?? "未知錯誤"}";
                     _lblLoadingStatus.ForeColor = Color.FromArgb(235, 95, 95);
+                    _lblLoadingStatus.Visible = true;
                     return;
                 }
 
@@ -499,22 +502,23 @@ namespace MyDoujinBot.Forms
                 var ch = data.Character;
 
                 this.Text = $"玩家詳細資訊 - {data.Nickname}";
-                _lblPlayerIdValue.Text = !string.IsNullOrWhiteSpace(data.Id) ? data.Id : _playerId;
+                _currentPlayerId = !string.IsNullOrWhiteSpace(data.Id) ? data.Id : _playerId;
+                _lblPlayerIdValue.Text = _currentPlayerId;
 
                 bool isDead = ch?.IsDead ?? _summaryHint?.IsDead ?? false;
                 bool isSoiled = ch?.IsSoiled ?? _summaryHint?.IsSoiled ?? false;
 
                 _lblNickname.Text = data.Nickname;
                 _lblNickname.ForeColor = GetNicknameColor(isDead, isSoiled);
-
-                _lblStatusTags.Text = FormatStatusBadgeText(isDead, isSoiled);
-                _lblStatusTags.ForeColor = isDead ? DeadNameColor : SoiledNameColor;
+                _lblDeadTag.Visible = isDead;
 
                 if (ch != null)
                 {
-                    string titlePart = !string.IsNullOrWhiteSpace(ch.Title) ? $"（{ch.Title}）" : string.Empty;
-                    _lblCharacterTitle.Text = $"角色：{ch.Name}{titlePart}";
-                    _lblLevelExp.Text = $"等級：Lv.{ch.Level} ｜ 經驗值：{ch.Exp:N0}（總經驗：{ch.TotalExp:N0}）";
+                    _lblCharacterTitle.Text = FormatCharacterTitle(ch.Name, ch.Title);
+                    _lblLevelFloor.Text = FormatLevelAndFloor(
+                        ch.Level,
+                        _summaryHint?.Floor ?? 0,
+                        _summaryHint?.HighestFloor ?? 0);
 
                     if (ch.Stats != null)
                     {
@@ -527,6 +531,8 @@ namespace MyDoujinBot.Forms
                         _valTec.Text = ch.Stats.Tec.ToString("N0");
                         _valInt.Text = ch.Stats.Int.ToString("N0");
                         _valLuk.Text = ch.Stats.Luk.ToString("N0");
+
+                        ApplyStatValueHighlightColors(ch.Stats);
                     }
 
                     if (ch.CombatStats != null)
@@ -542,21 +548,19 @@ namespace MyDoujinBot.Forms
                     // 若先前未抓頭像，或詳細 API 回傳了新的 imagePath，則抓取頭像
                     if (avatarTask == null && !string.IsNullOrWhiteSpace(ch.ImagePath))
                     {
-                        avatarTask = _battleService.FetchAvatarBitmapAsync(ch.ImagePath, ScaleDpi(76), _cts.Token);
+                        avatarTask = _battleService.FetchAvatarBitmapAsync(ch.ImagePath, 0, _cts.Token);
                     }
                 }
 
-                _lblLoadingStatus.Text = "✔ 詳細資料載入完成（點擊玩家 ID 或「複製 ID」可直接複製）";
-                _lblLoadingStatus.ForeColor = Color.FromArgb(110, 215, 150);
+                // 載入完成後隱藏提示文字
+                _lblLoadingStatus.Visible = false;
 
                 if (avatarTask != null)
                 {
                     var bmp = await avatarTask;
                     if (!_cts.IsCancellationRequested && !this.IsDisposed && bmp != null)
                     {
-                        _loadedAvatar?.Dispose();
-                        _loadedAvatar = bmp;
-                        _picAvatar.Image = _loadedAvatar;
+                        _picAvatar.Image = bmp;
                     }
                 }
             }
@@ -566,8 +570,74 @@ namespace MyDoujinBot.Forms
                 {
                     _lblLoadingStatus.Text = $"❌ 載入發生例外：{ex.Message}";
                     _lblLoadingStatus.ForeColor = Color.FromArgb(235, 95, 95);
+                    _lblLoadingStatus.Visible = true;
                 }
             }
+        }
+
+        /// <summary>
+        /// 角色數值（除 HP 外）最高的一項以金黃色標示，次高（比最高低一階）的一項以亮青藍色標示，其餘維持統一淺白色。
+        /// </summary>
+        private void ApplyStatValueHighlightColors(CharacterStats stats)
+        {
+            _valHp.ForeColor = UniformStatValueColor;
+
+            var nonHpStats = new (Label Label, int Value)[]
+            {
+                (_valAtk, stats.Atk),
+                (_valDef, stats.Def),
+                (_valSta, stats.Sta),
+                (_valAgi, stats.Agi),
+                (_valSpd, stats.Spd),
+                (_valTec, stats.Tec),
+                (_valInt, stats.Int),
+                (_valLuk, stats.Luk)
+            };
+
+            var distinctRanks = nonHpStats
+                .Select(s => s.Value)
+                .Where(v => v > 0)
+                .Distinct()
+                .OrderByDescending(v => v)
+                .ToList();
+
+            int? highestVal = distinctRanks.Count > 0 ? distinctRanks[0] : null;
+            int? secondVal  = distinctRanks.Count > 1 ? distinctRanks[1] : null;
+
+            foreach (var item in nonHpStats)
+            {
+                if (highestVal.HasValue && item.Value == highestVal.Value)
+                {
+                    item.Label.ForeColor = HighestStatValueColor;
+                }
+                else if (secondVal.HasValue && item.Value == secondVal.Value)
+                {
+                    item.Label.ForeColor = SecondHighestStatValueColor;
+                }
+                else
+                {
+                    item.Label.ForeColor = UniformStatValueColor;
+                }
+            }
+        }
+
+        private static string FormatCharacterTitle(string? characterName, string? characterTitle)
+        {
+            string name = characterName ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(characterTitle))
+            {
+                return $"{name}（{characterTitle}）";
+            }
+            return !string.IsNullOrWhiteSpace(name) ? name : "—";
+        }
+
+        private static string FormatLevelAndFloor(int level, int floor, int highestFloor)
+        {
+            string levelPart = level > 0 ? $"Lv.{level}" : "Lv.—";
+            string floorPart = (floor > 0 || highestFloor > 0)
+                ? $"{StatHelper.ConvertFloor(floor)}F / {StatHelper.ConvertFloor(highestFloor)}F"
+                : "—F / —F";
+            return $"等級：{levelPart}｜樓層：{floorPart}";
         }
 
         private static Color GetNicknameColor(bool isDead, bool isSoiled)
@@ -577,12 +647,16 @@ namespace MyDoujinBot.Forms
             return NormalNameColor;
         }
 
-        private static string FormatStatusBadgeText(bool isDead, bool isSoiled)
+        private sealed class HighQualityAvatarBox : PictureBox
         {
-            if (isDead && isSoiled) return "[死亡 / 沾屎]";
-            if (isDead) return "[死亡]";
-            if (isSoiled) return "[沾屎]";
-            return string.Empty;
+            protected override void OnPaint(PaintEventArgs pe)
+            {
+                pe.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                pe.Graphics.SmoothingMode = SmoothingMode.HighQuality;
+                pe.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                pe.Graphics.CompositingQuality = CompositingQuality.HighQuality;
+                base.OnPaint(pe);
+            }
         }
     }
 }

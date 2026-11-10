@@ -32,7 +32,6 @@ namespace MyDoujinBot.Forms
         private IconButton _btnBackToFollowed = null!;
         private IconButton _btnAddFriend = null!;
         private IconButton _btnRefresh = null!;
-        private Label _lblModeTitle = null!;
         private Label _lblStatus = null!;
         private DoubleBufferedDataGridView _dgv = null!;
 
@@ -42,7 +41,6 @@ namespace MyDoujinBot.Forms
         private int _hoveredRowIndex = -1;
 
         private readonly List<PlayerSummaryItem> _currentItems = new();
-        private readonly List<Bitmap> _activeRowBitmaps = new();
         private Bitmap? _placeholderBitmap;
 
         private float DpiScale => (float)this.DeviceDpi / 96f;
@@ -55,9 +53,26 @@ namespace MyDoujinBot.Forms
 
             this.Dock = DockStyle.Fill;
             this.BackColor = Color.FromArgb(24, 24, 30);
-            this.Padding = new Padding(ScaleDpi(14), ScaleDpi(12), ScaleDpi(14), ScaleDpi(12));
+            this.Padding = new Padding(ScaleDpi(64), ScaleDpi(14), ScaleDpi(64), ScaleDpi(12));
 
             BuildUI();
+            this.Resize += (_, _) => UpdateResponsivePadding();
+        }
+
+        private void UpdateResponsivePadding()
+        {
+            if (this.IsDisposed || this.ClientSize.Width <= 0) return;
+
+            int maxContentWidth = ScaleDpi(760);
+            int minSidePadding = ScaleDpi(48);
+            int extra = this.ClientSize.Width - maxContentWidth;
+            int sidePadding = extra > minSidePadding * 2 ? extra / 2 : minSidePadding;
+
+            var targetPadding = new Padding(sidePadding, ScaleDpi(14), sidePadding, ScaleDpi(12));
+            if (this.Padding != targetPadding)
+            {
+                this.Padding = targetPadding;
+            }
         }
 
         /// <summary>
@@ -77,10 +92,7 @@ namespace MyDoujinBot.Forms
             _isShowingSearchResults = false;
             _btnBackToFollowed.Visible = false;
             ClearGridAndBitmaps();
-            UpdateModeTitleLabel();
-
-            int count = AppSettingsManager.Current.FollowedPlayers?.Count ?? 0;
-            SetStatusText($"✔ 已從備份還原關注名單（共 {count} 人），切換至此分頁或點擊「重新整理關注狀態」即可更新狀態。");
+            UpdateModeState();
 
             if (this.Parent != null && this.Visible)
             {
@@ -94,16 +106,15 @@ namespace MyDoujinBot.Forms
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 4,
+                RowCount = 3,
                 BackColor = Color.Transparent,
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
             tblMain.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             tblMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // Row 0: 搜尋與操作工具列
-            tblMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // Row 1: 當前檢視標題與狀態列
+            tblMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // Row 1: 載入狀態提示列
             tblMain.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));  // Row 2: 條列表格
-            tblMain.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // Row 3: 底部圖例與提示
 
             // ═══════════════════════════════════════════════════════════════════
             // Row 0: 頂部搜尋與管理列
@@ -116,7 +127,7 @@ namespace MyDoujinBot.Forms
                 RowCount = 1,
                 BackColor = Color.FromArgb(30, 32, 42),
                 Padding = new Padding(ScaleDpi(10), ScaleDpi(8), ScaleDpi(10), ScaleDpi(8)),
-                Margin = new Padding(0, 0, 0, ScaleDpi(8))
+                Margin = new Padding(0, 0, 0, ScaleDpi(6))
             };
             pnlTopBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));       // 0: 標籤
             pnlTopBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));  // 1: 搜尋輸入框
@@ -142,7 +153,7 @@ namespace MyDoujinBot.Forms
                 ForeColor = Color.FromArgb(230, 230, 240),
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = new Font("Microsoft JhengHei UI", 9.8f),
-                PlaceholderText = "輸入玩家暱稱搜尋（查到後可點擊查看詳情或右側直接關注）...",
+                PlaceholderText = "輸入玩家暱稱搜尋",
                 Anchor = AnchorStyles.Left | AnchorStyles.Right,
                 Margin = new Padding(0, ScaleDpi(2), ScaleDpi(8), ScaleDpi(2))
             };
@@ -188,42 +199,18 @@ namespace MyDoujinBot.Forms
             tblMain.Controls.Add(pnlTopBar, 0, 0);
 
             // ═══════════════════════════════════════════════════════════════════
-            // Row 1: 當前模式標題與狀態提示列
+            // Row 1: 載入狀態提示列
             // ═══════════════════════════════════════════════════════════════════
-            var pnlStatusRow = new TableLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                ColumnCount = 2,
-                RowCount = 1,
-                BackColor = Color.Transparent,
-                Margin = new Padding(0, 0, 0, ScaleDpi(6))
-            };
-            pnlStatusRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            pnlStatusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-
-            _lblModeTitle = new Label
-            {
-                Text = "▎已關注群友 (0)",
-                ForeColor = Color.FromArgb(135, 180, 255),
-                Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
-                AutoSize = true,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(0, 0, ScaleDpi(14), 0)
-            };
-
             _lblStatus = new Label
             {
-                Text = "點擊表格任一欄位可查看該玩家詳細數值與複製 ID。",
-                ForeColor = Color.FromArgb(155, 165, 185),
-                Font = new Font("Microsoft JhengHei UI", 9.2f),
+                Text = string.Empty,
+                ForeColor = Color.FromArgb(145, 205, 165),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
                 AutoSize = true,
-                Anchor = AnchorStyles.Left
+                Visible = false,
+                Margin = new Padding(ScaleDpi(2), 0, 0, ScaleDpi(6))
             };
-
-            pnlStatusRow.Controls.Add(_lblModeTitle, 0, 0);
-            pnlStatusRow.Controls.Add(_lblStatus, 1, 0);
-            tblMain.Controls.Add(pnlStatusRow, 0, 1);
+            tblMain.Controls.Add(_lblStatus, 0, 1);
 
             // ═══════════════════════════════════════════════════════════════════
             // Row 2: 條列表格 (DataGridView)
@@ -234,7 +221,7 @@ namespace MyDoujinBot.Forms
                 BackgroundColor = Color.FromArgb(20, 20, 26),
                 BorderStyle = BorderStyle.FixedSingle,
                 GridColor = Color.FromArgb(42, 44, 58),
-                CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
+                CellBorderStyle = DataGridViewCellBorderStyle.Single,
                 ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single,
                 EnableHeadersVisualStyles = false,
                 AllowUserToAddRows = false,
@@ -245,21 +232,21 @@ namespace MyDoujinBot.Forms
                 MultiSelect = false,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-                RowTemplate = { Height = ScaleDpi(52) },
+                RowTemplate = { Height = ScaleDpi(66) },
                 Margin = new Padding(0, 0, 0, ScaleDpi(6))
             };
 
             _dgv.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            _dgv.ColumnHeadersHeight = ScaleDpi(36);
+            _dgv.ColumnHeadersHeight = ScaleDpi(40);
             _dgv.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
             {
                 BackColor = Color.FromArgb(32, 35, 48),
                 ForeColor = Color.FromArgb(185, 195, 220),
                 SelectionBackColor = Color.FromArgb(32, 35, 48),
                 SelectionForeColor = Color.FromArgb(185, 195, 220),
-                Font = new Font("Microsoft JhengHei UI", 9.5f, FontStyle.Bold),
-                Alignment = DataGridViewContentAlignment.MiddleLeft,
-                Padding = new Padding(ScaleDpi(6), 0, ScaleDpi(6), 0)
+                Font = new Font("Microsoft JhengHei UI", 10.8f, FontStyle.Bold),
+                Alignment = DataGridViewContentAlignment.MiddleCenter,
+                Padding = new Padding(ScaleDpi(4), 0, ScaleDpi(4), 0)
             };
 
             _dgv.DefaultCellStyle = new DataGridViewCellStyle
@@ -268,9 +255,9 @@ namespace MyDoujinBot.Forms
                 ForeColor = NormalNameColor,
                 SelectionBackColor = Color.FromArgb(38, 46, 68),
                 SelectionForeColor = NormalNameColor,
-                Font = new Font("Microsoft JhengHei UI", 9.8f),
-                Alignment = DataGridViewContentAlignment.MiddleLeft,
-                Padding = new Padding(ScaleDpi(6), 0, ScaleDpi(6), 0)
+                Font = new Font("Microsoft JhengHei UI", 10.2f),
+                Alignment = DataGridViewContentAlignment.MiddleCenter,
+                Padding = new Padding(ScaleDpi(4), 0, ScaleDpi(4), 0)
             };
 
             // 欄位 0: 頭像
@@ -280,8 +267,9 @@ namespace MyDoujinBot.Forms
                 HeaderText = "頭像",
                 ImageLayout = DataGridViewImageCellLayout.Zoom,
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-                Width = ScaleDpi(62),
-                Resizable = DataGridViewTriState.False
+                Width = ScaleDpi(66),
+                Resizable = DataGridViewTriState.False,
+                SortMode = DataGridViewColumnSortMode.NotSortable
             };
             colAvatar.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
             colAvatar.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
@@ -293,126 +281,83 @@ namespace MyDoujinBot.Forms
                 Name = "colLevel",
                 HeaderText = "等級",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-                Width = ScaleDpi(74)
+                Width = ScaleDpi(76),
+                SortMode = DataGridViewColumnSortMode.NotSortable
             };
-            colLevel.DefaultCellStyle.Font = new Font("Consolas", 10f, FontStyle.Bold);
+            colLevel.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            colLevel.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            colLevel.DefaultCellStyle.Font = new Font("Consolas", 11f, FontStyle.Bold);
             colLevel.DefaultCellStyle.ForeColor = Color.FromArgb(245, 210, 110);
             colLevel.DefaultCellStyle.SelectionForeColor = Color.FromArgb(245, 210, 110);
 
-            // 欄位 2: 暱稱
+            // 欄位 2: 暱稱（下方合併顯示個人狀態）
             var colNickname = new DataGridViewTextBoxColumn
             {
                 Name = "colNickname",
                 HeaderText = "暱稱",
-                FillWeight = 22f,
-                MinimumWidth = ScaleDpi(110)
+                FillWeight = 42f,
+                MinimumWidth = ScaleDpi(110),
+                SortMode = DataGridViewColumnSortMode.NotSortable
             };
-            colNickname.DefaultCellStyle.Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold);
+            colNickname.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            colNickname.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            colNickname.DefaultCellStyle.Font = new Font("Microsoft JhengHei UI", 11f, FontStyle.Bold);
 
-            // 欄位 3: 角色 (以及稱號)
+            // 欄位 3: 角色（下方合併顯示個人狀態）
             var colCharacter = new DataGridViewTextBoxColumn
             {
                 Name = "colCharacter",
-                HeaderText = "角色（稱號）",
-                FillWeight = 28f,
-                MinimumWidth = ScaleDpi(140)
+                HeaderText = "角色",
+                FillWeight = 58f,
+                MinimumWidth = ScaleDpi(140),
+                SortMode = DataGridViewColumnSortMode.NotSortable
             };
+            colCharacter.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            colCharacter.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            colCharacter.DefaultCellStyle.Font = new Font("Microsoft JhengHei UI", 10.8f);
             colCharacter.DefaultCellStyle.ForeColor = Color.FromArgb(165, 205, 250);
             colCharacter.DefaultCellStyle.SelectionForeColor = Color.FromArgb(165, 205, 250);
 
-            // 欄位 4: 層數 (現今/最大)
+            // 欄位 4: 層數
             var colFloor = new DataGridViewTextBoxColumn
             {
                 Name = "colFloor",
-                HeaderText = "層數 (現今/最大)",
+                HeaderText = "層數",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-                Width = ScaleDpi(130)
+                Width = ScaleDpi(112),
+                SortMode = DataGridViewColumnSortMode.NotSortable
             };
-            colFloor.DefaultCellStyle.Font = new Font("Consolas", 10f);
+            colFloor.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            colFloor.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            colFloor.DefaultCellStyle.Font = new Font("Consolas", 11f, FontStyle.Bold);
             colFloor.DefaultCellStyle.ForeColor = Color.FromArgb(145, 225, 175);
             colFloor.DefaultCellStyle.SelectionForeColor = Color.FromArgb(145, 225, 175);
 
-            // 欄位 5: 個人狀態
-            var colPersonalStatus = new DataGridViewTextBoxColumn
-            {
-                Name = "colPersonalStatus",
-                HeaderText = "個人狀態",
-                FillWeight = 35f,
-                MinimumWidth = ScaleDpi(150)
-            };
-            colPersonalStatus.DefaultCellStyle.ForeColor = Color.FromArgb(185, 190, 210);
-            colPersonalStatus.DefaultCellStyle.SelectionForeColor = Color.FromArgb(215, 220, 235);
-
-            // 欄位 6: 操作按鈕 (關注 / 移除)
+            // 欄位 5: 操作按鈕 (關注 / 移除)
             var colAction = new DataGridViewTextBoxColumn
             {
                 Name = "colAction",
                 HeaderText = "操作",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-                Width = ScaleDpi(96),
-                Resizable = DataGridViewTriState.False
+                Width = ScaleDpi(92),
+                Resizable = DataGridViewTriState.False,
+                SortMode = DataGridViewColumnSortMode.NotSortable
             };
             colAction.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
             colAction.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
 
-            _dgv.Columns.AddRange(colAvatar, colLevel, colNickname, colCharacter, colFloor, colPersonalStatus, colAction);
+            _dgv.Columns.AddRange(colAvatar, colLevel, colNickname, colCharacter, colFloor, colAction);
 
             _dgv.CellClick += OnDgvCellClick;
             _dgv.CellPainting += OnDgvCellPainting;
             _dgv.CellMouseEnter += OnDgvCellMouseEnter;
             _dgv.CellMouseLeave += OnDgvCellMouseLeave;
+            _dgv.ColumnWidthChanged += (_, _) => _dgv.Invalidate();
 
             tblMain.Controls.Add(_dgv, 0, 2);
-
-            // ═══════════════════════════════════════════════════════════════════
-            // Row 3: 底部顏色圖例與操作提示
-            // ═══════════════════════════════════════════════════════════════════
-            var pnlLegend = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = true,
-                BackColor = Color.Transparent,
-                Margin = Padding.Empty
-            };
-
-            pnlLegend.Controls.Add(new Label
-            {
-                Text = "暱稱顏色圖例：",
-                ForeColor = Color.FromArgb(145, 150, 170),
-                Font = new Font("Microsoft JhengHei UI", 9f),
-                AutoSize = true,
-                Margin = new Padding(0, 0, ScaleDpi(4), 0)
-            });
-            pnlLegend.Controls.Add(new Label
-            {
-                Text = "● 紅色＝死亡",
-                ForeColor = DeadNameColor,
-                Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
-                AutoSize = true,
-                Margin = new Padding(0, 0, ScaleDpi(12), 0)
-            });
-            pnlLegend.Controls.Add(new Label
-            {
-                Text = "● 褐色＝沾屎",
-                ForeColor = SoiledNameColor,
-                Font = new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
-                AutoSize = true,
-                Margin = new Padding(0, 0, ScaleDpi(12), 0)
-            });
-            pnlLegend.Controls.Add(new Label
-            {
-                Text = "｜ 點擊列表中任一欄位即可開啟該玩家的詳細屬性與戰績視窗。",
-                ForeColor = Color.FromArgb(145, 150, 170),
-                Font = new Font("Microsoft JhengHei UI", 9f),
-                AutoSize = true
-            });
-
-            tblMain.Controls.Add(pnlLegend, 0, 3);
             this.Controls.Add(tblMain);
 
-            UpdateModeTitleLabel();
+            UpdateModeState();
         }
 
         private IconButton CreateBarButton(string text, Color backColor, IconChar icon)
@@ -457,11 +402,6 @@ namespace MyDoujinBot.Forms
         {
             _dgv.Rows.Clear();
             _currentItems.Clear();
-            foreach (var bmp in _activeRowBitmaps)
-            {
-                bmp.Dispose();
-            }
-            _activeRowBitmaps.Clear();
             _hoveredRowIndex = -1;
         }
 
@@ -475,21 +415,9 @@ namespace MyDoujinBot.Forms
                 string.Equals(f.Nickname, item.Nickname, StringComparison.OrdinalIgnoreCase));
         }
 
-        private void UpdateModeTitleLabel()
+        private void UpdateModeState()
         {
-            int followedCount = AppSettingsManager.Current.FollowedPlayers?.Count ?? 0;
-            if (_isShowingSearchResults)
-            {
-                _lblModeTitle.Text = $"▎搜尋結果：「{_lastSearchKeyword}」（共 {_currentItems.Count} 筆）";
-                _lblModeTitle.ForeColor = Color.FromArgb(245, 200, 105);
-                _btnBackToFollowed.Visible = true;
-            }
-            else
-            {
-                _lblModeTitle.Text = $"▎已關注群友 ({followedCount})";
-                _lblModeTitle.ForeColor = Color.FromArgb(135, 180, 255);
-                _btnBackToFollowed.Visible = false;
-            }
+            _btnBackToFollowed.Visible = _isShowingSearchResults;
         }
 
         /// <summary>
@@ -499,7 +427,7 @@ namespace MyDoujinBot.Forms
         {
             string token = _tokenProvider();
             _isShowingSearchResults = false;
-            UpdateModeTitleLabel();
+            UpdateModeState();
 
             if (string.IsNullOrWhiteSpace(token))
             {
@@ -512,7 +440,7 @@ namespace MyDoujinBot.Forms
             if (followedList.Count == 0)
             {
                 ClearGridAndBitmaps();
-                SetStatusText("目前尚未關注任何群友。您可在上方輸入玩家暱稱搜尋並加入關注，或點擊「新增關注」。");
+                SetStatusText(string.Empty);
                 return;
             }
 
@@ -522,9 +450,8 @@ namespace MyDoujinBot.Forms
             _queryCts = cts;
 
             ClearGridAndBitmaps();
-            SetStatusText($"⏳ 正在更新關注群友狀態 (0 / {followedList.Count})...", isWarning: true);
+            SetStatusText($"⏳ 正在載入玩家資訊 (0 / {followedList.Count})...", isWarning: true);
 
-            int completed = 0;
             bool settingsModified = false;
 
             try
@@ -534,7 +461,7 @@ namespace MyDoujinBot.Forms
                     if (cts.IsCancellationRequested || this.IsDisposed) return;
 
                     var entry = followedList[i];
-                    SetStatusText($"⏳ 正在查詢「{entry.Nickname}」({i + 1} / {followedList.Count})...", isWarning: true);
+                    SetStatusText($"⏳ 正在載入「{entry.Nickname}」({i + 1} / {followedList.Count})...", isWarning: true);
 
                     PlayerSummaryItem? matched = await FetchSingleFollowedPlayerAsync(entry, token, cts.Token);
                     if (cts.IsCancellationRequested || this.IsDisposed) return;
@@ -565,13 +492,11 @@ namespace MyDoujinBot.Forms
                         };
                     }
 
-                    int rowIdx = AppendPlayerRow(matched);
-                    if (!string.IsNullOrWhiteSpace(matched.ImagePath))
+                    int rowIdx = AppendPlayerRow(matched, out bool avatarCached);
+                    if (!avatarCached && !string.IsNullOrWhiteSpace(matched.ImagePath))
                     {
                         _ = LoadRowAvatarAsync(rowIdx, matched.ImagePath, cts.Token);
                     }
-
-                    completed++;
                 }
 
                 if (settingsModified)
@@ -579,8 +504,8 @@ namespace MyDoujinBot.Forms
                     AppSettingsManager.Save();
                 }
 
-                UpdateModeTitleLabel();
-                SetStatusText($"✔ 已更新 {completed} 位關注群友狀態（{DateTime.Now:HH:mm:ss}）。點擊任一欄位可查看詳細數值。");
+                UpdateModeState();
+                SetStatusText($"✔ 玩家資訊載入完成（{DateTime.Now:HH:mm:ss}）");
             }
             catch (OperationCanceledException)
             {
@@ -589,7 +514,7 @@ namespace MyDoujinBot.Forms
             {
                 if (!cts.IsCancellationRequested && !this.IsDisposed)
                 {
-                    SetStatusText($"❌ 更新關注清單時發生錯誤：{ex.Message}", isError: true);
+                    SetStatusText($"❌ 載入發生錯誤：{ex.Message}", isError: true);
                 }
             }
         }
@@ -682,7 +607,7 @@ namespace MyDoujinBot.Forms
             _isShowingSearchResults = true;
             _lastSearchKeyword = keyword;
             ClearGridAndBitmaps();
-            UpdateModeTitleLabel();
+            UpdateModeState();
             SetStatusText($"⏳ 正在搜尋玩家「{keyword}」...", isWarning: true);
 
             try
@@ -700,21 +625,21 @@ namespace MyDoujinBot.Forms
                 for (int i = 0; i < players.Count; i++)
                 {
                     var item = players[i];
-                    int rowIdx = AppendPlayerRow(item);
-                    if (!string.IsNullOrWhiteSpace(item.ImagePath))
+                    int rowIdx = AppendPlayerRow(item, out bool avatarCached);
+                    if (!avatarCached && !string.IsNullOrWhiteSpace(item.ImagePath))
                     {
                         _ = LoadRowAvatarAsync(rowIdx, item.ImagePath, cts.Token);
                     }
                 }
 
-                UpdateModeTitleLabel();
+                UpdateModeState();
                 if (players.Count == 0)
                 {
-                    SetStatusText($"查無包含「{keyword}」的玩家。可點擊「返回關注列表」回到關注名單。", isWarning: true);
+                    SetStatusText($"查無包含「{keyword}」的玩家。", isWarning: true);
                 }
                 else
                 {
-                    SetStatusText($"✔ 搜尋「{keyword}」共找到 {players.Count} 筆結果。點擊任一欄查看詳細數值，點擊右側「＋ 關注」可加入關注清單。");
+                    SetStatusText($"✔ 搜尋「{keyword}」完成（共 {players.Count} 筆）");
                 }
             }
             catch (OperationCanceledException)
@@ -729,7 +654,7 @@ namespace MyDoujinBot.Forms
             }
         }
 
-        private int AppendPlayerRow(PlayerSummaryItem item)
+        private int AppendPlayerRow(PlayerSummaryItem item, out bool avatarCached)
         {
             _currentItems.Add(item);
 
@@ -738,17 +663,19 @@ namespace MyDoujinBot.Forms
                 ? $"{item.CharacterName}（{item.CharacterTitle}）"
                 : item.CharacterName;
             string floorText = (item.Floor > 0 || item.HighestFloor > 0)
-                ? $"{item.Floor} / {item.HighestFloor}"
+                ? $"{StatHelper.ConvertFloor(item.Floor)}F / {StatHelper.ConvertFloor(item.HighestFloor)}F"
                 : "—";
             string actionText = IsPlayerFollowed(item) ? "移除" : "＋ 關注";
 
+            Bitmap? cachedAvatar = _battleService.TryGetCachedAvatarBitmap(item.ImagePath, 0);
+            avatarCached = cachedAvatar != null;
+
             int rowIdx = _dgv.Rows.Add(
-                GetPlaceholderBitmap(),
+                cachedAvatar ?? GetPlaceholderBitmap(),
                 levelText,
                 item.Nickname,
                 charText,
                 floorText,
-                item.PersonalStatus,
                 actionText);
 
             ApplyRowNicknameColor(rowIdx, item);
@@ -772,21 +699,19 @@ namespace MyDoujinBot.Forms
 
         private async Task LoadRowAvatarAsync(int rowIndex, string imagePath, CancellationToken ct)
         {
-            var bmp = await _battleService.FetchAvatarBitmapAsync(imagePath, ScaleDpi(44), ct);
+            var bmp = await _battleService.FetchAvatarBitmapAsync(imagePath, 0, ct);
             if (ct.IsCancellationRequested || this.IsDisposed || bmp == null)
             {
-                bmp?.Dispose();
                 return;
             }
 
             if (rowIndex < 0 || rowIndex >= _dgv.Rows.Count)
             {
-                bmp.Dispose();
                 return;
             }
 
-            _activeRowBitmaps.Add(bmp);
             _dgv.Rows[rowIndex].Cells["colAvatar"].Value = bmp;
+            _dgv.InvalidateCell(_dgv.Columns["colAvatar"]!.Index, rowIndex);
         }
 
         private async void OnAddFriendByPromptClicked(object? sender, EventArgs e)
@@ -794,9 +719,9 @@ namespace MyDoujinBot.Forms
             string? inputName = PromptDialog.Show(
                 this.FindForm(),
                 "新增關注群友",
-                "請輸入欲關注的玩家暱稱（系統將自動透過 /api/players 查詢並記錄該玩家）：",
+                "請輸入玩家暱稱：",
                 defaultValue: string.Empty,
-                placeholder: "例如：老ㄐ訶德");
+                placeholder: "例如：大木");
 
             if (string.IsNullOrWhiteSpace(inputName)) return;
             inputName = inputName.Trim();
@@ -888,14 +813,12 @@ namespace MyDoujinBot.Forms
                     {
                         _dgv.Rows[e.RowIndex].Cells[actionColIndex].Value = "＋ 關注";
                         _dgv.InvalidateCell(actionColIndex, e.RowIndex);
-                        SetStatusText($"已將「{item.Nickname}」自關注清單移除。");
                     }
                     else
                     {
                         _dgv.Rows.RemoveAt(e.RowIndex);
                         _currentItems.RemoveAt(e.RowIndex);
-                        UpdateModeTitleLabel();
-                        SetStatusText($"已將「{item.Nickname}」自關注清單移除。");
+                        UpdateModeState();
                     }
                 }
                 else
@@ -903,12 +826,11 @@ namespace MyDoujinBot.Forms
                     AddOrUpdateFollowedPlayer(item);
                     _dgv.Rows[e.RowIndex].Cells[actionColIndex].Value = "移除";
                     _dgv.InvalidateCell(actionColIndex, e.RowIndex);
-                    SetStatusText($"✔ 已將「{item.Nickname}」加入關注清單！");
                 }
                 return;
             }
 
-            // 點擊其餘任意顯示欄位（頭像、等級、暱稱、角色、層數、個人狀態）→ 進入詳細確認數值視窗
+            // 點擊其餘任意顯示欄位（頭像、暱稱、等級、角色、個人狀態、層數）→ 進入詳細確認數值視窗
             if (string.IsNullOrWhiteSpace(item.Id))
             {
                 MessageBox.Show(this.FindForm(), "此筆記錄缺少玩家 ID，無法查詢詳細數值。", "無法查詢", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -922,8 +844,19 @@ namespace MyDoujinBot.Forms
                 return;
             }
 
-            using var detailForm = new PlayerDetailForm(_battleService, item.Id, token, item);
-            detailForm.ShowDialog(this.FindForm());
+            var ownerForm = this.FindForm();
+            int openDetailCount = Application.OpenForms.OfType<PlayerDetailForm>().Count();
+
+            var detailForm = new PlayerDetailForm(_battleService, item.Id, token, item);
+            if (ownerForm != null && openDetailCount > 0)
+            {
+                detailForm.StartPosition = FormStartPosition.Manual;
+                int offset = (openDetailCount % 6) * ScaleDpi(28);
+                int baseX = ownerForm.Left + (ownerForm.Width - detailForm.Width) / 2;
+                int baseY = ownerForm.Top + (ownerForm.Height - detailForm.Height) / 2;
+                detailForm.Location = new Point(Math.Max(0, baseX + offset), Math.Max(0, baseY + offset));
+            }
+            detailForm.Show(ownerForm);
         }
 
         private void OnDgvCellMouseEnter(object? sender, DataGridViewCellEventArgs e)
@@ -958,14 +891,189 @@ namespace MyDoujinBot.Forms
 
         private void OnDgvCellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
         {
-            if (e.RowIndex < 0 || e.RowIndex >= _currentItems.Count || e.Graphics == null) return;
+            if (e.Graphics == null || e.ColumnIndex < 0) return;
+
+            // 標題列：確保所有欄位標題完全水平與垂直置中（不受排序圖示預留空間影響）
+            if (e.RowIndex == -1)
+            {
+                using (var headerBrush = new SolidBrush(Color.FromArgb(32, 35, 48)))
+                {
+                    e.Graphics.FillRectangle(headerBrush, e.CellBounds);
+                }
+
+                using (var gridPen = new Pen(_dgv.GridColor))
+                {
+                    e.Graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right, e.CellBounds.Bottom - 1);
+                    e.Graphics.DrawLine(gridPen, e.CellBounds.Right - 1, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
+                }
+
+                string headerText = e.FormattedValue?.ToString() ?? string.Empty;
+                Font headerFont = _dgv.ColumnHeadersDefaultCellStyle.Font ?? _dgv.Font;
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    headerText,
+                    headerFont,
+                    e.CellBounds,
+                    Color.FromArgb(185, 195, 220),
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+
+                e.Handled = true;
+                return;
+            }
+
+            if (e.RowIndex < 0 || e.RowIndex >= _currentItems.Count) return;
 
             bool isHovered = e.RowIndex == _hoveredRowIndex;
+            bool isSelected = (e.State & DataGridViewElementStates.Selected) != 0;
             Color rowBackColor = isHovered
                 ? Color.FromArgb(36, 42, 60)
-                : (e.RowIndex % 2 == 0 ? Color.FromArgb(24, 25, 34) : Color.FromArgb(28, 30, 40));
+                : isSelected
+                    ? Color.FromArgb(34, 40, 58)
+                    : (e.RowIndex % 2 == 0 ? Color.FromArgb(24, 25, 34) : Color.FromArgb(28, 30, 40));
 
+            var item = _currentItems[e.RowIndex];
+            int avatarColIndex = _dgv.Columns["colAvatar"]!.Index;
+            int nickColIndex = _dgv.Columns["colNickname"]!.Index;
+            int charColIndex = _dgv.Columns["colCharacter"]!.Index;
             int actionColIndex = _dgv.Columns["colAction"]!.Index;
+
+            // 頭像欄：保留原圖完整比例與高解析度，使用 HighQualityBicubic 等比例縮小置中繪製
+            if (e.ColumnIndex == avatarColIndex)
+            {
+                using (var backBrush = new SolidBrush(rowBackColor))
+                {
+                    e.Graphics.FillRectangle(backBrush, e.CellBounds);
+                }
+
+                using (var gridPen = new Pen(_dgv.GridColor))
+                {
+                    e.Graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right, e.CellBounds.Bottom - 1);
+                    e.Graphics.DrawLine(gridPen, e.CellBounds.Right - 1, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
+                }
+
+                if (_dgv.Rows[e.RowIndex].Cells[avatarColIndex].Value is Bitmap bmp && bmp.Width > 0 && bmp.Height > 0)
+                {
+                    int pad = ScaleDpi(5);
+                    int boxW = Math.Max(1, e.CellBounds.Width - 1 - pad * 2);
+                    int boxH = Math.Max(1, e.CellBounds.Height - 1 - pad * 2);
+
+                    float scale = Math.Min((float)boxW / bmp.Width, (float)boxH / bmp.Height);
+                    int drawW = Math.Max(1, (int)Math.Round(bmp.Width * scale));
+                    int drawH = Math.Max(1, (int)Math.Round(bmp.Height * scale));
+                    int drawX = e.CellBounds.X + (e.CellBounds.Width - 1 - drawW) / 2;
+                    int drawY = e.CellBounds.Y + (e.CellBounds.Height - 1 - drawH) / 2;
+
+                    var state = e.Graphics.Save();
+                    e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    e.Graphics.SmoothingMode = SmoothingMode.HighQuality;
+                    e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    e.Graphics.CompositingQuality = CompositingQuality.HighQuality;
+                    e.Graphics.DrawImage(bmp, new Rectangle(drawX, drawY, drawW, drawH));
+                    e.Graphics.Restore(state);
+                }
+
+                e.Handled = true;
+                return;
+            }
+
+            // 中段二欄（暱稱、角色）：分為上下兩列，上列顯示各自欄位，下列跨「暱稱 + 角色」兩欄合併靠左顯示「個人狀態」
+            if (e.ColumnIndex == nickColIndex || e.ColumnIndex == charColIndex)
+            {
+                using (var backBrush = new SolidBrush(rowBackColor))
+                {
+                    e.Graphics.FillRectangle(backBrush, e.CellBounds);
+                }
+
+                int topHeight = e.CellBounds.Height / 2;
+                int midY = e.CellBounds.Top + topHeight;
+
+                string topText;
+                Color topColor;
+                Font topFont;
+
+                if (e.ColumnIndex == nickColIndex)
+                {
+                    topText = item.Nickname;
+                    topColor = item.IsDead
+                        ? DeadNameColor
+                        : item.IsSoiled
+                            ? SoiledNameColor
+                            : NormalNameColor;
+                    topFont = _dgv.Columns[nickColIndex].DefaultCellStyle.Font ?? _dgv.Font;
+                }
+                else
+                {
+                    topText = !string.IsNullOrWhiteSpace(item.CharacterTitle)
+                        ? $"{item.CharacterName}（{item.CharacterTitle}）"
+                        : item.CharacterName;
+                    topColor = Color.FromArgb(165, 205, 250);
+                    topFont = _dgv.Columns[charColIndex].DefaultCellStyle.Font ?? _dgv.Font;
+                }
+
+                var topRect = new Rectangle(
+                    e.CellBounds.X + ScaleDpi(4),
+                    e.CellBounds.Y,
+                    Math.Max(1, e.CellBounds.Width - ScaleDpi(8)),
+                    topHeight);
+
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    topText,
+                    topFont,
+                    topRect,
+                    topColor,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+
+                // 下半列：跨「暱稱 + 角色」兩欄靠左繪製個人狀態
+                int nickW = _dgv.Columns[nickColIndex].Width;
+                int charW = _dgv.Columns[charColIndex].Width;
+                int spanLeft = e.ColumnIndex == nickColIndex
+                    ? e.CellBounds.Left
+                    : e.CellBounds.Left - nickW;
+                int spanWidth = nickW + charW;
+
+                var bottomSpanRect = new Rectangle(
+                    spanLeft + ScaleDpi(10),
+                    midY + 1,
+                    Math.Max(1, spanWidth - ScaleDpi(20)),
+                    Math.Max(1, e.CellBounds.Bottom - 1 - (midY + 1)));
+
+                if (!string.IsNullOrWhiteSpace(item.PersonalStatus))
+                {
+                    var state = e.Graphics.Save();
+                    e.Graphics.SetClip(e.CellBounds);
+                    TextRenderer.DrawText(
+                        e.Graphics,
+                        item.PersonalStatus,
+                        _dgv.DefaultCellStyle.Font ?? _dgv.Font,
+                        bottomSpanRect,
+                        Color.FromArgb(185, 190, 210),
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.PreserveGraphicsClipping);
+                    e.Graphics.Restore(state);
+                }
+
+                using (var gridPen = new Pen(_dgv.GridColor))
+                {
+                    // 上下兩列分隔線
+                    e.Graphics.DrawLine(gridPen, e.CellBounds.Left, midY, e.CellBounds.Right, midY);
+                    // 底部分隔線
+                    e.Graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right, e.CellBounds.Bottom - 1);
+
+                    // 右側格線：暱稱僅畫上半列，讓下半列視覺上合併為單一跨欄列；角色畫全高以與層數分隔
+                    if (e.ColumnIndex == charColIndex)
+                    {
+                        e.Graphics.DrawLine(gridPen, e.CellBounds.Right - 1, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
+                    }
+                    else
+                    {
+                        e.Graphics.DrawLine(gridPen, e.CellBounds.Right - 1, e.CellBounds.Top, e.CellBounds.Right - 1, midY);
+                    }
+                }
+
+                e.Handled = true;
+                return;
+            }
+
             if (e.ColumnIndex == actionColIndex)
             {
                 using (var backBrush = new SolidBrush(rowBackColor))
@@ -973,19 +1081,18 @@ namespace MyDoujinBot.Forms
                     e.Graphics.FillRectangle(backBrush, e.CellBounds);
                 }
 
-                // 繪製底部分隔線
                 using (var gridPen = new Pen(_dgv.GridColor))
                 {
                     e.Graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right, e.CellBounds.Bottom - 1);
+                    e.Graphics.DrawLine(gridPen, e.CellBounds.Right - 1, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
                 }
 
-                var item = _currentItems[e.RowIndex];
                 bool followed = IsPlayerFollowed(item);
                 string btnText = followed ? "移除" : "＋ 關注";
                 Color btnBack = followed ? Color.FromArgb(105, 45, 50) : Color.FromArgb(40, 125, 78);
 
                 int btnW = ScaleDpi(74);
-                int btnH = ScaleDpi(28);
+                int btnH = ScaleDpi(30);
                 int btnX = e.CellBounds.X + (e.CellBounds.Width - btnW) / 2;
                 int btnY = e.CellBounds.Y + (e.CellBounds.Height - btnH) / 2;
                 var btnRect = new Rectangle(btnX, btnY, btnW, btnH);
@@ -999,7 +1106,7 @@ namespace MyDoujinBot.Forms
                 TextRenderer.DrawText(
                     e.Graphics,
                     btnText,
-                    new Font("Microsoft JhengHei UI", 9f, FontStyle.Bold),
+                    new Font("Microsoft JhengHei UI", 9.8f, FontStyle.Bold),
                     btnRect,
                     Color.White,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
@@ -1008,15 +1115,16 @@ namespace MyDoujinBot.Forms
                 return;
             }
 
-            // 一般欄位套用 Hover 與奇偶列底色
+            // 一般欄位（等級、層數）套用 Hover 與奇偶列底色
             e.CellStyle!.BackColor = rowBackColor;
-            e.CellStyle.SelectionBackColor = isHovered ? Color.FromArgb(42, 50, 72) : Color.FromArgb(34, 40, 58);
+            e.CellStyle.SelectionBackColor = rowBackColor;
         }
 
         private void SetStatusText(string text, bool isWarning = false, bool isError = false)
         {
-            if (this.IsDisposed) return;
+            if (this.IsDisposed || _lblStatus == null) return;
             _lblStatus.Text = text;
+            _lblStatus.Visible = !string.IsNullOrWhiteSpace(text);
             _lblStatus.ForeColor = isError
                 ? Color.FromArgb(235, 95, 95)
                 : isWarning
@@ -1030,11 +1138,6 @@ namespace MyDoujinBot.Forms
             {
                 _queryCts?.Cancel();
                 _queryCts?.Dispose();
-                foreach (var bmp in _activeRowBitmaps)
-                {
-                    bmp.Dispose();
-                }
-                _activeRowBitmaps.Clear();
                 _placeholderBitmap?.Dispose();
             }
             base.Dispose(disposing);

@@ -190,7 +190,7 @@ namespace MyDoujinBot.Utilities
 
             if (report.Boss?.FloorNumber.HasValue == true && report.Boss.FloorNumber.Value > 0)
             {
-                parts.Add($"{report.Boss.FloorNumber.Value}F");
+                parts.Add(StatHelper.FormatFloor(report.Boss.FloorNumber.Value));
             }
 
             if (!string.IsNullOrWhiteSpace(report.Boss?.Name)) parts.Add(report.Boss!.Name!);

@@ -3737,7 +3737,7 @@ namespace MyDoujinBot.Forms
                 if (result.IsSuccess && result.Data != null)
                 {
                     var data = result.Data;
-                    var msg = $"[樓層獎勵] 已領取 {data.Floor}F 樓層獎勵：獲得經驗值 +{data.Exp}";
+                    var msg = $"[樓層獎勵] 已領取 {StatHelper.FormatFloor(data.Floor)} 樓層獎勵：獲得經驗值 +{data.Exp}";
                     if (data.RewardResult != null && data.RewardResult.LevelUps > 0)
                     {
                         msg += $"，升級 +{data.RewardResult.LevelUps}，目前等級 {data.RewardResult.Level}";
@@ -3883,7 +3883,7 @@ namespace MyDoujinBot.Forms
 
                 MessageBox.Show(
                     this,
-                    $"Token 驗證成功並已儲存！\n\n玩家名稱：{UserContext.Current.PlayerName}\n出戰角色：{UserContext.Current.CharacterName} (Lv.{UserContext.Current.Level})\n目前樓層：{UserContext.Current.CurrentFloor}F",
+                    $"Token 驗證成功並已儲存！\n\n玩家名稱：{UserContext.Current.PlayerName}\n出戰角色：{UserContext.Current.CharacterName} (Lv.{UserContext.Current.Level})\n目前樓層：{StatHelper.FormatFloor(UserContext.Current.CurrentFloor)}",
                     "驗證成功",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -4136,7 +4136,7 @@ namespace MyDoujinBot.Forms
 
                 MessageBox.Show(
                     dialog,
-                    $"備份資料匯入成功，Token 驗證通過！\n\n玩家名稱：{UserContext.Current.PlayerName}\n出戰角色：{UserContext.Current.CharacterName} (Lv.{UserContext.Current.Level})\n目前樓層：{UserContext.Current.CurrentFloor}F",
+                    $"備份資料匯入成功，Token 驗證通過！\n\n玩家名稱：{UserContext.Current.PlayerName}\n出戰角色：{UserContext.Current.CharacterName} (Lv.{UserContext.Current.Level})\n目前樓層：{StatHelper.FormatFloor(UserContext.Current.CurrentFloor)}",
                     "匯入與驗證成功",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);

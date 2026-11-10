@@ -1,5 +1,6 @@
 using System;
 using MyDoujinBot.Models;
+using MyDoujinBot.Utilities;
 
 namespace MyDoujinBot.Services
 {
@@ -96,7 +97,7 @@ namespace MyDoujinBot.Services
 
                 var charNameSuffix = !string.IsNullOrWhiteSpace(CharacterName) ? $" {CharacterName}" : string.Empty;
                 var lvlStr = Level > 0 ? $"Lv.{Level}{charNameSuffix}" : "Lv.—";
-                var floorStr = CurrentFloor > 0 ? $"{CurrentFloor}F" : "—F";
+                var floorStr = StatHelper.FormatFloor(CurrentFloor);
                 return $"{PlayerName} ｜ {lvlStr} ｜ 目前樓層：{floorStr}";
             }
         }
