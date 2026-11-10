@@ -14,6 +14,7 @@ namespace MyDoujinBot.Services
     {
         private const string MeEndpoint = $"{HttpService.ApiBaseUrl}/users/me";
         private const string ActiveCharacterEndpoint = $"{HttpService.ApiBaseUrl}/characters/active";
+        private const string CharactersEndpoint = $"{HttpService.ApiBaseUrl}/characters";
         private const string ActionStatusEndpoint = $"{HttpService.ApiBaseUrl}/action/status";
         private const string FloorRewardEndpoint = $"{HttpService.ApiBaseUrl}/action/floor-reward";
 
@@ -79,8 +80,13 @@ namespace MyDoujinBot.Services
                 return UserValidationResult.Fail($"取得行動狀態失敗：{statusRes.ErrorMessage ?? "未知錯誤"}", statusRes.IsUnauthorized);
             }
 
-            // 三隻皆成功，同步寫入全域 UserContext
-            UserContext.SetProfile(meRes.Data, activeRes.Data.Character, statusRes.Data);
+            // 4. 取得全角色清單與轉生配點資訊（含最高跳樓層數 jumpMaxFloor 與轉生配點 reincarnation）
+            var charactersRes = await _httpService.GetAsync<CharactersResponse>(CharactersEndpoint, token, cancellationToken);
+            if (cancellationToken.IsCancellationRequested)
+                return UserValidationResult.Cancelled();
+
+            // 同步寫入全域 UserContext
+            UserContext.SetProfile(meRes.Data, activeRes.Data.Character, statusRes.Data, charactersRes.Data);
 
             return UserValidationResult.Success(meRes.Data, activeRes.Data.Character, statusRes.Data);
         }
@@ -112,6 +118,19 @@ namespace MyDoujinBot.Services
             UserContext.UpdateFloorReward(response.Data);
 
             return FloorRewardClaimResult.Success(response.Data);
+        }
+
+        /// <summary>
+        /// 查詢玩家角色清單與本次轉生配點資訊（GET /api/characters），並更新 UserContext 快取。
+        /// </summary>
+        public async Task<ApiResponse<CharactersResponse>> GetCharactersAsync(string token, CancellationToken cancellationToken = default)
+        {
+            var res = await _httpService.GetAsync<CharactersResponse>(CharactersEndpoint, token, cancellationToken);
+            if (res.IsSuccess && res.Data != null)
+            {
+                UserContext.UpdateCharactersData(res.Data);
+            }
+            return res;
         }
 
         public void Dispose()

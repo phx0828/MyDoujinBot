@@ -25,6 +25,12 @@ namespace MyDoujinBot.Services
         /// <summary>行動與即時狀態（對應 GET /api/action/status）</summary>
         public ActionStatusResponse? ActionStatus { get; private set; }
 
+        /// <summary>全角色清單與轉生配點資料（對應 GET /api/characters）</summary>
+        public CharactersResponse? CharactersData { get; private set; }
+
+        /// <summary>本次轉生配點資訊（對應 GET /api/characters 內之 reincarnation）</summary>
+        public ReincarnationInfo? Reincarnation => CharactersData?.Reincarnation;
+
         /// <summary>使用者資料是否已成功載入並完成驗證</summary>
         public bool IsAuthenticated => UserMe != null && ActiveCharacter != null;
 
@@ -47,8 +53,11 @@ namespace MyDoujinBot.Services
         /// <summary>當前出戰角色名稱</summary>
         public string CharacterName => ActiveCharacter?.Name ?? string.Empty;
 
-        /// <summary>當前所在最高樓層</summary>
+        /// <summary>當前所在樓層</summary>
         public int CurrentFloor => UserMe?.CurrentFloor ?? 0;
+
+        /// <summary>歷史最高樓層（取自 characters.jumpMaxFloor 與 currentFloor 之較大值）</summary>
+        public int HighestFloor => Math.Max(CurrentFloor, CharactersData?.JumpMaxFloor ?? 0);
 
         /// <summary>下次可領取樓層獎勵的預估時間點（UTC），若無資料或尚未載入則為 null</summary>
         public DateTimeOffset? NextFloorRewardClaimTime { get; private set; }
@@ -85,20 +94,21 @@ namespace MyDoujinBot.Services
         }
 
         /// <summary>
-        /// 格式化摘要字串：玩家名 ｜ 等級 角色名 ｜ 目前樓層：41F
-        /// 例："阿爾吉利亞 ｜ Lv.79 同人 ｜ 目前樓層：41F"
+        /// 格式化摘要字串：玩家名 ｜ 等級 角色名 ｜ 樓層：1F / 80F
+        /// 例："阿爾吉利亞 ｜ Lv.79 同人 ｜ 樓層：1F / 80F"
         /// </summary>
         public string SummaryText
         {
             get
             {
                 if (!IsAuthenticated)
-                    return "— ｜ Lv.— ｜ 目前樓層：—F";
+                    return "— ｜ Lv.— ｜ 樓層：—F / —F";
 
                 var charNameSuffix = !string.IsNullOrWhiteSpace(CharacterName) ? $" {CharacterName}" : string.Empty;
                 var lvlStr = Level > 0 ? $"Lv.{Level}{charNameSuffix}" : "Lv.—";
-                var floorStr = StatHelper.FormatFloor(CurrentFloor);
-                return $"{PlayerName} ｜ {lvlStr} ｜ 目前樓層：{floorStr}";
+                var curFloorStr = StatHelper.FormatFloor(CurrentFloor);
+                var maxFloorStr = StatHelper.FormatFloor(HighestFloor);
+                return $"{PlayerName} ｜ {lvlStr} ｜ 樓層：{curFloorStr} / {maxFloorStr}";
             }
         }
 
@@ -108,7 +118,11 @@ namespace MyDoujinBot.Services
         /// <summary>
         /// 更新並設定目前已驗證之使用者完整資料。
         /// </summary>
-        public static void SetProfile(UserMeResponse me, ActiveCharacter? activeChar, ActionStatusResponse? status)
+        public static void SetProfile(
+            UserMeResponse me,
+            ActiveCharacter? activeChar,
+            ActionStatusResponse? status,
+            CharactersResponse? charactersData = null)
         {
             var nextClaim = (status?.FloorReward != null)
                 ? DateTimeOffset.UtcNow.AddMilliseconds(Math.Max(0, status.FloorReward.CooldownRemainingMs))
@@ -121,8 +135,26 @@ namespace MyDoujinBot.Services
                     UserMe = me,
                     ActiveCharacter = activeChar,
                     ActionStatus = status,
+                    CharactersData = charactersData ?? Current?.CharactersData,
                     NextFloorRewardClaimTime = nextClaim
                 };
+            }
+            OnProfileUpdated?.Invoke();
+        }
+
+        /// <summary>
+        /// 更新全角色清單與轉生配點快取資料。
+        /// </summary>
+        public static void UpdateCharactersData(CharactersResponse? charactersData)
+        {
+            if (charactersData == null) return;
+
+            lock (_lock)
+            {
+                if (Current != null)
+                {
+                    Current.CharactersData = charactersData;
+                }
             }
             OnProfileUpdated?.Invoke();
         }
@@ -143,6 +175,23 @@ namespace MyDoujinBot.Services
                 {
                     Current.ActionStatus = status;
                     Current.NextFloorRewardClaimTime = nextClaim;
+                }
+            }
+            OnProfileUpdated?.Invoke();
+        }
+
+        /// <summary>
+        /// 即時更新出戰角色完整資料（例如探索/訓練回傳最新 activeCharacter 時調用）。
+        /// </summary>
+        public static void UpdateActiveCharacter(ActiveCharacter? activeChar)
+        {
+            if (activeChar == null) return;
+
+            lock (_lock)
+            {
+                if (Current != null)
+                {
+                    Current.ActiveCharacter = activeChar;
                 }
             }
             OnProfileUpdated?.Invoke();

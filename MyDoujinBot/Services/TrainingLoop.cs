@@ -222,15 +222,14 @@ namespace MyDoujinBot.Services
                     }
                     if (response.ActiveCharacter != null)
                     {
+                        UserContext.UpdateActiveCharacter(response.ActiveCharacter);
                         if (response.ActiveCharacter.Level > 0)
                         {
                             Stats.CurrentLevel = response.ActiveCharacter.Level;
-                            UserContext.UpdateLevel(response.ActiveCharacter.Level);
                         }
                         if (response.ActiveCharacter.Stats != null)
                         {
                             Stats.CurrentStats = response.ActiveCharacter.Stats.Clone();
-                            UserContext.UpdateCharacterStats(response.ActiveCharacter.Stats);
                         }
                     }
 

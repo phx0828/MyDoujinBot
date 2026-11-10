@@ -69,6 +69,7 @@ namespace MyDoujinBot.Forms
         private Panel pnlSidebar = null!;
         private TableLayoutPanel pnlNav = null!;
         private Label lblSidebarToken = null!;
+        private NavButton btnNavCharacter = null!;
         private NavButton btnNavTraining = null!;
         private NavButton btnNavBattle = null!;
         private NavButton btnNavPipeline = null!;
@@ -80,6 +81,7 @@ namespace MyDoujinBot.Forms
 
         // --- 主畫布與分頁 Panel ---
         private Panel pnlMainCanvas = null!;
+        private MyCharacterPanel pnlViewCharacter = null!;
         private Panel pnlViewTraining = null!;
         private Panel pnlViewBattle = null!;
         private Panel pnlViewPipeline = null!;
@@ -1232,19 +1234,20 @@ namespace MyDoujinBot.Forms
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 8,
+                RowCount = 9,
                 BackColor = SidebarBackColor,
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
             pnlNav.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            for (int i = 0; i < 7; i++)
+            for (int i = 0; i < 8; i++)
             {
                 pnlNav.RowStyles.Add(new RowStyle(SizeType.Absolute, ScaleDpi(42F)));
             }
             pnlNav.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // 剩餘空間填充
             tblSidebarLayout.Controls.Add(pnlNav, 0, 1);
 
+            btnNavCharacter = CreateNavButton("我的角色", "character", IconChar.User);
             btnNavTraining  = CreateNavButton("自動訓練", "training", IconChar.Bullseye);
             btnNavBattle    = CreateNavButton("自動戰鬥", "battle", IconChar.ShieldHalved);
             btnNavPipeline  = CreateNavButton("行動排程", "pipeline", IconChar.Rotate);
@@ -1253,13 +1256,14 @@ namespace MyDoujinBot.Forms
             btnNavFriends   = CreateNavButton("關注群友", "friends", IconChar.UserGroup);
             btnNavSettings  = CreateNavButton("設定", "settings", IconChar.Gear);
 
-            pnlNav.Controls.Add(btnNavTraining, 0, 0);
-            pnlNav.Controls.Add(btnNavBattle, 0, 1);
-            pnlNav.Controls.Add(btnNavPipeline, 0, 2);
-            pnlNav.Controls.Add(btnNavEvents, 0, 3);
-            pnlNav.Controls.Add(btnNavStats, 0, 4);
-            pnlNav.Controls.Add(btnNavFriends, 0, 5);
-            pnlNav.Controls.Add(btnNavSettings, 0, 6);
+            pnlNav.Controls.Add(btnNavCharacter, 0, 0);
+            pnlNav.Controls.Add(btnNavTraining, 0, 1);
+            pnlNav.Controls.Add(btnNavBattle, 0, 2);
+            pnlNav.Controls.Add(btnNavPipeline, 0, 3);
+            pnlNav.Controls.Add(btnNavEvents, 0, 4);
+            pnlNav.Controls.Add(btnNavStats, 0, 5);
+            pnlNav.Controls.Add(btnNavFriends, 0, 6);
+            pnlNav.Controls.Add(btnNavSettings, 0, 7);
 
             // 底部 Token 狀態指示（未設定時顯示警告，已設定則隱藏不佔版面）
             lblSidebarToken = new Label
@@ -1391,13 +1395,14 @@ namespace MyDoujinBot.Forms
             {
                 Control targetView = tabKey switch
                 {
-                    "battle"   => pnlViewBattle,
-                    "pipeline" => pnlViewPipeline,
-                    "events"   => pnlViewEvents,
-                    "stats"    => pnlViewStats,
-                    "friends"  => pnlViewFriends,
-                    "settings" => pnlViewSettings,
-                    _          => pnlViewTraining
+                    "character" => pnlViewCharacter,
+                    "battle"    => pnlViewBattle,
+                    "pipeline"  => pnlViewPipeline,
+                    "events"    => pnlViewEvents,
+                    "stats"     => pnlViewStats,
+                    "friends"   => pnlViewFriends,
+                    "settings"  => pnlViewSettings,
+                    _           => pnlViewTraining
                 };
 
                 // 核心關鍵：只將當前頁籤掛載到 pnlMainCanvas，移出其他非使用中的頁籤。
@@ -1416,7 +1421,11 @@ namespace MyDoujinBot.Forms
                 pnlMainCanvas.ResumeLayout(true);
             }
 
-            if (tabKey == "friends")
+            if (tabKey == "character")
+            {
+                pnlViewCharacter?.OnTabActivated();
+            }
+            else if (tabKey == "friends")
             {
                 pnlViewFriends?.OnTabActivated();
             }
@@ -1445,13 +1454,14 @@ namespace MyDoujinBot.Forms
             InitializePipelinePresets();
 
             // 建立各頁籤檢視（物件常駐記憶體保持狀態，但畫面樹永遠只由 SwitchNavTab 掛載當前作用中頁籤）
-            pnlViewTraining = BuildTrainingView();
-            pnlViewBattle   = BuildBattleView();
-            pnlViewPipeline = BuildPipelineView();
-            pnlViewEvents   = BuildEventsView();
-            pnlViewStats    = BuildStatsView();
-            pnlViewFriends  = new FriendMonitorPanel(_battleService, () => _currentToken);
-            pnlViewSettings = BuildSettingsView();
+            pnlViewCharacter = new MyCharacterPanel(_battleService, _userService, () => _currentToken);
+            pnlViewTraining  = BuildTrainingView();
+            pnlViewBattle    = BuildBattleView();
+            pnlViewPipeline  = BuildPipelineView();
+            pnlViewEvents    = BuildEventsView();
+            pnlViewStats     = BuildStatsView();
+            pnlViewFriends   = new FriendMonitorPanel(_battleService, () => _currentToken);
+            pnlViewSettings  = BuildSettingsView();
 
             EnableDoubleBuffering(pnlMainCanvas);
             if (pnlRightPanel != null) EnableDoubleBuffering(pnlRightPanel);
@@ -4546,6 +4556,7 @@ namespace MyDoujinBot.Forms
             if (enabled)
             {
                 // 空閒/停止狀態：所有導覽頁籤皆可點擊切換
+                SetNavLocked(btnNavCharacter, false);
                 SetNavLocked(btnNavTraining, false);
                 SetNavLocked(btnNavBattle, false);
                 SetNavLocked(btnNavPipeline, false);
@@ -4559,8 +4570,9 @@ namespace MyDoujinBot.Forms
                 // 執行中狀態：
                 // - 當前正在運行的行動頁籤必須保持啟用，確保切換至戰報等頁面後能切換回原本的行動頁面！
                 // - 非當前運行的其他行動頁籤停用，避免同時啟動多個任務衝突
-                // - 戰報分析與關注群友頁籤保持啟用（純查詢與數據檢視，不影響背景執行）
+                // - 我的角色、戰報分析與關注群友頁籤保持啟用（純查詢與數據檢視，不影響背景執行）
                 // - 事件應對與連線設定頁籤停用，避免運作中修改關鍵策略或 Token
+                SetNavLocked(btnNavCharacter, false);
                 SetNavLocked(btnNavTraining, _activeRunningMode != "training");
                 SetNavLocked(btnNavBattle, _activeRunningMode != "battle");
                 SetNavLocked(btnNavPipeline, _activeRunningMode != "pipeline");

@@ -202,15 +202,14 @@ namespace MyDoujinBot.Services
                             }
                             if (resp.ActiveCharacter != null)
                             {
+                                UserContext.UpdateActiveCharacter(resp.ActiveCharacter);
                                 if (resp.ActiveCharacter.Level > 0)
                                 {
                                     Stats.CurrentLevel = resp.ActiveCharacter.Level;
-                                    UserContext.UpdateLevel(resp.ActiveCharacter.Level);
                                 }
                                 if (resp.ActiveCharacter.Stats != null)
                                 {
                                     Stats.CurrentStats = resp.ActiveCharacter.Stats.Clone();
-                                    UserContext.UpdateCharacterStats(resp.ActiveCharacter.Stats);
                                 }
                             }
                             var curStageRec = GetOrCreateStageRecord(stageIndex + 1, stage);
