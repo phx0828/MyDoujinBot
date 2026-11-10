@@ -74,6 +74,7 @@ namespace MyDoujinBot.Forms
         private NavButton btnNavPipeline = null!;
         private NavButton btnNavEvents = null!;
         private NavButton btnNavStats = null!;
+        private NavButton btnNavFriends = null!;
         private NavButton btnNavSettings = null!;
         private readonly List<NavButton> _navButtons = new();
 
@@ -84,6 +85,7 @@ namespace MyDoujinBot.Forms
         private Panel pnlViewPipeline = null!;
         private Panel pnlViewEvents = null!;
         private Panel pnlViewStats = null!;
+        private FriendMonitorPanel pnlViewFriends = null!;
         private Panel pnlViewSettings = null!;
         private Panel pnlEventOverlay = null!;
 
@@ -1230,13 +1232,13 @@ namespace MyDoujinBot.Forms
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 7,
+                RowCount = 8,
                 BackColor = SidebarBackColor,
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
             pnlNav.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < 7; i++)
             {
                 pnlNav.RowStyles.Add(new RowStyle(SizeType.Absolute, ScaleDpi(42F)));
             }
@@ -1248,6 +1250,7 @@ namespace MyDoujinBot.Forms
             btnNavPipeline  = CreateNavButton("行動排程", "pipeline", IconChar.Rotate);
             btnNavEvents    = CreateNavButton("事件應對", "events", IconChar.Scroll);
             btnNavStats     = CreateNavButton("戰報分析", "stats", IconChar.ChartBar);
+            btnNavFriends   = CreateNavButton("關注群友", "friends", IconChar.UserGroup);
             btnNavSettings  = CreateNavButton("設定", "settings", IconChar.Gear);
 
             pnlNav.Controls.Add(btnNavTraining, 0, 0);
@@ -1255,7 +1258,8 @@ namespace MyDoujinBot.Forms
             pnlNav.Controls.Add(btnNavPipeline, 0, 2);
             pnlNav.Controls.Add(btnNavEvents, 0, 3);
             pnlNav.Controls.Add(btnNavStats, 0, 4);
-            pnlNav.Controls.Add(btnNavSettings, 0, 5);
+            pnlNav.Controls.Add(btnNavFriends, 0, 5);
+            pnlNav.Controls.Add(btnNavSettings, 0, 6);
 
             // 底部 Token 狀態指示（未設定時顯示警告，已設定則隱藏不佔版面）
             lblSidebarToken = new Label
@@ -1391,6 +1395,7 @@ namespace MyDoujinBot.Forms
                     "pipeline" => pnlViewPipeline,
                     "events"   => pnlViewEvents,
                     "stats"    => pnlViewStats,
+                    "friends"  => pnlViewFriends,
                     "settings" => pnlViewSettings,
                     _          => pnlViewTraining
                 };
@@ -1409,6 +1414,11 @@ namespace MyDoujinBot.Forms
             finally
             {
                 pnlMainCanvas.ResumeLayout(true);
+            }
+
+            if (tabKey == "friends")
+            {
+                pnlViewFriends?.OnTabActivated();
             }
 
             if (lblStatusRuns != null)
@@ -1440,6 +1450,7 @@ namespace MyDoujinBot.Forms
             pnlViewPipeline = BuildPipelineView();
             pnlViewEvents   = BuildEventsView();
             pnlViewStats    = BuildStatsView();
+            pnlViewFriends  = new FriendMonitorPanel(_battleService, () => _currentToken);
             pnlViewSettings = BuildSettingsView();
 
             EnableDoubleBuffering(pnlMainCanvas);
@@ -3580,7 +3591,7 @@ namespace MyDoujinBot.Forms
 
             var lblBackupNote = new Label
             {
-                Text = "💡 一鍵匯出包含系統設定、Token、排程方案與事件自選方案；從此處一鍵匯入將完整覆寫現有設定與所有方案（保留目前連線中的 Token）。",
+                Text = "💡 一鍵匯出包含系統設定、Token、關注群友清單、排程方案與事件自選方案；從此處一鍵匯入將完整覆寫現有設定與所有方案（保留目前連線中的 Token）。",
                 ForeColor = Color.FromArgb(140, 140, 160),
                 Font = new Font("Microsoft JhengHei UI", 8.5f),
                 AutoSize = true,
@@ -3973,7 +3984,7 @@ namespace MyDoujinBot.Forms
 
             var confirmResult = MessageBox.Show(
                 this,
-                "匯入備份資料將會完全覆寫現有的所有系統設定、排程方案與事件自選方案！\n\n（注意：目前連線中的 Token 將予以保留，不會被覆寫）\n\n確定要繼續匯入嗎？",
+                "匯入備份資料將會完全覆寫現有的所有系統設定、關注群友清單、排程方案與事件自選方案！\n\n（注意：目前連線中的 Token 將予以保留，不會被覆寫）\n\n確定要繼續匯入嗎？",
                 "匯入覆寫確認",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -4253,6 +4264,9 @@ namespace MyDoujinBot.Forms
 
             // 重新載入事件自選面板
             _eventChoicePanel?.ReloadAllFromStorage(AppSettingsManager.Current.ActiveEventPresetId);
+
+            // 重新載入關注群友面板
+            pnlViewFriends?.ReloadFromSettings();
 
             // 更新通知與圖示
             if (chkEventNotify != null) chkEventNotify.Checked = AppSettingsManager.Current.EnableSystemNotify;
@@ -4537,6 +4551,7 @@ namespace MyDoujinBot.Forms
                 SetNavLocked(btnNavPipeline, false);
                 SetNavLocked(btnNavEvents, false);
                 SetNavLocked(btnNavStats, false);
+                SetNavLocked(btnNavFriends, false);
                 SetNavLocked(btnNavSettings, false);
             }
             else
@@ -4544,13 +4559,14 @@ namespace MyDoujinBot.Forms
                 // 執行中狀態：
                 // - 當前正在運行的行動頁籤必須保持啟用，確保切換至戰報等頁面後能切換回原本的行動頁面！
                 // - 非當前運行的其他行動頁籤停用，避免同時啟動多個任務衝突
-                // - 戰報分析頁籤保持啟用（純查詢與數據檢視，不影響背景執行）
+                // - 戰報分析與關注群友頁籤保持啟用（純查詢與數據檢視，不影響背景執行）
                 // - 事件應對與連線設定頁籤停用，避免運作中修改關鍵策略或 Token
                 SetNavLocked(btnNavTraining, _activeRunningMode != "training");
                 SetNavLocked(btnNavBattle, _activeRunningMode != "battle");
                 SetNavLocked(btnNavPipeline, _activeRunningMode != "pipeline");
                 SetNavLocked(btnNavEvents, true);
                 SetNavLocked(btnNavStats, false);
+                SetNavLocked(btnNavFriends, false);
                 SetNavLocked(btnNavSettings, true);
             }
 

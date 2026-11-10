@@ -20,11 +20,11 @@
 
 | 文件路徑 | 主題 | 核心內容摘要 |
 | :--- | :--- | :--- |
-| 📘 **[Architecture.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/Architecture.md)** | **系統架構與技術核心** | 四層架構 (SoC)、非同步與執行緒安全、無鎖事件掛起、持久化策略 |
-| 📗 **[Features.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/Features.md)** | **系統功能與運作模組** | 自動訓練、自動戰鬥與潑屎判定、行動排程與方案管理、兩階段事件決策、戰報統計、樓層獎勵 |
-| 📙 **[ApiCatalog.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/ApiCatalog.md)** | **API 端點與服務手冊** | 目前運作中 API、標頭封裝規範、401 攔截與安全機制 |
-| 📑 **[GameApis_Spec.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/GameApis_Spec.md)** | **遊戲延伸 API 規格** | 4 隻已驗證 GET API（`users/me`、`action/status`、`characters/active`、`characters`）欄位對照 |
-| 📊 **[BattleStats_Spec.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/BattleStats_Spec.md)** | **戰報解析與圖表規格** | 戰報事件逐行統計、全局 100% 長條圖繪製規則、PVP 陣營處理 |
+| 📘 **[Architecture.md](file:///d:/Side/MyDoujinBot/MyDoujinBot/docs/Architecture.md)** | **系統架構與技術核心** | 四層架構 (SoC)、非同步與執行緒安全、無鎖事件掛起、持久化策略 |
+| 📗 **[Features.md](file:///d:/Side/MyDoujinBot/MyDoujinBot/docs/Features.md)** | **系統功能與運作模組** | 自動訓練、自動戰鬥與潑屎判定、行動排程與方案管理、兩階段事件決策、戰報統計、關注群友、樓層獎勵 |
+| 📙 **[ApiCatalog.md](file:///d:/Side/MyDoujinBot/MyDoujinBot/docs/ApiCatalog.md)** | **API 端點與服務手冊** | 目前運作中 API、標頭封裝規範、401 攔截與安全機制 |
+| 📑 **[GameApis_Spec.md](file:///d:/Side/MyDoujinBot/MyDoujinBot/docs/GameApis_Spec.md)** | **遊戲延伸 API 規格** | 已驗證 GET/POST API（`users/me`、`action/status`、`characters/active`、`characters`、`players`）欄位對照 |
+| 📊 **[BattleStats_Spec.md](file:///d:/Side/MyDoujinBot/MyDoujinBot/docs/BattleStats_Spec.md)** | **戰報解析與圖表規格** | 戰報事件逐行統計、全局 100% 長條圖繪製規則、PVP 陣營處理 |
 
 ---
 
@@ -33,8 +33,11 @@
 ```text
 MyDoujinBot/
 ├── Forms/                    # UI 視窗與自訂渲染控制項
-│   ├── MainForm.cs           # 主畫面（側邊欄、6 大分頁、即時儀表板、日誌區、內嵌事件 Overlay、狀態列）
+│   ├── MainForm.cs           # 主畫面（側邊欄、7 大分頁、即時儀表板、日誌區、內嵌事件 Overlay、狀態列）
+│   ├── FriendMonitorPanel.cs # 關注群友分頁面板（關注名單管理、玩家搜尋、狀態著色、WebP 頭像顯示）
+│   ├── PlayerDetailForm.cs   # 單一玩家詳細數值彈窗（九圍能力值、戰績統計、玩家 ID 點擊複製）
 │   ├── EventSelectionForm.cs # 獨立彈窗模式下之事件選項決策視窗
+│   ├── EventArchiveImportForm.cs # 事件庫手動備援匯入視窗（支援貼上 JSON 文字與選取 JSON 檔案）
 │   ├── BattleReportForm.cs   # 單場戰報彩色日誌彈出視窗
 │   ├── BattleStatsForm.cs    # 獨立戰報數據查詢與圖表視窗
 │   ├── IconSelectionForm.cs  # 獨立應用程式圖示挑選視窗
@@ -49,8 +52,8 @@ MyDoujinBot/
 │   ├── PipelineLoop.cs       # 行動排程多階段排程調度迴圈
 │   ├── TrainingService.cs    # 訓練 API (POST /api/action/explore) 服務
 │   ├── EventService.cs       # 事件選項 API (POST /api/action/resolve) 服務
-│   ├── BattleService.cs      # 戰鬥與驗證 API 服務
-│   ├── AppSettingsManager.cs # 全域組態管理 (settings.json，含樓層獎勵開關)
+│   ├── BattleService.cs      # 戰鬥、玩家列表查詢、玩家詳情與 WebP 頭像解碼服務
+│   ├── AppSettingsManager.cs # 全域組態管理 (settings.json，含樓層獎勵開關與關注群友清單)
 │   ├── PresetManager.cs      # 泛型方案管理 (data/presets/{category}/{id}.json)
 │   └── BattleStats*.cs       # 戰報數據統計與解析引擎 (Context/Calculator/Index)
 ├── Models/                   # 資料模型 (DTO) 與列舉
@@ -59,6 +62,9 @@ MyDoujinBot/
 │   ├── CharactersResponse.cs # 帳號全角色清單（GET /api/characters）
 │   ├── ActionStatusResponse.cs# 冷卻與即時狀態（GET /api/action/status）
 │   ├── FloorRewardClaimResponse.cs# 樓層獎勵領取結果（POST /api/action/floor-reward）
+│   ├── PlayersQueryResponse.cs# 玩家列表查詢結果（GET /api/players?page=1&limit=10...）
+│   ├── PlayerProfileResponse.cs# 單一玩家詳細資訊（GET /api/players/{id}）
+│   ├── FollowedPlayerEntry.cs# 關注群友持久化項目模型（Id、Nickname）
 │   ├── TrainingAction.cs     # 訓練動作項目定義
 │   ├── BattleActionResponse.cs# 戰鬥結果與參與者 (participants) 模型 (含茶渡潑屎防誤判)
 │   ├── PipelineStage.cs      # 排程單一階段資料模型

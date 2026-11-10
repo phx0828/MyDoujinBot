@@ -298,4 +298,68 @@
 | `exp` | `int` | 本次行動獲得之經驗值 (例：`20`) |
 | `level` | `int` | 行動結算後角色等級 (例：`74`) |
 | `levelUps` | `int` | 本次行動觸發之升級次數 (例：`0`) |
+| `gains` | `Dictionary<string, int>?` | 各能力成長值 (例：`{ "hp": 0, "atk": 1 }`) |
+
+---
+
+## 6. 玩家列表查詢 (`players` 帶查詢參數)
+
+- **端點 URL**：`GET https://api.mydoujin.online/api/players?page=1&limit=10&sort=level&order=desc&name={Uri.EscapeDataString(nickname)}`
+- **用途**：依玩家暱稱搜尋玩家列表，或逐筆查詢關注群友的即時狀態。
+- **對應 C# Model**：[PlayersQueryResponse.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Models/PlayersQueryResponse.cs)
+
+### 頂層欄位結構 (Root)
+| 欄位名稱 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| `players` | `List<PlayerSummaryItem>` | 符合查詢條件之玩家列表 |
+| `pagination` | `PlayersPaginationInfo` | 分頁資訊 (`page`, `limit`, `total`, `totalPages`) |
+| `sort` | `PlayersSortInfo` | 排序資訊 (`by`, `order`) |
+
+### 子結構：玩家摘要項目 (`players[] / PlayerSummaryItem`)
+| 欄位名稱 | 型別 | 遊戲介面對應名稱 | 說明 / 範例值 |
+| :--- | :--- | :--- | :--- |
+| `id` | `string` | 玩家 ID | 玩家唯一識別碼，例：`"69cd17cf649c1a1588d769b6"` |
+| `nickname` | `string` | **暱稱** | 玩家顯示暱稱，例：`"老ㄐ訶德"` |
+| `characterName` | `string` | **角色** | 當前出戰角色名稱，例：`"瓦倫西娜"` |
+| `characterTitle` | `string` | **稱號** | 當前出戰角色稱號，例：`"拇指姑娘"` |
+| `imagePath` | `string` | **頭像** | 角色頭像相對路徑，例：`"/images/characters/valencina.webp"` |
+| `level` | `int` | **等級** | 當前出戰角色等級，例：`57` |
+| `floor` | `int` | **現今層數** | 目前所在樓層，例：`40` |
+| `highestFloor` | `int` | **最大層數** | 歷史最高樓層，例：`41` |
+| `isDead` | `bool` | 死亡狀態 | 是否死亡（`true` 時暱稱優先顯示紅字） |
+| `isSoiled` | `bool` | 沾屎狀態 | 是否沾屎（`true` 時暱稱顯示褐字） |
+| `personalStatus` | `string` | **個人狀態** | 玩家個人狀態文字 |
+
+---
+
+## 7. 單一玩家詳細資訊 (`players/{id}`)
+
+- **端點 URL**：`GET https://api.mydoujin.online/api/players/{id}`
+- **用途**：點擊關注群友或搜尋結果列時，查詢該玩家的完整能力數值與戰績統計；亦用於自動戰鬥對手 ID 驗證。
+- **對應 C# Model**：[PlayerProfileResponse.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Models/PlayerProfileResponse.cs)
+
+### 頂層欄位結構 (Root)
+| 欄位名稱 | 型別 | 說明 / 範例值 |
+| :--- | :--- | :--- |
+| `id` | `string` | 玩家唯一識別碼，例：`"69cd17cf649c1a1588d769b6"` |
+| `nickname` | `string` | 玩家公開暱稱，例：`"老ㄐ訶德"` |
+| `character` | `CharacterInfo?` | 該玩家當前出戰角色之完整資訊 |
+
+### 子結構：玩家出戰角色詳情 (`character / CharacterInfo`)
+| 欄位名稱 | 型別 | 說明 / 範例值 |
+| :--- | :--- | :--- |
+| `_id` | `string` | 角色實例 ID，例：`"69d70be413c7d86c25b86411"` |
+| `userId` | `string` | 玩家帳號 ID，例：`"69cd17cf649c1a1588d769b6"` |
+| `characterId` | `string` | 角色原型代號，例：`"valencina"` |
+| `formId` | `string?` | 角色型態 ID（無則為 `null`） |
+| `level` | `int` | 角色等級，例：`67` |
+| `exp` | `int` | 當前等級經驗值，例：`2460` |
+| `totalExp` | `int` | 累計總經驗值，例：`80085` |
+| `combatStats` | `CombatStats?` | 本輪戰績統計（`wins`, `losses`, `activeThrows`, `defenseThrows`, `assaultSoiled`, `counterSoiled` 等） |
+| `isDead` | `bool` | 是否處於死亡狀態 |
+| `isSoiled` | `bool` | 是否處於沾屎狀態 |
+| `name` | `string` | 角色名稱，例：`"瓦倫西娜"` |
+| `title` | `string` | 角色稱號，例：`"拇指姑娘"` |
+| `imagePath` | `string` | 角色立繪路徑，例：`"/images/characters/valencina.webp"` |
+| `stats` | `CharacterStats?` | 九大戰鬥屬性（`hp`, `atk`, `def`, `sta`, `agi`, `spd`, `tec`, `int`, `luk`） |
 | `gains` | `Dictionary<string, int>` | 各能力屬性成長值 (`hp`, `atk`, `def`, `sta`, `agi`, `spd`, `tec`, `int`, `luk`，範例值皆為 `0`) |

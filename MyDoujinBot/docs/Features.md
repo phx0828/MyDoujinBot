@@ -164,3 +164,39 @@
      - 設定持久化儲存於 `settings.json`（`selectedAppIcon`），重啟應用程式自動恢復使用者的圖示偏好。
   4. **建置與發布支援**：
      - 專案檔設定為 `<Content Include="Resources\*.ico">`，編譯與發布時自動複製所有放在 Resources 的圖示檔案。
+
+
+---
+
+## 9. 關注群友與玩家查詢模組 (Friend Monitor & Player Search)
+
+- **核心程式碼**：[FriendMonitorPanel.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/FriendMonitorPanel.cs)、[PlayerDetailForm.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Forms/PlayerDetailForm.cs)、[BattleService.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Services/BattleService.cs)、[PlayersQueryResponse.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Models/PlayersQueryResponse.cs)、[PlayerProfileResponse.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Models/PlayerProfileResponse.cs)、[FollowedPlayerEntry.cs](file:///d:/Side/MyDoujinBot/MyDoujinBot/Models/FollowedPlayerEntry.cs)
+- **API 端點**：
+  - 玩家列表查詢：`GET /api/players?page=1&limit=10&sort=level&order=desc&name={encodedNickname}`
+  - 單一玩家詳細資訊：`GET /api/players/{id}`
+  - 角色頭像圖片：`GET https://mydoujin.online{imagePath}`（`.webp` 格式）
+- **功能特性**：
+  1. **獨立導航分頁與運行期間不鎖定**：
+     - 主畫面左側導航列設有獨立分頁 **「關注群友」**（`friends`）。
+     - 自動訓練、自動戰鬥或行動排程執行期間，該分頁保持不鎖定，使用者可隨時切換進入查看。
+  2. **自動發查與手動重新整理**：
+     - 切換至「關注群友」分頁時，自動針對所有已關注玩家逐筆呼叫 `/api/players` 取得最新狀態。
+     - 頁面提供 **「重新整理關注狀態」** 按鈕，供手動重新拉取關注對象狀態。
+  3. **玩家搜尋與關注清單管理**：
+     - 提供玩家暱稱搜尋框，輸入暱稱後呼叫 `/api/players` 並於同一表格呈現查詢結果。
+     - 新增關注對象不需手動輸入玩家 ID，只需透過暱稱查詢即可由 API 回傳結果自動取得 `id` 與 `nickname`。
+     - 搜尋結果右側提供 **「＋ 關注」** 按鈕可直接加入關注清單；已關注對象右側提供 **「移除」** 按鈕可從清單刪除。
+     - 關注清單儲存於 `settings.json` 的 `followedPlayers` 欄位，並完整跟隨「設定 → 一鍵匯出備份／一鍵匯入備份」進行備份與還原。
+  4. **條列表格欄位與狀態顏色優先序**：
+     - 顯示欄位：**頭像**、**等級**、**暱稱**、**角色（稱號）**、**層數 (現今/最大)**、**個人狀態**、**操作**。
+     - 暱稱文字顏色依狀態優先序顯示：
+       1. **死亡**（`isDead == true`）：優先以**紅色**顯示暱稱。
+       2. **沾屎**（`isSoiled == true`）：以**褐色**顯示暱稱。
+       3. **一般狀態**：預設淺色顯示。
+  5. **WebP 頭像記憶體即時解碼**：
+     - 每次發查時直接透過 `GET` 取得 `.webp` 圖片位元組，不落地本機快取。
+     - 使用 `SkiaSharp` 於記憶體內解碼並縮放為目標尺寸後，透過 `Bitmap.LockBits` 與 `Marshal.Copy` 轉換為 WinForms `Bitmap` 顯示。
+  6. **點擊欄位開啟詳細數值視窗與複製 ID (PlayerDetailForm)**：
+     - 點擊表格內任一資料欄位（頭像、等級、暱稱、角色、層數、個人狀態），即開啟詳細確認視窗並呼叫 `GET /api/players/{id}`。
+     - 視窗顯示玩家頭像、暱稱（套用死亡紅字／沾屎褐字）、角色與稱號、等級與經驗值、九圍能力值（HP、攻擊、防禦、體力、敏捷、速度、技巧、智力、運氣）及本輪戰績統計。
+     - 顯示玩家 ID，點擊 ID 文字或「複製 ID」按鈕可直接複製至剪貼簿。

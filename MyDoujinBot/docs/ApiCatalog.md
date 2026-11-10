@@ -18,7 +18,9 @@
 | 服務類別 (Service) | HTTP 方法 | 端點路徑 (Endpoint) | 傳入參數 (Payload / Param) | 回傳模型 (Model) | 作用說明 |
 | **TrainingService** | **POST** | `/action/explore` | `{"actionId": "hunt"}` | `TrainingResponse` | 執行指定訓練探險行動（回傳結構詳見 [GameApis_Spec.md](file:///d:/MyDoujinBot/MyDoujinBot/docs/GameApis_Spec.md#5-訓練與探險行動-actionexplore)） |
 | **EventService** | **POST** | `/action/resolve` | `{"optionId": "選項ID"}` | `ApiResponse<EventResult>` | 提交遭遇事件之選擇結果 |
-| **BattleService** | **GET** | `/players/{id}` | URL 路徑帶入玩家 ID | `PlayerProfileResponse` | 查詢並驗證對手玩家名稱、角色與等級 |
+| **BattleService** | **GET** | `/players` | `?page=1&limit=10&sort=level&order=desc&name=...` | `PlayersQueryResponse` | 依暱稱搜尋玩家列表與關注對象狀態（頭像路徑、等級、角色稱號、層數、死亡/沾屎、個人狀態） |
+| **BattleService** | **GET** | `/players/{id}` | URL 路徑帶入玩家 ID | `PlayerProfileResponse` | 查詢單一玩家詳細資訊（九圍能力值、本輪戰績、等級經驗、角色稱號）與對手 ID 驗證 |
+| **BattleService** | **GET** | `https://mydoujin.online{imagePath}` | 角色立繪相對路徑（如 `/images/characters/valencina.webp`） | `Bitmap?` | 取得角色 `.webp` 頭像並於記憶體解碼為 WinForms `Bitmap` |
 | **BattleService** | **POST** | `/players/{id}/challenge` | 空物件 Payload | `BattleActionResponse` | 對指定玩家發起友好切磋 |
 | **BattleService** | **POST** | `/players/{id}/chado` | 空物件 Payload | `BattleActionResponse` | 對指定玩家發起「我要茶渡你」挑戰 |
 | **BattleService** | **GET** | `/battle-reports/{id}` | URL 路徑帶入戰報編號 | `BattleReportResponse` | 取得單場戰鬥完整戰報與逐行 LOG |

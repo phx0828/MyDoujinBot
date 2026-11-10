@@ -32,6 +32,7 @@ namespace MyDoujinBot.Services
         public static void Replace(AppSettings newSettings)
         {
             Current = newSettings ?? new AppSettings();
+            Current.FollowedPlayers ??= new System.Collections.Generic.List<MyDoujinBot.Models.FollowedPlayerEntry>();
             Save();
         }
 
@@ -52,6 +53,7 @@ namespace MyDoujinBot.Services
 
                 var json = File.ReadAllText(_settingsPath);
                 Current = JsonSerializer.Deserialize<AppSettings>(json, _jsonOptions) ?? new AppSettings();
+                Current.FollowedPlayers ??= new System.Collections.Generic.List<MyDoujinBot.Models.FollowedPlayerEntry>();
             }
             catch
             {
@@ -253,5 +255,11 @@ namespace MyDoujinBot.Services
         /// </summary>
         [JsonPropertyName("activeTab")]
         public string ActiveTab { get; set; } = "training";
+
+        /// <summary>
+        /// 關注群友清單（儲存玩家 ID 與暱稱）。
+        /// </summary>
+        [JsonPropertyName("followedPlayers")]
+        public System.Collections.Generic.List<MyDoujinBot.Models.FollowedPlayerEntry> FollowedPlayers { get; set; } = new();
     }
 }

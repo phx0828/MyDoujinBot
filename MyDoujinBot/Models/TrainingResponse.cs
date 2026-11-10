@@ -138,6 +138,24 @@ namespace MyDoujinBot.Models
 
         [JsonPropertyName("tricks")]
         public int Tricks { get; set; }
+
+        [JsonPropertyName("boPenReturned")]
+        public int BoPenReturned { get; set; }
+
+        [JsonPropertyName("boPenPink")]
+        public int BoPenPink { get; set; }
+
+        [JsonPropertyName("boPenGrey")]
+        public int BoPenGrey { get; set; }
+
+        [JsonPropertyName("boPenDrawn")]
+        public int BoPenDrawn { get; set; }
+
+        [JsonPropertyName("roxyAClass")]
+        public int RoxyAClass { get; set; }
+
+        [JsonPropertyName("roxyFClass")]
+        public int RoxyFClass { get; set; }
     }
 
     /// <summary>

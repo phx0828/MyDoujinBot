@@ -7,7 +7,7 @@ namespace MyDoujinBot.Models
 {
     /// <summary>
     /// 全域資料一鍵匯出/匯入封裝包模型。
-    /// 包含完整系統設定（含 Token）、所有排程方案與所有事件自選方案。
+    /// 包含完整系統設定（含 Token 與關注群友清單）、所有排程方案與所有事件自選方案。
     /// </summary>
     public class FullBackupPackage
     {
