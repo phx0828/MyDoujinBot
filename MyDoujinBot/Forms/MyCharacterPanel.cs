@@ -172,60 +172,73 @@ namespace MyDoujinBot.Forms
             _tblMainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // Row 1: 角色資訊大表格
 
             // ═══════════════════════════════════════════════════════════════════
-            // Row 0: 頂部標題與重新整理列
+            // Row 0: 頂部標題區（與「自動訓練設定」等全域 SectionHeader 格式一致）
             // ═══════════════════════════════════════════════════════════════════
             var pnlHeaderBar = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
                 AutoSize = true,
-                ColumnCount = 4,
-                RowCount = 1,
+                ColumnCount = 2,
+                RowCount = 2,
                 BackColor = Color.Transparent,
                 Margin = new Padding(0, 0, 0, ScaleDpi(10))
             };
-            pnlHeaderBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             pnlHeaderBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             pnlHeaderBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            pnlHeaderBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            pnlHeaderBar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            pnlHeaderBar.RowStyles.Add(new RowStyle(SizeType.Absolute, 1));
 
             var lblTitle = new Label
             {
                 Text = "我的角色",
-                Font = new Font("Microsoft JhengHei UI", 13f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(235, 238, 248),
+                ForeColor = Color.FromArgb(140, 180, 255),
+                Font = new Font("Microsoft JhengHei UI", 10f, FontStyle.Bold),
                 AutoSize = true,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(0, 0, ScaleDpi(12), 0)
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(0, 0, 0, ScaleDpi(6))
+            };
+            pnlHeaderBar.Controls.Add(lblTitle, 0, 0);
+
+            var pnlActions = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Anchor = AnchorStyles.Right,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, 0, 0, ScaleDpi(6)),
+                Padding = Padding.Empty
             };
 
             _lblStatus = new Label
             {
                 Text = string.Empty,
-                Font = new Font("Microsoft JhengHei UI", 9.5f),
-                ForeColor = Color.FromArgb(145, 195, 250),
+                Font = new Font("Microsoft JhengHei UI", 9f),
+                ForeColor = Color.FromArgb(235, 185, 80),
                 AutoSize = true,
-                Anchor = AnchorStyles.Left,
-                Margin = Padding.Empty
+                Anchor = AnchorStyles.Right,
+                Margin = new Padding(0, ScaleDpi(5), ScaleDpi(8), 0)
             };
 
             _btnReincarnation = new IconButton
             {
                 Text = " 檢視轉生配點",
                 AutoSize = true,
-                Height = ScaleDpi(32),
+                Height = ScaleDpi(28),
                 BackColor = Color.FromArgb(78, 62, 22),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                Font = new Font("Microsoft JhengHei UI", 9f),
                 Cursor = Cursors.Hand,
                 IconChar = IconChar.Sliders,
                 IconColor = Color.FromArgb(235, 200, 105),
-                IconSize = ScaleDpi(15),
+                IconSize = ScaleDpi(14),
                 TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(ScaleDpi(8), 0, ScaleDpi(10), 0),
-                Anchor = AnchorStyles.Right,
-                Margin = new Padding(0, 0, ScaleDpi(8), 0)
+                Padding = new Padding(ScaleDpi(8), ScaleDpi(2), ScaleDpi(8), ScaleDpi(2)),
+                Margin = new Padding(0, 0, ScaleDpi(6), 0)
             };
             _btnReincarnation.FlatAppearance.BorderSize = 0;
             _btnReincarnation.Click += (_, _) => OpenReincarnationDetailDialog();
@@ -234,28 +247,39 @@ namespace MyDoujinBot.Forms
             {
                 Text = " 重新整理",
                 AutoSize = true,
-                Height = ScaleDpi(32),
+                Height = ScaleDpi(28),
                 BackColor = Color.FromArgb(45, 58, 82),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft JhengHei UI", 9.5f),
+                Font = new Font("Microsoft JhengHei UI", 9f),
                 Cursor = Cursors.Hand,
                 IconChar = IconChar.ArrowsRotate,
                 IconColor = Color.FromArgb(135, 200, 255),
-                IconSize = ScaleDpi(15),
+                IconSize = ScaleDpi(14),
                 TextImageRelation = TextImageRelation.ImageBeforeText,
                 ImageAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(ScaleDpi(8), 0, ScaleDpi(10), 0),
-                Anchor = AnchorStyles.Right,
+                Padding = new Padding(ScaleDpi(8), ScaleDpi(2), ScaleDpi(8), ScaleDpi(2)),
                 Margin = Padding.Empty
             };
             _btnRefresh.FlatAppearance.BorderSize = 0;
             _btnRefresh.Click += async (_, _) => await ManualRefreshAsync();
 
-            pnlHeaderBar.Controls.Add(lblTitle, 0, 0);
-            pnlHeaderBar.Controls.Add(_lblStatus, 1, 0);
-            pnlHeaderBar.Controls.Add(_btnReincarnation, 2, 0);
-            pnlHeaderBar.Controls.Add(_btnRefresh, 3, 0);
+            pnlActions.Controls.Add(_lblStatus);
+            pnlActions.Controls.Add(_btnReincarnation);
+            pnlActions.Controls.Add(_btnRefresh);
+            pnlHeaderBar.Controls.Add(pnlActions, 1, 0);
+
+            var divider = new Label
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(50, 50, 65),
+                Height = 1,
+                AutoSize = false,
+                Text = string.Empty
+            };
+            pnlHeaderBar.Controls.Add(divider, 0, 1);
+            pnlHeaderBar.SetColumnSpan(divider, 2);
+
             _tblMainLayout.Controls.Add(pnlHeaderBar, 0, 0);
 
             // ═══════════════════════════════════════════════════════════════════
@@ -550,7 +574,7 @@ namespace MyDoujinBot.Forms
             _isRefreshing = true;
             _btnRefresh.Enabled = false;
             _lblStatus.Text = "⏳ 正在同步角色資料...";
-            _lblStatus.ForeColor = Color.FromArgb(145, 195, 250);
+            _lblStatus.ForeColor = Color.FromArgb(235, 185, 80);
 
             try
             {
