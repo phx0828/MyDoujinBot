@@ -286,9 +286,9 @@ namespace MyDoujinBot.Forms
             };
             colLevel.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
             colLevel.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            colLevel.DefaultCellStyle.Font = new Font("Consolas", 11f, FontStyle.Bold);
-            colLevel.DefaultCellStyle.ForeColor = Color.FromArgb(245, 210, 110);
-            colLevel.DefaultCellStyle.SelectionForeColor = Color.FromArgb(245, 210, 110);
+            colLevel.DefaultCellStyle.Font = new Font("Consolas", 10.5f);
+            colLevel.DefaultCellStyle.ForeColor = NormalNameColor;
+            colLevel.DefaultCellStyle.SelectionForeColor = NormalNameColor;
 
             // 欄位 2: 暱稱（下方合併顯示個人狀態）
             var colNickname = new DataGridViewTextBoxColumn
@@ -329,9 +329,9 @@ namespace MyDoujinBot.Forms
             };
             colFloor.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
             colFloor.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            colFloor.DefaultCellStyle.Font = new Font("Consolas", 11f, FontStyle.Bold);
-            colFloor.DefaultCellStyle.ForeColor = Color.FromArgb(145, 225, 175);
-            colFloor.DefaultCellStyle.SelectionForeColor = Color.FromArgb(145, 225, 175);
+            colFloor.DefaultCellStyle.Font = new Font("Consolas", 10.5f);
+            colFloor.DefaultCellStyle.ForeColor = NormalNameColor;
+            colFloor.DefaultCellStyle.SelectionForeColor = NormalNameColor;
 
             // 欄位 5: 操作按鈕 (關注 / 移除)
             var colAction = new DataGridViewTextBoxColumn

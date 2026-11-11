@@ -53,12 +53,10 @@ namespace MyDoujinBot.Forms
             _token = token;
 
             this.Text = "檢視轉生配點";
-            this.Size = new Size(ScaleDpi(380), ScaleDpi(680));
-            this.MinimumSize = new Size(ScaleDpi(350), ScaleDpi(620));
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(22, 22, 30);
             this.ForeColor = Color.FromArgb(225, 225, 238);
-            this.Font = new Font("Microsoft JhengHei UI", 10.5f);
+            this.Font = new Font("Microsoft JhengHei UI", 9.5f);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -67,6 +65,8 @@ namespace MyDoujinBot.Forms
 
             this.AutoScaleMode = AutoScaleMode.Dpi;
             this.AutoScaleDimensions = new SizeF(96F, 96F);
+            this.AutoSize = true;
+            this.AutoSizeMode = AutoSizeMode.GrowAndShrink;
 
             BuildUI();
 
@@ -83,17 +83,20 @@ namespace MyDoujinBot.Forms
             var tblRoot = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Width = ScaleDpi(330),
                 ColumnCount = 1,
                 RowCount = 5,
-                Padding = new Padding(ScaleDpi(16), ScaleDpi(14), ScaleDpi(16), ScaleDpi(14)),
+                Padding = new Padding(ScaleDpi(14), ScaleDpi(12), ScaleDpi(14), ScaleDpi(12)),
                 BackColor = Color.Transparent
             };
             tblRoot.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            tblRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // Row 0: 點數摘要卡
-            tblRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // Row 1: 狀態提示
-            tblRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // Row 2: 九圍配點
-            tblRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // Row 3: 特殊加成配點
-            tblRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));  // Row 4: 底部關閉按鈕
+            tblRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // Row 0: 點數摘要卡
+            tblRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // Row 1: 狀態提示
+            tblRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // Row 2: 九圍配點
+            tblRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // Row 3: 特殊加成配點
+            tblRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // Row 4: 底部關閉按鈕
 
             // ═══════════════════════════════════════════════════════════════════
             // Row 0: 頂部轉生點數總覽卡
@@ -278,7 +281,7 @@ namespace MyDoujinBot.Forms
             {
                 Text = labelText,
                 ForeColor = Color.FromArgb(175, 182, 202),
-                Font = new Font("Microsoft JhengHei UI", 10.5f),
+                Font = new Font("Microsoft JhengHei UI", 9.5f),
                 AutoSize = true,
                 Anchor = AnchorStyles.Left
             };
@@ -287,7 +290,7 @@ namespace MyDoujinBot.Forms
             {
                 Text = "—",
                 ForeColor = ZeroPointColor,
-                Font = new Font("Consolas", 12f, FontStyle.Bold),
+                Font = new Font("Consolas", 11f, FontStyle.Bold),
                 AutoSize = true,
                 Anchor = AnchorStyles.Right
             };

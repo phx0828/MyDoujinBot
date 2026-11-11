@@ -216,8 +216,8 @@ namespace MyDoujinBot.Forms
         public MainForm()
         {
             this.Text = $"MyDoujin Bot v{Application.ProductVersion}";
-            this.Size = new Size(1220, 760);
-            this.MinimumSize = new Size(1080, 660);
+            this.Size = new Size(1100, 700);
+            this.MinimumSize = new Size(980, 620);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(24, 24, 30);
             this.ForeColor = Color.FromArgb(220, 220, 230);

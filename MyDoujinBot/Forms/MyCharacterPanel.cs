@@ -397,7 +397,7 @@ namespace MyDoujinBot.Forms
                 Text = keyText,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Microsoft JhengHei UI", 11.5f, FontStyle.Bold),
+                Font = new Font("Microsoft JhengHei UI", 10.5f, FontStyle.Bold),
                 ForeColor = KeyTextColor,
                 AutoEllipsis = true
             };
@@ -416,7 +416,7 @@ namespace MyDoujinBot.Forms
                 Text = "—",
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Microsoft JhengHei UI", 11.5f),
+                Font = new Font("Microsoft JhengHei UI", 10.5f),
                 ForeColor = ValTextColor,
                 AutoEllipsis = true
             };
