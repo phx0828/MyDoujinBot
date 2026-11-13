@@ -251,6 +251,12 @@ namespace MyDoujinBot.Services
         public string ActiveEventPresetId { get; set; } = string.Empty;
 
         /// <summary>
+        /// 當前選取的事件偏好方案 ID。
+        /// </summary>
+        [JsonPropertyName("activeEventPreferencePresetId")]
+        public string ActiveEventPreferencePresetId { get; set; } = string.Empty;
+
+        /// <summary>
         /// 當前選取的導航分頁
         /// </summary>
         [JsonPropertyName("activeTab")]

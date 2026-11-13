@@ -195,6 +195,7 @@ namespace MyDoujinBot.Forms
         private Button btnUpdateEventArchive = null!;
         private Button btnImportEventArchive = null!;
         private EventCustomChoicePanel _eventChoicePanel = null!;
+        private EventPreferencePanel _eventPreferencePanel = null!;
 
         // --- 分頁 5: 戰報分析控制項 ---
         private TextBox txtStatsReportId = null!;
@@ -2861,7 +2862,7 @@ namespace MyDoujinBot.Forms
             _eventChoicePanel = new EventCustomChoicePanel(_eventArchiveService);
             TblAdd(tbl, _eventChoicePanel);
 
-            // 第三方事件檔案庫更新按鈕列與狀態列 (移至該分類最下面)
+            // 第三方事件檔案庫更新按鈕列與狀態列 (移至事件指定選項下方)
             var pnlArchiveButtons = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
@@ -2870,7 +2871,7 @@ namespace MyDoujinBot.Forms
                 WrapContents = true,
                 BackColor = Color.Transparent,
                 Padding = Padding.Empty,
-                Margin = new Padding(ScaleDpi(16), ScaleDpi(6), 0, ScaleDpi(4))
+                Margin = new Padding(ScaleDpi(16), ScaleDpi(2), 0, ScaleDpi(4))
             };
 
             btnUpdateEventArchive = new IconButton
@@ -2941,6 +2942,12 @@ namespace MyDoujinBot.Forms
             TblAdd(tbl, lblArchiveHint);
 
             UpdateEventArchiveStatusText();
+
+            // ── 區段 3: 事件偏好 ──
+            AddSectionHeader(tbl, "事件偏好");
+
+            _eventPreferencePanel = new EventPreferencePanel(_eventArchiveService, () => _currentToken);
+            TblAdd(tbl, _eventPreferencePanel);
 
             return outer;
         }

@@ -214,6 +214,74 @@ namespace MyDoujinBot.Services
             }
         }
 
+        /// <summary>
+        /// 泛型 PUT JSON 請求方法。
+        /// </summary>
+        public async Task<ApiResponse<TResponse>> PutAsync<TResponse>(
+            string endpoint,
+            string token,
+            object body,
+            CancellationToken cancellationToken) where TResponse : class
+        {
+            var cleanToken = CleanToken(token);
+            if (string.IsNullOrWhiteSpace(cleanToken))
+                return ApiResponse<TResponse>.Fail("Token 未設定，請輸入 Bearer Token。");
+
+            try
+            {
+                HttpContent? content = null;
+                if (body != null)
+                {
+                    var json = JsonSerializer.Serialize(body);
+                    content = new StringContent(json, Encoding.UTF8, "application/json");
+                }
+
+                var request = new HttpRequestMessage(HttpMethod.Put, endpoint)
+                {
+                    Content = content
+                };
+
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", cleanToken);
+                request.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36");
+                request.Headers.Add("Origin", "https://mydoujin.online");
+                request.Headers.Referrer = new Uri("https://mydoujin.online/");
+
+                var response = await _httpClient.SendAsync(request, cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return await HandleHttpErrorAsync<TResponse>(response);
+                }
+
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                var data = JsonSerializer.Deserialize<TResponse>(responseBody, _jsonOptions);
+
+                if (data == null)
+                    return ApiResponse<TResponse>.Fail("API 回傳空白 Response。");
+
+                return ApiResponse<TResponse>.Success(data);
+            }
+            catch (OperationCanceledException)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    return ApiResponse<TResponse>.Cancelled();
+                else
+                    return ApiResponse<TResponse>.Fail("Request 超時（Timeout），請檢查網路連線。");
+            }
+            catch (HttpRequestException ex)
+            {
+                return ApiResponse<TResponse>.Fail($"網路錯誤：{ex.Message}");
+            }
+            catch (JsonException ex)
+            {
+                return ApiResponse<TResponse>.Fail($"Response 格式錯誤：{ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<TResponse>.Fail($"未知錯誤：{ex.GetType().Name} - {ex.Message}");
+            }
+        }
+
         public void Dispose()
         {
             _httpClient.Dispose();

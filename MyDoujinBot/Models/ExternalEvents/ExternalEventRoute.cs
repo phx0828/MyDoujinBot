@@ -335,6 +335,15 @@ namespace MyDoujinBot.Models.ExternalEvents
 
         [JsonPropertyName("untick")]
         public List<string> Untick { get; set; } = new();
+
+        [JsonPropertyName("keep")]
+        public List<string> Keep { get; set; } = new();
+
+        [JsonPropertyName("reduce")]
+        public List<string> Reduce { get; set; } = new();
+
+        [JsonPropertyName("cut")]
+        public List<string> Cut { get; set; } = new();
     }
 
     /// <summary>
