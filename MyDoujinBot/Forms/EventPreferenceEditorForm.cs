@@ -101,7 +101,7 @@ namespace MyDoujinBot.Forms
             _initialPending = new HashSet<string>(preset.DeprioritizedCharacterIds ?? new List<string>());
 
             this.Text = $"編輯事件偏好 - {_preset.Name}";
-            this.Size = new Size(ScaleDpi(940), ScaleDpi(650));
+            this.Size = new Size(ScaleDpi(1000), ScaleDpi(820));
             this.MinimumSize = new Size(ScaleDpi(880), ScaleDpi(520));
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = FormBackColor;
@@ -115,6 +115,34 @@ namespace MyDoujinBot.Forms
             BuildUI();
             PopulateRows(characters);
             UpdateSummary();
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            try
+            {
+                var wa = Screen.FromControl(this.Owner ?? (Control)this)?.WorkingArea
+                    ?? Screen.PrimaryScreen?.WorkingArea;
+                if (wa != null)
+                {
+                    int minW = Math.Min(ScaleDpi(880), wa.Value.Width);
+                    int minH = Math.Min(ScaleDpi(520), wa.Value.Height);
+                    this.MinimumSize = new Size(minW, minH);
+
+                    int maxW = ScaleDpi(1000);
+                    int maxH = ScaleDpi(820);
+                    int targetW = Math.Clamp((int)Math.Round(wa.Value.Width * 0.50), minW, maxW);
+                    int targetH = Math.Clamp((int)Math.Round(wa.Value.Height * 0.70), minH, maxH);
+                    this.Size = new Size(targetW, targetH);
+
+                    if (this.Owner != null)
+                        this.CenterToParent();
+                    else
+                        this.CenterToScreen();
+                }
+            }
+            catch { }
         }
 
         private void BuildUI()
