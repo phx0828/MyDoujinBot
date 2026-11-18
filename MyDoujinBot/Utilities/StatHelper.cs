@@ -89,9 +89,9 @@ namespace MyDoujinBot.Utilities
         }
 
         /// <summary>
-        /// 樓層換算規則：90F 之後從 -1 開始反向計算（即 floor &gt; 90 時為 90 - floor，如 91 =&gt; -1、92 =&gt; -2）。
+        /// 樓層換算規則：90F 以上從 -9 開始遞增至 0F（即 floor &gt; 90 時為 floor - 100，如 91 =&gt; -9、92 =&gt; -8、...、100 =&gt; 0）。
         /// </summary>
-        public static int ConvertFloor(int floor) => floor > 90 ? 90 - floor : floor;
+        public static int ConvertFloor(int floor) => floor > 90 ? floor - 100 : floor;
 
         /// <summary>
         /// 格式化單一樓層字串（含單位後綴，預設 "F"）。若原始樓層 &lt;= 0 則回傳 "—F"。
